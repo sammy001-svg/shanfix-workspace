@@ -1,0 +1,50 @@
+# ── Shanfix Workspace — Apache Configuration ──────────────────
+# cPanel / Apache 2.4 compatible
+
+Options -Indexes
+ServerSignature Off
+
+# ── PHP settings ───────────────────────────────────────────────
+php_value upload_max_filesize 32M
+php_value post_max_size 32M
+php_value max_execution_time 120
+php_value memory_limit 256M
+php_flag display_errors Off
+php_flag log_errors On
+
+# ── Security headers ────────────────────────────────────────────
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set X-XSS-Protection "1; mode=block"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# ── Deny access to sensitive files ─────────────────────────────
+<FilesMatch "\.(sql|log|env|ini|sh|bak)$">
+  Order allow,deny
+  Deny from all
+</FilesMatch>
+
+# ── Block direct access to includes/config ─────────────────────
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^config/ - [F,L]
+  RewriteRule ^includes/ - [F,L]
+</IfModule>
+
+# ── Enable Gzip compression ─────────────────────────────────────
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript
+</IfModule>
+
+# ── Browser caching ─────────────────────────────────────────────
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css "access plus 1 month"
+  ExpiresByType application/javascript "access plus 1 month"
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/jpeg "access plus 1 year"
+  ExpiresByType image/gif "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 year"
+</IfModule>
