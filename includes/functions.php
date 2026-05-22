@@ -114,7 +114,37 @@ function isLoggedIn(): bool {
 }
 
 function requireLogin(string $redirect = '/auth/login.php'): void {
-    if (!isLoggedIn()) redirect($redirect);
+    if (!isLoggedIn()) {
+        redirect(APP_URL . $redirect);
+    }
+
+    // Session timeout check
+    global $pdo;
+    $timeoutHours = 2;
+    try {
+        $s = $pdo->prepare("SELECT `value` FROM system_settings WHERE `key`='session_timeout' LIMIT 1");
+        $s->execute();
+        $v = $s->fetchColumn();
+        if ($v !== false && is_numeric($v) && (int)$v > 0) $timeoutHours = (int)$v;
+    } catch (Exception $e) { /* use default */ }
+
+    $timeoutSecs = $timeoutHours * 3600;
+    if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > $timeoutSecs) {
+        session_unset();
+        session_destroy();
+        redirect(APP_URL . '/auth/login.php?expired=1');
+    }
+
+    // Session fingerprint check (detects session hijacking)
+    $currentFingerprint = md5(($_SERVER['HTTP_USER_AGENT'] ?? '') . ($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? ''));
+    if (isset($_SESSION['fingerprint']) && !hash_equals($_SESSION['fingerprint'], $currentFingerprint)) {
+        session_unset();
+        session_destroy();
+        redirect(APP_URL . '/auth/login.php?hijack=1');
+    }
+
+    // Refresh activity timestamp
+    $_SESSION['last_activity'] = time();
 }
 
 function requireSuperAdmin(): void {

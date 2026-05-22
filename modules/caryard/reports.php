@@ -216,13 +216,7 @@ try {
           </tr>
         </thead>
         <tbody>
-          <?php if (empty($ledger)): ?>
-          <tr>
-            <td colspan="7" class="text-center py-5 text-muted">
-              <i class="fas fa-file-invoice-dollar fa-3x mb-3 d-block"></i>No entries logged in transaction ledger yet.
-            </td>
-          </tr>
-          <?php else: foreach ($ledger as $l): ?>
+          <?php foreach ($ledger as $l): ?>
           <tr>
             <td><?= formatDate($l['sale_date']) ?></td>
             <td><code class="bg-light px-2 py-1 rounded text-dark fw-bold"><?= e($l['stock_no']) ?></code></td>
@@ -234,7 +228,7 @@ try {
               <?= ($l['margin'] >= 0 ? '+' : '') . formatCurrency((float)$l['margin']) ?>
             </td>
           </tr>
-          <?php endforeach; endif; ?>
+          <?php endforeach; ?>
         </tbody>
       </table>
     </div>
@@ -246,7 +240,7 @@ $extraJs = '
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 $(document).ready(function(){
-  $("#ledgerTable").DataTable({pageLength:10,order:[[0,"desc"]]});
+  $("#ledgerTable").DataTable({pageLength:10,order:[[0,"desc"]],language:{emptyTable:"<div class=\'text-center py-5 text-muted\'><i class=\'fas fa-file-invoice-dollar fa-3x mb-3 d-block\'></i>No entries logged in transaction ledger yet.</div>"}});
   
   // 1. Sales Trends
   var trendsCtx = document.getElementById("trendsChart").getContext("2d");

@@ -159,13 +159,7 @@ $reservedCount   = countRows('caryard_vehicles', "org_id=? AND status='reserved'
           </tr>
         </thead>
         <tbody>
-          <?php if (empty($vehicles)): ?>
-          <tr>
-            <td colspan="8" class="text-center py-5 text-muted">
-              <i class="fas fa-car-alt fa-3x mb-3 d-block"></i>No vehicles currently in stock.
-            </td>
-          </tr>
-          <?php else: foreach ($vehicles as $v): ?>
+          <?php foreach ($vehicles as $v): ?>
           <tr>
             <td>
               <code class="bg-light px-2 py-1 rounded text-dark fw-bold"><?= e($v['stock_no']) ?></code>
@@ -202,7 +196,7 @@ $reservedCount   = countRows('caryard_vehicles', "org_id=? AND status='reserved'
               </form>
             </td>
           </tr>
-          <?php endforeach; endif; ?>
+          <?php endforeach; ?>
         </tbody>
       </table>
     </div>
@@ -313,7 +307,7 @@ $reservedCount   = countRows('caryard_vehicles', "org_id=? AND status='reserved'
 <?php
 $extraJs = '<script>
 $(document).ready(function(){
-  $("#vehiclesTable").DataTable({pageLength:10,order:[[0,"desc"]]});
+  $("#vehiclesTable").DataTable({pageLength:10,order:[[0,"desc"]],language:{emptyTable:"<div class=\'text-center py-5 text-muted\'><i class=\'fas fa-car-alt fa-3x mb-3 d-block\'></i>No vehicles currently in stock.</div>"}});
 });
 
 function openAddModal() {

@@ -145,7 +145,7 @@ for ($i = 5; $i >= 0; $i--) {
       </table>
     </div>
   </div>
-</div></div>
+</div>
 
 <?php
 $extraJs = '<script>

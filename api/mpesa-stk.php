@@ -43,7 +43,7 @@ if ($invoiceId) {
 try {
     $mpesa      = new Mpesa();
     $ref        = $invoiceId ? ('INV-' . $invoiceId) : 'SUBSCRIPTION';
-    $desc       = 'Shanfix Workspace Payment';
+    $desc       = 'OrbitDesk Workspace Payment';
     $checkoutId = $mpesa->stkPush($phone, (int)$amount, $ref, $desc);
 
     if (!$checkoutId) {

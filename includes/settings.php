@@ -52,7 +52,7 @@ if (!defined('SMTP_PORT'))      define('SMTP_PORT',      (int)($__smtp['smtp_por
 if (!defined('SMTP_USER'))      define('SMTP_USER',      $__smtp['smtp_user']      ?? '');
 if (!defined('SMTP_PASS'))      define('SMTP_PASS',      $__smtp['smtp_pass']      ?? '');
 if (!defined('SMTP_ENC'))       define('SMTP_ENC',       $__smtp['smtp_enc']       ?? 'tls');
-if (!defined('MAIL_FROM'))      define('MAIL_FROM',      $__smtp['mail_from']      ?? 'noreply@shanfix.co.ke');
+if (!defined('MAIL_FROM'))      define('MAIL_FROM',      $__smtp['mail_from']      ?? 'noreply@orbitdesk.co.ke');
 if (!defined('MAIL_FROM_NAME')) define('MAIL_FROM_NAME', $__smtp['mail_from_name'] ?? APP_NAME);
 
 unset($__smtp);

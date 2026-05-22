@@ -87,9 +87,7 @@ try {
           <tr><th>Stock No</th><th>Make & Model</th><th>Year</th><th>Color</th><th>Mileage</th><th>Grade</th><th class="text-end">Asking Price</th></tr>
         </thead>
         <tbody>
-          <?php if (empty($vehicles)): ?>
-          <tr><td colspan="7" class="text-center text-muted py-4"><i class="fas fa-car-crash fa-2x mb-2 d-block"></i>No vehicles available in showroom</td></tr>
-          <?php else: foreach ($vehicles as $v): ?>
+          <?php foreach ($vehicles as $v): ?>
           <tr>
             <td class="fw-semibold"><code class="text-dark bg-light px-2 py-0.5 rounded"><?= e($v['stock_no']) ?></code></td>
             <td class="fw-semibold text-dark"><i class="fas fa-car-side me-2 text-warning"></i><?= e(($v['make'] ?? '') . ' ' . ($v['model'] ?? '')) ?></td>
@@ -99,7 +97,7 @@ try {
             <td><span class="badge bg-light text-dark border"><?= e($v['condition_grade'] ?: '—') ?></span></td>
             <td class="text-end fw-bold text-success"><?= formatCurrency((float)($v['selling_price'] ?? 0)) ?></td>
           </tr>
-          <?php endforeach; endif; ?>
+          <?php endforeach; ?>
         </tbody>
       </table>
     </div>
@@ -107,7 +105,7 @@ try {
 </div>
 
 <?php
-$extraJs = '<script>$("#carTable").DataTable({pageLength:10,order:[[6,"asc"]]});</script>';
+$extraJs = '<script>$("#carTable").DataTable({pageLength:10,order:[[6,"asc"]],language:{emptyTable:"<div class=\'text-center text-muted py-4\'><i class=\'fas fa-car-crash fa-2x mb-2 d-block\'></i>No vehicles available in showroom</div>"}});</script>';
 require_once __DIR__ . '/../../includes/footer.php';
 ?>
 

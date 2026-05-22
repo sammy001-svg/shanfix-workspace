@@ -352,7 +352,7 @@ function printPrescription(id) {
       w.document.write('<style>body{padding:40px;font-family:sans-serif;} .rx-logo{font-size:42px;font-weight:bold;color:#e74c3c;}</style></head><body>');
       w.document.write('<div class="container border p-4 rounded bg-light">');
       w.document.write('<div class="d-flex justify-content-between align-items-center mb-4">');
-      w.document.write('<div><h3 class="mb-0 text-uppercase fw-bold text-danger">Shanfix Medical Clinic</h3><p class="text-muted mb-0 small">Professional Healthcare Services</p></div>');
+      w.document.write('<div><h3 class="mb-0 text-uppercase fw-bold text-danger">OrbitDesk Medical Clinic</h3><p class="text-muted mb-0 small">Professional Healthcare Services</p></div>');
       w.document.write('<div class="rx-logo">℞</div>');
       w.document.write('</div>');
       w.document.write('<hr>');

@@ -68,6 +68,10 @@ function markNotifsRead() {
       <i class="fas fa-layer-group"></i><span>Plans</span></a>
     <a href="<?= APP_URL ?>/admin/users.php"         class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'users.php'         ? 'active' : '' ?>">
       <i class="fas fa-users"></i><span>Users</span></a>
+    <a href="<?= APP_URL ?>/admin/notifications.php"  class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'notifications.php' ? 'active' : '' ?>">
+      <i class="fas fa-bell"></i><span>Notifications</span></a>
+    <a href="<?= APP_URL ?>/admin/security.php"      class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'security.php'      ? 'active' : '' ?>">
+      <i class="fas fa-shield-alt"></i><span>Security</span></a>
     <a href="<?= APP_URL ?>/admin/activity.php"      class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'activity.php'      ? 'active' : '' ?>">
       <i class="fas fa-history"></i><span>Activity Log</span></a>
     <a href="<?= APP_URL ?>/admin/settings.php"      class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'settings.php'      ? 'active' : '' ?>">

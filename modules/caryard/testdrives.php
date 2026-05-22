@@ -153,13 +153,7 @@ $totalCancelled = countRows('caryard_test_drives', "org_id=? AND status='cancell
           </tr>
         </thead>
         <tbody>
-          <?php if (empty($testDrives)): ?>
-          <tr>
-            <td colspan="6" class="text-center py-5 text-muted">
-              <i class="fas fa-road fa-3x mb-3 d-block"></i>No test drives scheduled yet.
-            </td>
-          </tr>
-          <?php else: foreach ($testDrives as $td): ?>
+          <?php foreach ($testDrives as $td): ?>
           <tr>
             <td>
               <div class="fw-semibold text-dark"><i class="fas fa-user-circle me-2 text-warning"></i><?= e($td['client_name']) ?></div>
@@ -194,7 +188,7 @@ $totalCancelled = countRows('caryard_test_drives', "org_id=? AND status='cancell
               </form>
             </td>
           </tr>
-          <?php endforeach; endif; ?>
+          <?php endforeach; ?>
         </tbody>
       </table>
     </div>
@@ -268,7 +262,7 @@ $totalCancelled = countRows('caryard_test_drives', "org_id=? AND status='cancell
 <?php
 $extraJs = '<script>
 $(document).ready(function(){
-  $("#testDriveTable").DataTable({pageLength:10,order:[[2,"desc"]]});
+  $("#testDriveTable").DataTable({pageLength:10,order:[[2,"desc"]],language:{emptyTable:"<div class=\'text-center py-5 text-muted\'><i class=\'fas fa-road fa-3x mb-3 d-block\'></i>No test drives scheduled yet.</div>"}});
 });
 
 function openAddModal() {

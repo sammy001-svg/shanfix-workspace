@@ -1,6 +1,6 @@
 <?php
 /**
- * Shanfix Workspace — PDF Generator
+ * OrbitDesk Workspace — PDF Generator
  * Uses FPDF (place fpdf.php in /vendor/fpdf/fpdf.php)
  * Download: http://www.fpdf.org/en/download.php
  * No Composer needed — single file library.
@@ -12,7 +12,7 @@ if (file_exists($fpdfPath)) {
     require_once $fpdfPath;
 }
 
-class ShanfixPDF
+class OrbitDeskPDF
 {
     private bool $fpdfAvailable;
     private string $brandNavy  = '#0B2D4E';
@@ -428,12 +428,12 @@ class ShanfixPDF
 // ── Global PDF helper ────────────────────────────────────────────
 function generateInvoicePDF(array $invoice, array $org, array $items = []): void
 {
-    (new ShanfixPDF())->invoice($invoice, $org, $items);
+    (new OrbitDeskPDF())->invoice($invoice, $org, $items);
 }
 
 function generatePayslipPDF(array $payroll, array $employee, array $org): void
 {
-    (new ShanfixPDF())->payslip($payroll, $employee, $org);
+    (new OrbitDeskPDF())->payslip($payroll, $employee, $org);
 }
 
 /**
@@ -456,5 +456,5 @@ function generateModuleReportPDF(
     string $filename  = 'report.pdf',
     array  $color     = [11, 45, 78]
 ): void {
-    (new ShanfixPDF())->report($title, $subtitle, $summary, $cols, $rows, $filename, $color);
+    (new OrbitDeskPDF())->report($title, $subtitle, $summary, $cols, $rows, $filename, $color);
 }

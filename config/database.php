@@ -6,7 +6,7 @@ define('DB_PASS', '');              // Change for production
 define('DB_NAME', 'shanfix_db');
 define('DB_CHARSET', 'utf8mb4');
 
-define('APP_NAME',    'Shanfix Workspace');
+define('APP_NAME',    'OrbitDesk Workspace');
 define('APP_TAGLINE', 'All-in-One Business Management Platform');
 define('APP_URL',     'http://localhost');   // Change for production
 define('APP_VERSION', '1.0.0');

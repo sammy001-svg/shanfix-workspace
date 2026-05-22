@@ -206,13 +206,7 @@ foreach ($sales as $s) {
           </tr>
         </thead>
         <tbody>
-          <?php if (empty($sales)): ?>
-          <tr>
-            <td colspan="7" class="text-center py-5 text-muted">
-              <i class="fas fa-handshake fa-3x mb-3 d-block"></i>No vehicle sales logged yet.
-            </td>
-          </tr>
-          <?php else: foreach ($sales as $s): ?>
+          <?php foreach ($sales as $s): ?>
           <tr>
             <td>
               <div class="fw-semibold text-dark"><i class="fas fa-user-tie me-2 text-warning"></i><?= e($s['buyer_name']) ?></div>
@@ -246,7 +240,7 @@ foreach ($sales as $s) {
               </form>
             </td>
           </tr>
-          <?php endforeach; endif; ?>
+          <?php endforeach; ?>
         </tbody>
       </table>
     </div>
@@ -338,7 +332,7 @@ foreach ($sales as $s) {
 <?php
 $extraJs = '<script>
 $(document).ready(function(){
-  $("#salesTable").DataTable({pageLength:10,order:[[2,"desc"]]});
+  $("#salesTable").DataTable({pageLength:10,order:[[2,"desc"]],language:{emptyTable:"<div class=\'text-center py-5 text-muted\'><i class=\'fas fa-handshake fa-3x mb-3 d-block\'></i>No vehicle sales logged yet.</div>"}});
 });
 
 function openAddModal() {

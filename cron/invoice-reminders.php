@@ -8,6 +8,7 @@ define('CRON_RUN', true);
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/mailer.php';
+require_once __DIR__ . '/../includes/notifications.php';
 
 // Instantiate mailer using the same constants as the sendEmail() helper
 $mailer = new Mailer([
@@ -96,6 +97,15 @@ foreach ($dueSoonInvoices as $inv) {
         error_log("[invoice-reminders cron] Due-soon: Failed to send to {$inv['admin_email']} for invoice {$inv['invoice_number']}");
     }
 
+    // In-app notification
+    notifyOrg(
+        (int)$inv['org_id'],
+        'Invoice Due in 3 Days — ' . $inv['invoice_number'],
+        'Invoice ' . $inv['invoice_number'] . ' for KES ' . number_format((float)$inv['total'], 2) . ' is due on ' . date('d M Y', strtotime($inv['due_date'])) . '. Please arrange payment.',
+        'warning',
+        APP_URL . '/client/billing.php'
+    );
+
     $pdo->prepare(
         "INSERT INTO activity_log (action, module, description, ip) VALUES ('cron_email','billing',?,?)"
     )->execute([
@@ -128,6 +138,19 @@ foreach ($overdueInvoices as $inv) {
         $errors++;
         error_log("[invoice-reminders cron] Overdue: Failed to send to {$inv['admin_email']} for invoice {$inv['invoice_number']}");
     }
+
+    // In-app notification
+    notifyOrg(
+        (int)$inv['org_id'],
+        'Overdue Invoice — ' . $inv['invoice_number'],
+        'Invoice ' . $inv['invoice_number'] . ' for KES ' . number_format((float)$inv['total'], 2) . ' was due on ' . date('d M Y', strtotime($inv['due_date'])) . ' and is now overdue. Immediate payment is required.',
+        'danger',
+        APP_URL . '/client/billing.php'
+    );
+
+    // Update invoice status to overdue
+    $pdo->prepare("UPDATE invoices SET status='overdue' WHERE id=? AND status IN ('sent','pending')")
+        ->execute([$inv['id']]);
 
     $pdo->prepare(
         "INSERT INTO activity_log (action, module, description, ip) VALUES ('cron_email','billing',?,?)"

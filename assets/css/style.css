@@ -1,5 +1,5 @@
 /* ================================================================
-   SHANFIX WORKSPACE — Master Stylesheet
+   ORBITDESK WORKSPACE — Master Stylesheet
    Brand: Green #1A8A4E | Navy #0B2D4E | White #FFFFFF
    ================================================================ */
 
@@ -731,5 +731,71 @@ body.sidebar-collapsed .main-wrapper { margin-left: 68px; }
 
 /* DataTables overrides */
 div.dataTables_wrapper div.dataTables_length select { border-radius: 6px; border-color: var(--gray-200); }
-div.dataTables_wrapper div.dataTables_filter input { border-radius: 6px; border-color: var(--gray-200); }
+div.dataTables_wrapper div.dataTables_filter input  { border-radius: 6px; border-color: var(--gray-200); }
 table.dataTable thead th { background: var(--gray-50); }
+
+/* ── DataTables spacing — keeps controls off card edges ─────────── */
+div.dataTables_wrapper {
+  padding: 0;
+}
+div.dataTables_wrapper div.dataTables_length,
+div.dataTables_wrapper div.dataTables_filter {
+  padding: .75rem 1rem .5rem;
+}
+div.dataTables_wrapper div.dataTables_info,
+div.dataTables_wrapper div.dataTables_paginate {
+  padding: .6rem 1rem .75rem;
+}
+div.dataTables_wrapper div.dataTables_filter input {
+  margin-left: .5rem;
+}
+div.dataTables_wrapper div.dataTables_length label,
+div.dataTables_wrapper div.dataTables_filter label {
+  margin-bottom: 0;
+  font-size: .82rem;
+  color: var(--gray-600);
+}
+div.dataTables_wrapper div.dataTables_info {
+  font-size: .8rem;
+  color: var(--gray-400);
+  padding-top: .75rem;
+}
+div.dataTables_wrapper div.dataTables_paginate {
+  padding-top: .5rem;
+}
+div.dataTables_wrapper div.dataTables_paginate .paginate_button {
+  border-radius: 6px !important;
+  font-size: .82rem;
+  padding: .3rem .65rem !important;
+}
+div.dataTables_wrapper div.dataTables_paginate .paginate_button.current,
+div.dataTables_wrapper div.dataTables_paginate .paginate_button.current:hover {
+  background: var(--green) !important;
+  border-color: var(--green) !important;
+  color: white !important;
+}
+div.dataTables_wrapper div.dataTables_paginate .paginate_button:hover {
+  background: var(--gray-100) !important;
+  border-color: var(--gray-200) !important;
+  color: var(--navy) !important;
+}
+
+/* ── Card-header that contains a filter form below the title ──────── */
+.card-header.with-filter {
+  flex-direction: column;
+  align-items: stretch;
+  gap: .6rem;
+}
+.card-header.with-filter h6 {
+  margin-bottom: 0;
+}
+
+/* ── Utilities ─────────────────────────────────────────────────────── */
+.fw-600 { font-weight: 600 !important; }
+.fw-700 { font-weight: 700 !important; }
+.fw-800 { font-weight: 800 !important; }
+.fw-900 { font-weight: 900 !important; }
+
+.table-danger-subtle { background-color: rgba(239,68,68,.05) !important; }
+
+.btn-xs { padding: .2rem .5rem; font-size: .75rem; border-radius: 6px; line-height: 1.4; }

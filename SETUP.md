@@ -1,8 +1,8 @@
-# Shanfix Workspace — Setup & Deployment Guide
+# OrbitDesk Workspace — Setup & Deployment Guide
 
 ## Local Development (XAMPP / WAMP)
 
-1. Copy the entire `Shanfix Workspace` folder to your `htdocs` or `www` directory and rename it to `shanfix`
+1. Copy the entire `OrbitDesk Workspace` folder to your `htdocs` or `www` directory and rename it to `shanfix`
 2. Open `config/database.php` and set your credentials:
 
    ```php
@@ -10,12 +10,12 @@
    define('DB_USER', 'root');
    define('DB_PASS', '');
    define('DB_NAME', 'shanfix_db');
-   define('APP_URL',  'http://localhost/shanfix');
+   define('APP_URL',  'http://localhost/orbitdesk');
    ```
 
 3. Open phpMyAdmin → Create database: `shanfix_db` (Charset: `utf8mb4`, Collation: `utf8mb4_unicode_ci`)
 4. Import `database/schema.sql` into the database
-5. Visit `http://localhost/shanfix`
+5. Visit `http://localhost/orbitdesk`
 
 ---
 
@@ -121,5 +121,5 @@ Without FPDF, the system shows an HTML fallback instead of a PDF download. Every
 
 ## Support
 
-- Email: support@shanfix.co.ke
+- Email: support@orbitdesk.co.ke
 - WhatsApp: +254 700 000 000

@@ -8,6 +8,7 @@ define('CRON_RUN', true);
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/mailer.php';
+require_once __DIR__ . '/../includes/notifications.php';
 
 $mailer = mailer();
 $today  = date('Y-m-d');
@@ -62,6 +63,15 @@ foreach ($targetDays as $days) {
             error_log('[check-subscriptions] Email failed to ' . $sub['org_email']);
         }
 
+        // In-app notification
+        notifyOrg(
+            (int)$sub['org_id'],
+            'Subscription Expiring in ' . $days . ' Day' . ($days !== 1 ? 's' : ''),
+            'Your ' . ($sub['plan_name'] ?? 'subscription') . ' expires on ' . date('d M Y', strtotime($sub['ends_at'])) . '. Please renew to avoid service interruption.',
+            $days <= 1 ? 'danger' : 'warning',
+            APP_URL . '/client/billing.php'
+        );
+
         try {
             $pdo->prepare(
                 "INSERT INTO activity_log (action, module, description, ip) VALUES ('cron_email','billing',?,?)"
@@ -115,6 +125,15 @@ foreach ($expired as $sub) {
         $sub['plan_name'] ?? 'Subscription'
     );
     if (!$ok) $errors++;
+
+    // In-app notification
+    notifyOrg(
+        (int)$sub['org_id'],
+        'Account Suspended — Subscription Expired',
+        'Your subscription expired on ' . date('d M Y', strtotime($sub['ends_at'])) . ' and your account has been suspended. Please contact support or renew your subscription to restore access.',
+        'danger',
+        APP_URL . '/client/billing.php'
+    );
 
     try {
         $pdo->prepare(

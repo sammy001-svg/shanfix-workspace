@@ -1,6 +1,6 @@
 <?php
 /**
- * Shanfix Workspace — SMTP Mailer
+ * OrbitDesk Workspace — SMTP Mailer
  * Uses PHP's built-in socket-based SMTP (no Composer required)
  * Drop-in for cPanel hosting with SMTP settings
  */
@@ -22,7 +22,7 @@ class Mailer
         $this->password   = $config['password']   ?? '';
         $this->encryption = $config['encryption'] ?? 'tls';
         $this->fromName   = $config['from_name']  ?? APP_NAME;
-        $this->fromEmail  = $config['from_email'] ?? 'noreply@shanfix.co.ke';
+        $this->fromEmail  = $config['from_email'] ?? 'noreply@orbitdesk.co.ke';
     }
 
     /**

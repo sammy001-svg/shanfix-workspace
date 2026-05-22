@@ -39,7 +39,7 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
       <div class="card-body">
         <div class="row g-3">
           <div class="col-md-6"><label class="form-label">System Name</label><input type="text" class="form-control" id="app_name" value="<?= $s('app_name', APP_NAME) ?>"></div>
-          <div class="col-md-6"><label class="form-label">Support Email</label><input type="email" class="form-control" id="support_email" value="<?= $s('support_email', 'support@shanfix.co.ke') ?>"></div>
+          <div class="col-md-6"><label class="form-label">Support Email</label><input type="email" class="form-control" id="support_email" value="<?= $s('support_email', 'support@orbitdesk.co.ke') ?>"></div>
           <div class="col-md-6">
             <label class="form-label">Default Currency</label>
             <select class="form-select" id="default_currency">
@@ -77,7 +77,7 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
           <div class="col-md-6"><label class="form-label">SMTP Username</label><input type="email" class="form-control" id="smtp_user" value="<?= $s('smtp_user') ?>"></div>
           <div class="col-md-6"><label class="form-label">SMTP Password</label><input type="password" class="form-control" id="smtp_pass" placeholder="<?= $cfg['smtp_pass'] ? '••••••••' : 'Enter password' ?>"></div>
           <div class="col-md-6"><label class="form-label">From Name</label><input type="text" class="form-control" id="mail_from_name" value="<?= $s('mail_from_name', APP_NAME) ?>"></div>
-          <div class="col-md-6"><label class="form-label">From Email</label><input type="email" class="form-control" id="mail_from" value="<?= $s('mail_from','noreply@shanfix.co.ke') ?>"></div>
+          <div class="col-md-6"><label class="form-label">From Email</label><input type="email" class="form-control" id="mail_from" value="<?= $s('mail_from','noreply@orbitdesk.co.ke') ?>"></div>
           <div class="col-md-6">
             <label class="form-label">Encryption</label>
             <select class="form-select" id="smtp_enc">

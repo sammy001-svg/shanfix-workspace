@@ -1,11 +1,11 @@
-# 🌟 Shanfix Workspace — Premium All-in-One Business Management Suite
+# 🌟 OrbitDesk Workspace — Premium All-in-One Business Management Suite
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![PHP Version](https://img.shields.io/badge/PHP-8.1%2B-777BB4.svg?style=flat&logo=php)](https://www.php.net/)
 [![Database](https://img.shields.io/badge/Database-MySQL%208.0%2B-4479A1.svg?style=flat&logo=mysql)](https://www.mysql.com/)
 [![Frontend](https://img.shields.io/badge/Frontend-Bootstrap%205.3-7952B3.svg?style=flat&logo=bootstrap)](https://getbootstrap.com/)
 
-**Shanfix Workspace** is a premium, feature-rich, and highly integrated multi-tenant business and institutional management suite designed to modernize operations across various industries. Built with a powerful PHP backend and modern responsive Bootstrap frontend, it combines robust logic with beautiful, intuitive, and interactive interfaces.
+**OrbitDesk Workspace** is a premium, feature-rich, and highly integrated multi-tenant business and institutional management suite designed to modernize operations across various industries. Built with a powerful PHP backend and modern responsive Bootstrap frontend, it combines robust logic with beautiful, intuitive, and interactive interfaces.
 
 ---
 
@@ -49,11 +49,11 @@ The suite is modularly engineered to provide tailored management controls for tw
 
 ## 💻 Local Setup (XAMPP / WAMP)
 
-Follow these steps to deploy **Shanfix Workspace** on your local machine:
+Follow these steps to deploy **OrbitDesk Workspace** on your local machine:
 
 1. **Clone the repository** to your local web server root directory (e.g., `C:/xampp/htdocs` or `/var/www/html`) and rename the directory to `shanfix`:
    ```bash
-   git clone https://github.com/sammy001-svg/shanfix-workspace.git shanfix
+   git clone https://github.com/sammy001-svg/orbitdesk-workspace.git shanfix
    ```
 
 2. **Configure the Database Credentials**:
@@ -63,7 +63,7 @@ Follow these steps to deploy **Shanfix Workspace** on your local machine:
    define('DB_USER', 'root');
    define('DB_PASS', '');
    define('DB_NAME', 'shanfix_db');
-   define('APP_URL',  'http://localhost/shanfix');
+   define('APP_URL',  'http://localhost/orbitdesk');
    ```
 
 3. **Create MySQL Database**:
@@ -77,7 +77,7 @@ Follow these steps to deploy **Shanfix Workspace** on your local machine:
 
 5. **Access Application**:
    * Start Apache and MySQL services in your XAMPP/WAMP panel.
-   * Open your browser and navigate to `http://localhost/shanfix`.
+   * Open your browser and navigate to `http://localhost/orbitdesk`.
 
 ---
 
@@ -143,7 +143,7 @@ The PDF feature runs dynamically using the high-performance FPDF library, elimin
 ## 📞 Support & Feedback
 
 For technical support, custom module developments, or bug reports:
-* **Email:** support@shanfix.co.ke
+* **Email:** support@orbitdesk.co.ke
 * **WhatsApp:** +254 700 000 000
 
 ---

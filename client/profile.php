@@ -138,6 +138,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
     </div>
 
+    <!-- Two-Factor Authentication -->
+    <?php
+    $totpRow = $pdo->prepare("SELECT totp_enabled FROM users WHERE id=?");
+    $totpRow->execute([$user['id']]);
+    $totpEnabled = (bool)($totpRow->fetchColumn());
+    ?>
+    <div class="card mb-3">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="fas fa-shield-alt text-green me-2"></i>Two-Factor Authentication</span>
+        <?php if ($totpEnabled): ?>
+        <span class="badge bg-success"><i class="fas fa-check me-1"></i>Active</span>
+        <?php else: ?>
+        <span class="badge bg-secondary">Not Enabled</span>
+        <?php endif; ?>
+      </div>
+      <div class="card-body d-flex align-items-center justify-content-between">
+        <p class="mb-0 text-muted small">
+          <?php if ($totpEnabled): ?>
+          Your account is protected with an authenticator app (TOTP).
+          <?php else: ?>
+          Add an extra layer of security by requiring a code from your authenticator app at login.
+          <?php endif; ?>
+        </p>
+        <a href="<?= APP_URL ?>/auth/2fa-setup.php" class="btn btn-sm <?= $totpEnabled ? 'btn-outline-danger' : 'btn-outline-primary' ?> ms-3 text-nowrap">
+          <i class="fas fa-<?= $totpEnabled ? 'shield-virus' : 'mobile-alt' ?> me-1"></i>
+          <?= $totpEnabled ? 'Manage 2FA' : 'Enable 2FA' ?>
+        </a>
+      </div>
+    </div>
+
     <!-- Change Password -->
     <div class="card">
       <div class="card-header"><i class="fas fa-lock text-green me-2"></i>Change Password</div>

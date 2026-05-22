@@ -1,6 +1,6 @@
 <?php
 /**
- * Shanfix Workspace — M-Pesa Daraja API Integration
+ * OrbitDesk Workspace — M-Pesa Daraja API Integration
  * Supports: STK Push (Lipa Na M-Pesa Online), C2B, B2C, Transaction Status
  */
 class Mpesa
@@ -58,7 +58,7 @@ class Mpesa
      * @param string $ref     Account reference (e.g. invoice number)
      * @param string $desc    Transaction description
      */
-    public function stkPush(string $phone, float $amount, string $ref = 'Payment', string $desc = 'Shanfix Subscription'): array
+    public function stkPush(string $phone, float $amount, string $ref = 'Payment', string $desc = 'OrbitDesk Subscription'): array
     {
         $token = $this->getAccessToken();
         if (!$token) return ['success' => false, 'message' => 'Failed to get access token'];
@@ -224,5 +224,5 @@ class Mpesa
 // ── M-Pesa callback handler (include from api/mpesa-callback.php) ──
 // Usage example:
 //   $mpesa = new Mpesa(['consumer_key'=>'...','consumer_secret'=>'...','shortcode'=>'174379','passkey'=>'...']);
-//   $result = $mpesa->stkPush('0712345678', 500, 'INV-001', 'Shanfix Invoice');
+//   $result = $mpesa->stkPush('0712345678', 500, 'INV-001', 'OrbitDesk Invoice');
 //   if ($result['success']) { /* store checkout_id, poll for completion */ }

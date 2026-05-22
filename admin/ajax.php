@@ -6,13 +6,15 @@ requireSuperAdmin();
 
 header('Content-Type: application/json');
 
-$input  = json_decode(file_get_contents('php://input'), true);
+$input  = json_decode(file_get_contents('php://input'), true) ?? [];
 $action = $input['action'] ?? $_POST['action'] ?? '';
 
 switch ($action) {
+
+    // ── Subscription status quick-update ─────────────────────────
     case 'update_sub_status':
-        $id     = (int)($input['id']     ?? 0);
-        $status = $input['status'] ?? '';
+        $id      = (int)($input['id']     ?? 0);
+        $status  = $input['status']        ?? '';
         $allowed = ['active','trial','expired','cancelled'];
         if ($id && in_array($status, $allowed)) {
             $pdo->prepare("UPDATE subscriptions SET status=? WHERE id=?")->execute([$status, $id]);
@@ -23,15 +25,95 @@ switch ($action) {
         }
         break;
 
+    // ── Organization status toggle ───────────────────────────────
     case 'toggle_org_status':
-        $id     = (int)($input['id'] ?? 0);
-        $status = $input['status'] ?? 'active';
+        $id     = (int)($input['id']     ?? 0);
+        $status = $input['status']        ?? 'active';
         if ($id && in_array($status, ['active','inactive','suspended'])) {
             $pdo->prepare("UPDATE organizations SET status=? WHERE id=?")->execute([$status, $id]);
+            logActivity('toggle_org_status', 'admin', "Organization #$id set to $status");
             echo json_encode(['success' => true]);
+        } else {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid parameters']);
         }
         break;
 
+    // ── Module status toggle ─────────────────────────────────────
+    case 'toggle_module_status':
+        $id      = (int)($input['id']     ?? 0);
+        $current = $input['current']       ?? 'active';
+        $status  = $current === 'active' ? 'inactive' : 'active';
+        if ($id) {
+            $pdo->prepare("UPDATE modules SET status=? WHERE id=?")->execute([$status, $id]);
+            logActivity('toggle_module', 'admin', "Module #$id toggled to $status");
+            echo json_encode(['success' => true, 'new_status' => $status]);
+        } else {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid module ID']);
+        }
+        break;
+
+    // ── Save module pricing/details ──────────────────────────────
+    case 'save_module_pricing':
+        $id           = (int)($input['id']             ?? 0);
+        $monthlyPrice = (float)($input['monthly_price'] ?? 0);
+        $annualPrice  = (float)($input['annual_price']  ?? 0);
+        if ($id) {
+            $pdo->prepare("UPDATE modules SET monthly_price=?, annual_price=? WHERE id=?")
+                ->execute([$monthlyPrice, $annualPrice, $id]);
+            echo json_encode(['success' => true]);
+        } else {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid module ID']);
+        }
+        break;
+
+    // ── Extend / update subscription ────────────────────────────
+    case 'extend_subscription':
+        $id      = (int)($input['id']      ?? 0);
+        $endsAt  = $input['ends_at']        ?? '';
+        $status  = $input['status']         ?? 'active';
+        $planId  = (int)($input['plan_id']  ?? 0);
+        $allowed = ['active','trial','expired','cancelled'];
+        if ($id && $endsAt && in_array($status, $allowed)) {
+            $pdo->prepare("
+                UPDATE subscriptions
+                SET ends_at=?, status=?,
+                    plan_id=COALESCE(NULLIF(?,0), plan_id)
+                WHERE id=?
+            ")->execute([$endsAt, $status, $planId, $id]);
+            logActivity('extend_subscription', 'admin', "Subscription #$id extended to $endsAt");
+            echo json_encode(['success' => true]);
+        } else {
+            http_response_code(400);
+            echo json_encode(['error' => 'Missing required fields']);
+        }
+        break;
+
+    // ── Update modules assigned to a subscription ────────────────
+    case 'update_subscription_modules':
+        $subId     = (int)($input['subscription_id'] ?? 0);
+        $moduleIds = array_map('intval', $input['module_ids'] ?? []);
+        if ($subId) {
+            $pdo->prepare("UPDATE subscription_modules SET status='inactive' WHERE subscription_id=?")->execute([$subId]);
+            foreach ($moduleIds as $mid) {
+                if (!$mid) continue;
+                $pdo->prepare("
+                    INSERT INTO subscription_modules (subscription_id, module_id, status)
+                    VALUES (?, ?, 'active')
+                    ON DUPLICATE KEY UPDATE status='active'
+                ")->execute([$subId, $mid]);
+            }
+            logActivity('update_sub_modules', 'admin', "Modules updated for subscription #$subId");
+            echo json_encode(['success' => true]);
+        } else {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid subscription ID']);
+        }
+        break;
+
+    // ── System settings ──────────────────────────────────────────
     case 'save_settings':
         $section = $input['section'] ?? '';
         $data    = $input['data']    ?? [];
@@ -54,6 +136,7 @@ switch ($action) {
         echo json_encode(['success' => true]);
         break;
 
+    // ── Test email ───────────────────────────────────────────────
     case 'send_test_email':
         $toEmail = $input['email'] ?? '';
         if (!$toEmail || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
@@ -73,7 +156,41 @@ switch ($action) {
         ]);
         break;
 
+    // ── Mark invoice paid ────────────────────────────────────────
+    case 'mark_invoice_paid':
+        $id = (int)($input['id'] ?? 0);
+        if ($id) {
+            $pdo->prepare("UPDATE invoices SET status='paid', paid_at=NOW() WHERE id=?")->execute([$id]);
+            logActivity('mark_invoice_paid', 'admin', "Invoice #$id marked paid");
+            echo json_encode(['success' => true]);
+        } else {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid invoice ID']);
+        }
+        break;
+
+    // ── Delete user ──────────────────────────────────────────────
+    case 'delete_user':
+        $id = (int)($input['id'] ?? 0);
+        if ($id) {
+            // Prevent deleting super_admin
+            $role = $pdo->prepare("SELECT role FROM users WHERE id=?");
+            $role->execute([$id]);
+            $role = $role->fetchColumn();
+            if ($role === 'super_admin') {
+                http_response_code(403);
+                echo json_encode(['error' => 'Cannot delete super admin']);
+                break;
+            }
+            $pdo->prepare("DELETE FROM users WHERE id=?")->execute([$id]);
+            echo json_encode(['success' => true]);
+        } else {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid user ID']);
+        }
+        break;
+
     default:
         http_response_code(400);
-        echo json_encode(['error' => 'Unknown action']);
+        echo json_encode(['error' => 'Unknown action: ' . htmlspecialchars($action)]);
 }

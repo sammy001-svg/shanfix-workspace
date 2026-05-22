@@ -3,147 +3,744 @@ session_start();
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/functions.php';
 
-// Redirect logged-in users
 if (isLoggedIn()) {
     redirect(($_SESSION['user_role'] === 'super_admin') ? APP_URL . '/admin/index.php' : APP_URL . '/client/index.php');
 }
 
-// Fetch modules for the modules section
-$stmt = $pdo->query("SELECT * FROM modules WHERE status='active' ORDER BY sort_order");
+$stmt    = $pdo->query("SELECT * FROM modules WHERE status='active' ORDER BY sort_order");
 $modules = $stmt->fetchAll();
 
-// Fetch plans
-$stmt = $pdo->query("SELECT * FROM subscription_plans WHERE status='active' ORDER BY price_monthly");
+$stmt  = $pdo->query("SELECT * FROM subscription_plans WHERE status='active' ORDER BY price_monthly");
 $plans = $stmt->fetchAll();
+
+$contactSent = false;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['contact_submit'])) {
+    $contactSent = true;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Shanfix Workspace — The all-in-one business management platform. Manage accounting, CRM, HRM, POS, hotel, school, SACCO, and 20+ business modules in one place.">
+<meta name="description" content="OrbitDesk Workspace — The all-in-one business management platform. Manage accounting, CRM, HRM, POS, hotel, school, SACCO, and 20+ modules in one place.">
 <title><?= APP_NAME ?> — <?= APP_TAGLINE ?></title>
 <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/assets/images/favicon.svg">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link href="<?= APP_URL ?>/assets/css/style.css" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════
+   ORBITDESK LANDING PAGE — V2 PROFESSIONAL REDESIGN
+   ═══════════════════════════════════════════════════════════ */
+:root {
+  --od-navy:   #0B2D4E;
+  --od-green:  #1A8A4E;
+  --od-glow:   rgba(26,138,78,.25);
+  --od-mesh:   rgba(255,255,255,.04);
+}
+html { scroll-behavior: smooth; }
+body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #fff; overflow-x: hidden; }
+
+/* ─── Scroll Progress Bar ────────────────────────────────── */
+#scroll-progress {
+  position: fixed; top: 0; left: 0; height: 3px;
+  background: linear-gradient(90deg, var(--od-green), #22d3a5);
+  z-index: 99999; width: 0%; transition: width .1s linear;
+}
+
+/* ─── Navbar ─────────────────────────────────────────────── */
+.od-nav {
+  position: fixed; top: 0; left: 0; right: 0;
+  padding: .9rem 0;
+  z-index: 9000;
+  transition: all .3s ease;
+}
+.od-nav.scrolled {
+  background: rgba(7,25,44,.97);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: .65rem 0;
+  box-shadow: 0 1px 0 rgba(255,255,255,.06);
+}
+.od-nav .nav-logo {
+  display: flex; align-items: center; gap: .6rem;
+  text-decoration: none;
+}
+.od-nav .logo-mark {
+  width: 38px; height: 38px;
+  background: linear-gradient(135deg, var(--od-green), #22c27a);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 900; color: white; font-size: .85rem; letter-spacing: -.5px;
+  box-shadow: 0 4px 12px rgba(26,138,78,.4);
+}
+.od-nav .logo-name { font-size: 1.1rem; font-weight: 800; color: white; }
+.od-nav .logo-name span { color: var(--od-green); }
+.od-nav-links { display: flex; align-items: center; gap: .25rem; }
+.od-nav-links a {
+  color: rgba(255,255,255,.75); font-size: .875rem; font-weight: 500;
+  padding: .45rem .9rem; border-radius: 8px; transition: all .2s;
+  text-decoration: none;
+}
+.od-nav-links a:hover { color: white; background: rgba(255,255,255,.08); }
+.od-nav .nav-cta-login {
+  color: rgba(255,255,255,.8); font-size: .875rem; font-weight: 500;
+  padding: .45rem 1.1rem; border: 1px solid rgba(255,255,255,.2);
+  border-radius: 8px; text-decoration: none; transition: all .2s;
+}
+.od-nav .nav-cta-login:hover { background: rgba(255,255,255,.1); color: white; }
+.od-nav .nav-cta-start {
+  background: var(--od-green); color: white; font-size: .875rem; font-weight: 600;
+  padding: .5rem 1.25rem; border-radius: 8px; text-decoration: none;
+  transition: all .2s; white-space: nowrap;
+}
+.od-nav .nav-cta-start:hover { background: #157a42; color: white; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(26,138,78,.4); }
+
+/* ─── Hero ───────────────────────────────────────────────── */
+.od-hero {
+  position: relative;
+  min-height: 100vh;
+  background: #050f1f;
+  display: flex; align-items: center;
+  padding: 120px 0 80px;
+  overflow: hidden;
+}
+/* Mesh grid overlay */
+.od-hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 0%, black 40%, transparent 100%);
+}
+/* Glow orbs */
+.od-hero .orb-1 {
+  position: absolute; top: -80px; right: -80px;
+  width: 600px; height: 600px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(26,138,78,.18) 0%, transparent 70%);
+  pointer-events: none;
+}
+.od-hero .orb-2 {
+  position: absolute; bottom: -120px; left: -60px;
+  width: 500px; height: 500px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(11,45,78,.4) 0%, transparent 70%);
+  pointer-events: none;
+}
+.od-hero .orb-3 {
+  position: absolute; top: 40%; left: 40%;
+  width: 300px; height: 300px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(26,138,78,.08) 0%, transparent 70%);
+  animation: orb-float 8s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes orb-float {
+  0%,100% { transform: translate(0,0); }
+  33%      { transform: translate(30px,-20px); }
+  66%      { transform: translate(-20px,30px); }
+}
+
+.hero-eyebrow {
+  display: inline-flex; align-items: center; gap: .5rem;
+  background: rgba(26,138,78,.15); border: 1px solid rgba(26,138,78,.35);
+  color: #4ade93; border-radius: 50px; padding: .35rem 1rem .35rem .65rem;
+  font-size: .8rem; font-weight: 600; letter-spacing: .3px; margin-bottom: 1.5rem;
+}
+.hero-eyebrow .dot {
+  width: 6px; height: 6px; background: #4ade93; border-radius: 50%;
+  animation: blink 2s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+
+.od-hero h1 {
+  font-size: clamp(2.4rem, 5.5vw, 4rem);
+  font-weight: 900; line-height: 1.08; color: white;
+  letter-spacing: -1.5px; margin-bottom: 1.5rem;
+}
+.od-hero h1 .grad-text {
+  background: linear-gradient(135deg, #4ade93 0%, #22d3a5 50%, #38bdf8 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.od-hero .hero-sub {
+  font-size: 1.1rem; color: rgba(255,255,255,.6); line-height: 1.8;
+  max-width: 520px; margin-bottom: 2.25rem; font-weight: 400;
+}
+.od-hero .hero-actions { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: 3rem; }
+.btn-od-primary {
+  background: var(--od-green); color: white; border: none;
+  padding: .85rem 1.75rem; border-radius: 10px; font-weight: 700;
+  font-size: .95rem; transition: all .25s; text-decoration: none;
+  display: inline-flex; align-items: center; gap: .5rem;
+}
+.btn-od-primary:hover { background: #157a42; color: white; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(26,138,78,.4); }
+.btn-od-ghost {
+  background: rgba(255,255,255,.07); color: rgba(255,255,255,.85);
+  border: 1px solid rgba(255,255,255,.15); padding: .85rem 1.75rem;
+  border-radius: 10px; font-weight: 600; font-size: .95rem;
+  transition: all .25s; text-decoration: none;
+  display: inline-flex; align-items: center; gap: .5rem;
+}
+.btn-od-ghost:hover { background: rgba(255,255,255,.12); color: white; border-color: rgba(255,255,255,.3); }
+
+/* Trust badges under CTA */
+.hero-trust {
+  display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;
+}
+.hero-trust .trust-item {
+  display: flex; align-items: center; gap: .4rem;
+  color: rgba(255,255,255,.5); font-size: .8rem;
+}
+.hero-trust .trust-item i { color: var(--od-green); font-size: .75rem; }
+
+/* ─── Dashboard Mockup ──────────────────────────────────── */
+.od-dashboard-wrap {
+  position: relative; z-index: 2;
+}
+.od-dashboard {
+  background: #0f1f33;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.05),
+    0 40px 80px rgba(0,0,0,.6),
+    0 0 80px rgba(26,138,78,.1);
+  animation: float-dash 6s ease-in-out infinite;
+}
+@keyframes float-dash {
+  0%,100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+.dash-chrome {
+  background: #0a1625;
+  padding: .7rem 1rem;
+  display: flex; align-items: center; gap: .5rem;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+}
+.dash-chrome .dot { width: 10px; height: 10px; border-radius: 50%; }
+.dash-url-bar {
+  flex: 1; background: rgba(255,255,255,.06); border-radius: 6px;
+  padding: .25rem .75rem; font-size: .72rem; color: rgba(255,255,255,.4);
+  margin: 0 .75rem;
+}
+.dash-body { padding: 1.25rem; }
+.dash-header-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.dash-title { color: white; font-weight: 700; font-size: .9rem; }
+.dash-period {
+  background: rgba(26,138,78,.2); color: #4ade93;
+  border-radius: 6px; padding: .2rem .65rem; font-size: .7rem; font-weight: 600;
+}
+.dash-kpis { display: grid; grid-template-columns: repeat(4,1fr); gap: .6rem; margin-bottom: 1rem; }
+.dash-kpi {
+  background: rgba(255,255,255,.05); border-radius: 10px; padding: .75rem;
+  border: 1px solid rgba(255,255,255,.07);
+}
+.dash-kpi .kv { font-size: 1rem; font-weight: 800; color: white; }
+.dash-kpi .kv.green { color: #4ade93; }
+.dash-kpi .kv.amber { color: #fbbf24; }
+.dash-kpi .kv.red   { color: #f87171; }
+.dash-kpi .kl { font-size: .62rem; color: rgba(255,255,255,.4); margin-top: .15rem; }
+.dash-kpi .kt { font-size: .62rem; margin-top: .25rem; }
+.dash-kpi .kt.up   { color: #4ade93; }
+.dash-kpi .kt.down { color: #f87171; }
+
+.dash-chart-section { background: rgba(255,255,255,.04); border-radius: 10px; padding: .9rem; margin-bottom: 1rem; border: 1px solid rgba(255,255,255,.06); }
+.dash-chart-label { font-size: .7rem; color: rgba(255,255,255,.4); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; margin-bottom: .75rem; }
+.dash-bars { display: flex; align-items: flex-end; gap: 4px; height: 70px; }
+.dash-bar { flex: 1; border-radius: 4px 4px 0 0; background: rgba(26,138,78,.25); transition: height .5s ease; }
+.dash-bar.hi { background: linear-gradient(180deg, #4ade93 0%, var(--od-green) 100%); }
+
+.dash-modules { display: grid; grid-template-columns: repeat(3,1fr); gap: .5rem; }
+.dash-mod {
+  background: rgba(255,255,255,.05); border-radius: 8px; padding: .6rem .75rem;
+  display: flex; align-items: center; gap: .5rem;
+  border: 1px solid rgba(255,255,255,.06);
+}
+.dash-mod-icon { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: .6rem; flex-shrink: 0; }
+.dash-mod-name { font-size: .65rem; font-weight: 600; color: rgba(255,255,255,.75); }
+
+/* Floating badges */
+.float-badge {
+  position: absolute; background: white;
+  border-radius: 12px; padding: .6rem .9rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,.3);
+  display: flex; align-items: center; gap: .5rem;
+  font-size: .75rem; font-weight: 700; white-space: nowrap;
+  animation: badge-float 5s ease-in-out infinite;
+}
+.float-badge-1 { top: -20px; right: -30px; animation-delay: 0s; }
+.float-badge-2 { bottom: 40px; left: -40px; animation-delay: 2.5s; }
+@keyframes badge-float {
+  0%,100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+.float-badge .fb-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: .8rem; }
+
+/* ─── Trusted By Strip ───────────────────────────────────── */
+.trusted-strip {
+  background: #fff; border-top: 1px solid #f0f4f8; border-bottom: 1px solid #f0f4f8;
+  padding: 1.75rem 0;
+}
+.trusted-label { font-size: .72rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+.industry-pill {
+  display: inline-flex; align-items: center; gap: .4rem;
+  background: #f8fafc; border: 1px solid #e2e8f0;
+  border-radius: 50px; padding: .4rem 1rem;
+  font-size: .8rem; font-weight: 600; color: #475569;
+  transition: all .2s;
+}
+.industry-pill i { font-size: .75rem; }
+.industry-pill:hover { background: #e6f5ee; border-color: #1A8A4E; color: #1A8A4E; }
+
+/* ─── Impact Stats ───────────────────────────────────────── */
+.impact-section {
+  background: linear-gradient(135deg, #050f1f 0%, #0B2D4E 60%, #0d3b1e 100%);
+  padding: 5rem 0; position: relative; overflow: hidden;
+}
+.impact-section::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.impact-stat { text-align: center; position: relative; z-index: 1; }
+.impact-stat .i-num {
+  font-size: clamp(2.5rem, 5vw, 3.8rem); font-weight: 900; color: white;
+  line-height: 1; letter-spacing: -2px;
+}
+.impact-stat .i-num span { color: #4ade93; }
+.impact-stat .i-label { font-size: .85rem; color: rgba(255,255,255,.5); margin-top: .4rem; font-weight: 500; }
+.impact-divider { width: 1px; background: rgba(255,255,255,.1); }
+
+/* ─── Features ───────────────────────────────────────────── */
+.od-section-eyebrow {
+  display: inline-block; background: #e6f5ee; color: #157a42;
+  font-size: .72rem; font-weight: 800; padding: .3rem .9rem;
+  border-radius: 50px; text-transform: uppercase; letter-spacing: .8px; margin-bottom: 1rem;
+}
+.od-section-title {
+  font-size: clamp(1.8rem, 3.5vw, 2.6rem); font-weight: 900;
+  color: #0B2D4E; letter-spacing: -1px; line-height: 1.15;
+}
+.od-section-sub { color: #64748b; font-size: 1rem; line-height: 1.7; max-width: 540px; margin: .75rem auto 0; }
+
+.feature-card {
+  background: white; border-radius: 16px; padding: 2rem 1.75rem;
+  border: 1px solid #f0f4f8; height: 100%;
+  transition: all .3s cubic-bezier(.4,0,.2,1);
+  position: relative; overflow: hidden;
+}
+.feature-card::before {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--od-green), #22d3a5);
+  transform: scaleX(0); transition: transform .3s ease;
+  transform-origin: left;
+}
+.feature-card:hover { transform: translateY(-6px); box-shadow: 0 20px 50px rgba(11,45,78,.1); border-color: #e6f5ee; }
+.feature-card:hover::before { transform: scaleX(1); }
+.feat-icon-wrap {
+  width: 52px; height: 52px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem; margin-bottom: 1.25rem;
+}
+.feature-card h6 { font-size: .95rem; font-weight: 800; color: #0B2D4E; margin-bottom: .6rem; }
+.feature-card p  { font-size: .85rem; color: #64748b; line-height: 1.65; margin: 0; }
+
+/* ─── Modules ─────────────────────────────────────────────── */
+.od-modules-bg { background: #f8fafc; }
+.mod-filter-tabs { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: center; margin-bottom: 2.5rem; }
+.mod-filter-tab {
+  padding: .45rem 1.1rem; border-radius: 8px; font-size: .82rem; font-weight: 600;
+  border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;
+  transition: all .2s;
+}
+.mod-filter-tab.active, .mod-filter-tab:hover { background: #0B2D4E; color: white; border-color: #0B2D4E; }
+
+.mod-tile {
+  background: white; border-radius: 14px; padding: 1.5rem 1.25rem;
+  text-align: center; border: 2px solid transparent;
+  box-shadow: 0 2px 8px rgba(0,0,0,.05);
+  transition: all .25s; height: 100%;
+  text-decoration: none; display: block;
+}
+.mod-tile:hover { transform: translateY(-4px); box-shadow: 0 16px 40px rgba(11,45,78,.1); border-color: var(--od-green); }
+.mod-tile-icon { width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; margin: 0 auto .85rem; }
+.mod-tile h6   { font-size: .875rem; font-weight: 800; color: #0B2D4E; margin-bottom: .3rem; }
+.mod-tile p    { font-size: .75rem; color: #94a3b8; margin: 0; line-height: 1.5; }
+.mod-tile .price-pill {
+  display: inline-block; margin-top: .65rem; background: #e6f5ee; color: #157a42;
+  font-size: .72rem; font-weight: 700; padding: .2rem .65rem; border-radius: 50px;
+}
+
+/* ─── How It Works ────────────────────────────────────────── */
+.od-how-bg { background: white; }
+.process-row { position: relative; }
+.process-connector {
+  position: absolute; top: 32px; left: calc(16.666% + 30px);
+  right: calc(16.666% + 30px); height: 2px;
+  background: linear-gradient(90deg, var(--od-green), #38bdf8);
+  opacity: .2;
+}
+.process-step { text-align: center; position: relative; z-index: 1; }
+.process-num {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--od-green), #0B2D4E);
+  color: white; font-size: 1.5rem; font-weight: 900;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 1.25rem;
+  box-shadow: 0 6px 20px rgba(26,138,78,.35);
+  position: relative;
+}
+.process-num::after {
+  content: ''; position: absolute; inset: -4px; border-radius: 50%;
+  border: 2px dashed rgba(26,138,78,.3); animation: spin 12s linear infinite;
+}
+@keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+.process-step h5 { font-size: 1rem; font-weight: 800; color: #0B2D4E; margin-bottom: .5rem; }
+.process-step p  { font-size: .875rem; color: #64748b; line-height: 1.65; max-width: 240px; margin: 0 auto; }
+
+/* ─── Testimonials ────────────────────────────────────────── */
+.od-testimonials-bg { background: #f8fafc; }
+.testi-card {
+  background: white; border-radius: 16px; padding: 2rem;
+  box-shadow: 0 2px 16px rgba(11,45,78,.07);
+  border: 1px solid #f0f4f8; height: 100%;
+  transition: all .25s;
+}
+.testi-card:hover { transform: translateY(-4px); box-shadow: 0 16px 40px rgba(11,45,78,.1); }
+.testi-stars { display: flex; gap: 3px; margin-bottom: 1rem; }
+.testi-stars i { color: #fbbf24; font-size: .8rem; }
+.testi-quote {
+  font-size: .9rem; color: #475569; line-height: 1.75; margin-bottom: 1.5rem;
+  font-style: italic; position: relative;
+}
+.testi-quote::before { content: '\201C'; font-size: 3rem; color: #e2e8f0; line-height: 0; vertical-align: -1rem; margin-right: .2rem; font-style: normal; }
+.testi-author { display: flex; align-items: center; gap: .75rem; }
+.testi-avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: .8rem; color: white; flex-shrink: 0;
+}
+.testi-name { font-size: .875rem; font-weight: 700; color: #0B2D4E; }
+.testi-role { font-size: .75rem; color: #94a3b8; }
+
+/* ─── Pricing ─────────────────────────────────────────────── */
+.od-pricing-bg { background: white; }
+.billing-toggle-wrap {
+  display: inline-flex; align-items: center; gap: .75rem;
+  background: #f8fafc; border: 1px solid #e2e8f0;
+  border-radius: 12px; padding: .5rem 1.25rem; margin-bottom: 3rem;
+}
+.billing-toggle-wrap span { font-size: .875rem; font-weight: 600; color: #64748b; }
+.billing-toggle-wrap span.active { color: #0B2D4E; }
+
+.od-plan-card {
+  background: white; border-radius: 20px; padding: 2.25rem 2rem;
+  border: 2px solid #f0f4f8; position: relative;
+  transition: all .3s; height: 100%;
+}
+.od-plan-card:hover { transform: translateY(-6px); box-shadow: 0 24px 60px rgba(11,45,78,.12); }
+.od-plan-card.popular {
+  border-color: var(--od-green);
+  box-shadow: 0 12px 40px rgba(26,138,78,.15);
+  background: linear-gradient(180deg, #e6f5ee 0%, #ffffff 25%);
+}
+.od-plan-card .pop-label {
+  position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+  background: var(--od-green); color: white; font-size: .72rem; font-weight: 800;
+  padding: .3rem 1rem; border-radius: 50px; white-space: nowrap;
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.od-plan-card .plan-name { font-size: .85rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: .5rem; }
+.od-plan-card .plan-price { font-size: 3rem; font-weight: 900; color: #0B2D4E; line-height: 1; letter-spacing: -2px; }
+.od-plan-card .plan-price sup { font-size: 1rem; font-weight: 600; color: #94a3b8; vertical-align: top; margin-top: .6rem; letter-spacing: 0; }
+.od-plan-card .plan-price .per { font-size: .9rem; font-weight: 500; color: #94a3b8; letter-spacing: 0; }
+.plan-features { list-style: none; padding: 0; margin: 1.75rem 0; }
+.plan-features li { display: flex; align-items: flex-start; gap: .65rem; padding: .45rem 0; font-size: .875rem; color: #475569; border-bottom: 1px solid #f8fafc; }
+.plan-features li:last-child { border-bottom: none; }
+.plan-features li i { color: var(--od-green); font-size: .75rem; margin-top: .2rem; flex-shrink: 0; }
+.btn-plan-primary { display: block; width: 100%; padding: .85rem; border-radius: 10px; font-weight: 700; font-size: .9rem; text-align: center; background: var(--od-green); color: white; text-decoration: none; transition: all .2s; border: none; }
+.btn-plan-primary:hover { background: #157a42; color: white; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(26,138,78,.35); }
+.btn-plan-outline { display: block; width: 100%; padding: .85rem; border-radius: 10px; font-weight: 700; font-size: .9rem; text-align: center; background: transparent; color: #0B2D4E; border: 2px solid #e2e8f0; text-decoration: none; transition: all .2s; }
+.btn-plan-outline:hover { border-color: var(--od-green); color: var(--od-green); }
+
+/* ─── FAQ ─────────────────────────────────────────────────── */
+.od-faq-bg { background: #f8fafc; }
+.od-accordion .accordion-item { background: white; border: 1px solid #f0f4f8; border-radius: 12px !important; margin-bottom: .6rem; overflow: hidden; }
+.od-accordion .accordion-button {
+  background: white; color: #0B2D4E; font-weight: 700; font-size: .9rem;
+  border-radius: 12px !important; padding: 1.1rem 1.5rem;
+  box-shadow: none !important;
+}
+.od-accordion .accordion-button:not(.collapsed) { color: var(--od-green); background: #e6f5ee; }
+.od-accordion .accordion-button::after { filter: none; }
+.od-accordion .accordion-button:not(.collapsed)::after { filter: hue-rotate(120deg) saturate(2); }
+.od-accordion .accordion-body { color: #64748b; font-size: .875rem; line-height: 1.75; padding: .5rem 1.5rem 1.25rem; }
+
+/* ─── CTA Section ─────────────────────────────────────────── */
+.od-cta-section {
+  background: linear-gradient(135deg, #050f1f 0%, #0B2D4E 50%, #0d3b1e 100%);
+  padding: 6rem 0; position: relative; overflow: hidden;
+}
+.od-cta-section::before {
+  content: ''; position: absolute; inset: 0;
+  background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.od-cta-section .cta-glow {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  width: 600px; height: 300px;
+  background: radial-gradient(ellipse, rgba(26,138,78,.2) 0%, transparent 70%);
+}
+.od-cta-section h2 { font-size: clamp(2rem, 4vw, 3rem); font-weight: 900; color: white; letter-spacing: -1px; }
+.od-cta-section p  { color: rgba(255,255,255,.6); font-size: 1.05rem; max-width: 520px; margin: 0 auto 2.5rem; }
+.cta-trust-row { display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; margin-top: 2.5rem; }
+.cta-trust-item { display: flex; align-items: center; gap: .4rem; color: rgba(255,255,255,.45); font-size: .8rem; }
+.cta-trust-item i { color: #4ade93; }
+
+/* ─── Contact ─────────────────────────────────────────────── */
+.od-contact-bg { background: white; }
+.contact-info-card {
+  display: flex; align-items: flex-start; gap: 1rem;
+  background: #f8fafc; border: 1px solid #f0f4f8;
+  border-radius: 14px; padding: 1.25rem 1.5rem;
+  margin-bottom: 1rem; transition: all .2s;
+}
+.contact-info-card:hover { border-color: #c7e8d8; background: #e6f5ee; }
+.contact-info-card .ci-icon {
+  width: 44px; height: 44px; border-radius: 12px; background: #e6f5ee;
+  color: var(--od-green); display: flex; align-items: center; justify-content: center;
+  font-size: 1rem; flex-shrink: 0;
+}
+.contact-info-card .ci-label { font-size: .72rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .5px; margin-bottom: .2rem; }
+.contact-info-card .ci-value { font-size: .9rem; font-weight: 600; color: #0B2D4E; }
+
+.od-contact-form { background: #f8fafc; border-radius: 20px; padding: 2.5rem; border: 1px solid #f0f4f8; }
+.od-contact-form .form-control, .od-contact-form .form-select {
+  background: white; border-color: #e2e8f0; border-radius: 10px;
+  padding: .7rem 1rem; font-size: .875rem;
+}
+.od-contact-form .form-control:focus, .od-contact-form .form-select:focus {
+  border-color: var(--od-green); box-shadow: 0 0 0 3px rgba(26,138,78,.1);
+}
+.od-contact-form .form-label { font-size: .82rem; font-weight: 700; color: #475569; margin-bottom: .4rem; }
+
+/* ─── Footer ──────────────────────────────────────────────── */
+.od-footer { background: #050f1f; color: rgba(255,255,255,.55); }
+.od-footer .foot-logo-name { font-size: 1.15rem; font-weight: 900; color: white; }
+.od-footer .foot-logo-name span { color: #4ade93; }
+.od-footer .foot-desc { font-size: .85rem; line-height: 1.7; color: rgba(255,255,255,.45); max-width: 280px; }
+.od-footer h6 { font-size: .78rem; font-weight: 800; color: rgba(255,255,255,.9); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 1.1rem; }
+.od-footer .foot-link { display: block; color: rgba(255,255,255,.45); font-size: .85rem; margin-bottom: .5rem; text-decoration: none; transition: color .2s; }
+.od-footer .foot-link:hover { color: #4ade93; }
+.od-footer .social-links { display: flex; gap: .5rem; margin-top: 1.25rem; }
+.od-footer .soc-btn {
+  width: 36px; height: 36px; border-radius: 9px;
+  background: rgba(255,255,255,.07); color: rgba(255,255,255,.6);
+  display: flex; align-items: center; justify-content: center;
+  font-size: .8rem; transition: all .2s; text-decoration: none;
+}
+.od-footer .soc-btn:hover { background: var(--od-green); color: white; }
+.od-footer .foot-bottom { border-top: 1px solid rgba(255,255,255,.07); padding: 1.5rem 0; }
+.od-footer .foot-bottom p { font-size: .8rem; color: rgba(255,255,255,.35); margin: 0; }
+.od-footer .foot-badges { display: flex; gap: .75rem; align-items: center; }
+.od-footer .foot-badge {
+  display: inline-flex; align-items: center; gap: .35rem;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+  border-radius: 6px; padding: .25rem .65rem; font-size: .7rem; color: rgba(255,255,255,.45);
+}
+.od-footer .foot-badge i { color: #4ade93; font-size: .65rem; }
+
+/* ─── Scroll-reveal ───────────────────────────────────────── */
+.reveal { opacity: 0; transform: translateY(28px); transition: opacity .6s ease, transform .6s ease; }
+.reveal.visible { opacity: 1; transform: translateY(0); }
+.reveal.delay-1 { transition-delay: .1s; }
+.reveal.delay-2 { transition-delay: .2s; }
+.reveal.delay-3 { transition-delay: .3s; }
+.reveal.delay-4 { transition-delay: .4s; }
+
+/* ─── Mobile Nav ──────────────────────────────────────────── */
+.od-mobile-menu {
+  background: rgba(5,15,31,.98); border-top: 1px solid rgba(255,255,255,.08);
+  padding: 1rem; margin-top: .5rem;
+}
+.od-mobile-menu a { display: block; color: rgba(255,255,255,.75); padding: .65rem .75rem; border-radius: 8px; font-weight: 500; font-size: .9rem; text-decoration: none; margin-bottom: .2rem; }
+.od-mobile-menu a:hover { background: rgba(255,255,255,.08); color: white; }
+.od-mobile-menu .mob-divider { border-color: rgba(255,255,255,.1); margin: .5rem 0; }
+</style>
 </head>
 <body class="landing-body">
 
-<!-- ═══════════════ NAVBAR ═══════════════════════════════════════ -->
-<nav class="landing-nav" id="mainNav">
+<!-- Scroll progress -->
+<div id="scroll-progress"></div>
+
+<!-- ══════════════════════════════════════════════════════════
+     NAVBAR
+══════════════════════════════════════════════════════════ -->
+<nav class="od-nav" id="odNav">
   <div class="container">
     <div class="d-flex align-items-center justify-content-between">
-      <a href="#hero" class="nav-brand text-decoration-none">
-        <div class="logo-icon"><i class="fas fa-cubes text-white"></i></div>
-        <span><?= APP_NAME ?></span>
+      <!-- Logo -->
+      <a href="#hero" class="nav-logo">
+        <div class="logo-mark">OD</div>
+        <div class="logo-name">Orbit<span>Desk</span></div>
       </a>
-      <div class="d-none d-lg-flex align-items-center gap-3">
-        <a href="#features"  class="nav-link">Features</a>
-        <a href="#modules"   class="nav-link">Modules</a>
-        <a href="#pricing"   class="nav-link">Pricing</a>
-        <a href="#about"     class="nav-link">About</a>
-        <a href="#contact"   class="nav-link">Contact</a>
+      <!-- Desktop links -->
+      <div class="od-nav-links d-none d-lg-flex">
+        <a href="#features">Features</a>
+        <a href="#modules">Modules</a>
+        <a href="#how">How it Works</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#contact">Contact</a>
       </div>
+      <!-- CTAs -->
       <div class="d-flex align-items-center gap-2">
-        <a href="<?= APP_URL ?>/auth/login.php"    class="btn-login">Login</a>
-        <a href="<?= APP_URL ?>/auth/register.php" class="btn-getstarted">Get Started Free</a>
-        <button class="d-lg-none btn-icon text-white" data-bs-toggle="collapse" data-bs-target="#mobileMenu">
+        <a href="<?= APP_URL ?>/auth/login.php" class="nav-cta-login d-none d-sm-inline">Login</a>
+        <a href="<?= APP_URL ?>/auth/register.php" class="nav-cta-start">Get Started <i class="fas fa-arrow-right ms-1" style="font-size:.75rem"></i></a>
+        <button class="d-lg-none btn-icon text-white ms-1" style="background:none;border:none;font-size:1.1rem;cursor:pointer" data-bs-toggle="collapse" data-bs-target="#mobileNav">
           <i class="fas fa-bars"></i>
         </button>
       </div>
     </div>
-    <!-- Mobile menu -->
-    <div class="collapse mt-3 pb-2" id="mobileMenu">
-      <div class="d-flex flex-column gap-1">
-        <a href="#features" class="nav-link">Features</a>
-        <a href="#modules"  class="nav-link">Modules</a>
-        <a href="#pricing"  class="nav-link">Pricing</a>
-        <a href="#contact"  class="nav-link">Contact</a>
+    <!-- Mobile nav -->
+    <div class="collapse" id="mobileNav">
+      <div class="od-mobile-menu">
+        <a href="#features"><i class="fas fa-bolt me-2"></i>Features</a>
+        <a href="#modules"><i class="fas fa-th me-2"></i>Modules</a>
+        <a href="#how"><i class="fas fa-route me-2"></i>How it Works</a>
+        <a href="#pricing"><i class="fas fa-tags me-2"></i>Pricing</a>
+        <a href="#contact"><i class="fas fa-envelope me-2"></i>Contact</a>
+        <hr class="mob-divider">
+        <a href="<?= APP_URL ?>/auth/login.php"><i class="fas fa-sign-in-alt me-2"></i>Login</a>
+        <a href="<?= APP_URL ?>/auth/register.php" style="background:var(--od-green);color:white;text-align:center;font-weight:700">Start Free Trial</a>
       </div>
     </div>
   </div>
 </nav>
 
-<!-- ═══════════════ HERO ══════════════════════════════════════════ -->
-<section class="hero" id="hero">
-  <div class="container">
+<!-- ══════════════════════════════════════════════════════════
+     HERO
+══════════════════════════════════════════════════════════ -->
+<section class="od-hero" id="hero">
+  <div class="orb-1"></div>
+  <div class="orb-2"></div>
+  <div class="orb-3"></div>
+  <div class="container position-relative" style="z-index:2">
     <div class="row align-items-center g-5">
-      <div class="col-lg-6 hero-content">
-        <div class="hero-badge animate-in">
-          <i class="fas fa-star"></i> Kenya's #1 Business Management Platform
+      <!-- Left: Copy -->
+      <div class="col-lg-6">
+        <div class="hero-eyebrow">
+          <span class="dot"></span>
+          Kenya's #1 Business Management Suite
         </div>
-        <h1 class="animate-in delay-1">
+        <h1>
           One Platform.<br>
-          <span class="highlight">20+ Business</span><br>
+          <span class="grad-text">20+ Business</span><br>
           Solutions.
         </h1>
-        <p class="animate-in delay-2">
-          Shanfix Workspace brings all your business operations into a single, powerful platform.
-          From accounting to hotel management, HRM to SACCO — subscribe to only what you need.
+        <p class="hero-sub">
+          OrbitDesk Workspace centralises every aspect of your business — accounting, HR, POS, hotel, school, SACCO, and more — in a single, powerful, cloud-based platform.
         </p>
-        <div class="hero-cta animate-in delay-3">
-          <a href="<?= APP_URL ?>/auth/register.php" class="btn btn-hero-primary">
-            Start Free Trial <i class="fas fa-arrow-right ms-2"></i>
+        <div class="hero-actions">
+          <a href="<?= APP_URL ?>/auth/register.php" class="btn-od-primary">
+            Start Free Trial <i class="fas fa-arrow-right"></i>
           </a>
-          <a href="#modules" class="btn btn-hero-outline">
-            <i class="fas fa-play-circle me-2"></i> Explore Modules
+          <a href="#modules" class="btn-od-ghost">
+            <i class="fas fa-th-large"></i> Browse Modules
           </a>
         </div>
-        <div class="hero-stats animate-in delay-3">
-          <div class="hero-stat">
-            <div class="num" data-counter data-target="500">0</div>
-            <div class="lbl">Businesses</div>
-          </div>
-          <div class="hero-stat">
-            <div class="num" data-counter data-target="20">0</div>
-            <div class="lbl">Modules</div>
-          </div>
-          <div class="hero-stat">
-            <div class="num" data-counter data-target="99">0</div>
-            <div class="lbl">% Uptime</div>
-          </div>
-          <div class="hero-stat">
-            <div class="num" data-counter data-target="24">0</div>
-            <div class="lbl">/7 Support</div>
-          </div>
+        <div class="hero-trust">
+          <div class="trust-item"><i class="fas fa-check-circle"></i> No credit card</div>
+          <div class="trust-item"><i class="fas fa-check-circle"></i> 14-day free trial</div>
+          <div class="trust-item"><i class="fas fa-check-circle"></i> Cancel anytime</div>
+          <div class="trust-item"><i class="fas fa-check-circle"></i> M-Pesa ready</div>
         </div>
       </div>
 
-      <!-- Dashboard mockup -->
-      <div class="col-lg-6 hero-visual d-none d-lg-block animate-in delay-2">
-        <div class="hero-dashboard">
-          <div class="hd-header">
-            <div class="hd-dot" style="background:#ef4444"></div>
-            <div class="hd-dot" style="background:#f59e0b"></div>
-            <div class="hd-dot" style="background:#22c55e"></div>
-            <span class="ms-2 text-muted small">Shanfix Dashboard</span>
-          </div>
-          <div class="row g-2 mb-3">
-            <div class="col-3"><div class="hd-mini-stat"><div class="val text-success">KES 2.4M</div><div class="lbl">Revenue</div></div></div>
-            <div class="col-3"><div class="hd-mini-stat"><div class="val" style="color:var(--navy)">1,284</div><div class="lbl">Customers</div></div></div>
-            <div class="col-3"><div class="hd-mini-stat"><div class="val text-warning">48</div><div class="lbl">Orders</div></div></div>
-            <div class="col-3"><div class="hd-mini-stat"><div class="val text-danger">12</div><div class="lbl">Pending</div></div></div>
-          </div>
-          <div class="mb-3 p-2 bg-light rounded">
-            <div class="small fw-bold mb-2 text-muted">Monthly Revenue</div>
-            <div class="hd-chart-bar">
-              <?php $bars = [40,55,35,70,50,65,80,90,60,75,85,100]; foreach($bars as $i => $h): ?>
-              <div class="hd-bar <?= $i >= 9 ? 'active' : '' ?>" style="height:<?= $h ?>%"></div>
-              <?php endforeach; ?>
+      <!-- Right: Dashboard Mockup -->
+      <div class="col-lg-6 d-none d-lg-block">
+        <div class="od-dashboard-wrap">
+          <!-- Floating badges -->
+          <div class="float-badge float-badge-1">
+            <div class="fb-icon" style="background:#e6f5ee;color:#1A8A4E"><i class="fas fa-chart-line"></i></div>
+            <div>
+              <div style="font-size:.7rem;font-weight:800;color:#0B2D4E">Revenue Up</div>
+              <div style="font-size:.65rem;color:#1A8A4E">+24% this month</div>
             </div>
           </div>
-          <div class="row g-2">
-            <?php $mods = array_slice($modules, 0, 6); foreach($mods as $m): ?>
-            <div class="col-4">
-              <div class="d-flex align-items-center gap-1 p-2 bg-light rounded">
-                <div style="width:24px;height:24px;border-radius:6px;background:<?= e($m['color']) ?>22;display:flex;align-items:center;justify-content:center;color:<?= e($m['color']) ?>;font-size:.6rem;">
-                  <i class="<?= e($m['icon']) ?>"></i>
+          <div class="float-badge float-badge-2">
+            <div class="fb-icon" style="background:#fff3cd;color:#f59e0b"><i class="fas fa-bell"></i></div>
+            <div>
+              <div style="font-size:.7rem;font-weight:800;color:#0B2D4E">New Booking</div>
+              <div style="font-size:.65rem;color:#64748b">Room 204 — checked in</div>
+            </div>
+          </div>
+
+          <!-- Dashboard -->
+          <div class="od-dashboard">
+            <div class="dash-chrome">
+              <div class="dot" style="background:#ef4444"></div>
+              <div class="dot" style="background:#f59e0b"></div>
+              <div class="dot" style="background:#22c55e"></div>
+              <div class="dash-url-bar">app.orbitdesk.co.ke/dashboard</div>
+            </div>
+            <div class="dash-body">
+              <div class="dash-header-row">
+                <div class="dash-title">Business Overview</div>
+                <div class="dash-period">This Month</div>
+              </div>
+              <div class="dash-kpis">
+                <div class="dash-kpi">
+                  <div class="kv green">KES 2.4M</div>
+                  <div class="kl">Revenue</div>
+                  <div class="kt up"><i class="fas fa-arrow-up" style="font-size:.55rem"></i> 24%</div>
                 </div>
-                <span style="font-size:.65rem;font-weight:600;color:var(--navy)"><?= e(explode(' ', $m['name'])[0]) ?></span>
+                <div class="dash-kpi">
+                  <div class="kv" style="color:#38bdf8">1,284</div>
+                  <div class="kl">Customers</div>
+                  <div class="kt up"><i class="fas fa-arrow-up" style="font-size:.55rem"></i> 12%</div>
+                </div>
+                <div class="dash-kpi">
+                  <div class="kv amber">48</div>
+                  <div class="kl">Pending</div>
+                  <div class="kt down"><i class="fas fa-arrow-down" style="font-size:.55rem"></i> 3%</div>
+                </div>
+                <div class="dash-kpi">
+                  <div class="kv" style="color:#a78bfa">99.9%</div>
+                  <div class="kl">Uptime</div>
+                  <div class="kt up">Stable</div>
+                </div>
+              </div>
+
+              <div class="dash-chart-section">
+                <div class="dash-chart-label">Monthly Revenue Trend</div>
+                <div class="dash-bars">
+                  <?php $heights=[30,45,28,58,40,52,65,72,50,68,80,100]; foreach($heights as $i=>$h): ?>
+                  <div class="dash-bar <?= $i>=9?'hi':'' ?>" style="height:<?=$h?>%"></div>
+                  <?php endforeach; ?>
+                </div>
+              </div>
+
+              <div class="dash-modules">
+                <?php foreach(array_slice($modules,0,6) as $m): ?>
+                <div class="dash-mod">
+                  <div class="dash-mod-icon" style="background:<?=e($m['color'])?>22;color:<?=e($m['color'])?>">
+                    <i class="<?=e($m['icon'])?>"></i>
+                  </div>
+                  <div class="dash-mod-name"><?=e(explode(' ',$m['name'])[0])?></div>
+                </div>
+                <?php endforeach; ?>
               </div>
             </div>
-            <?php endforeach; ?>
           </div>
         </div>
       </div>
@@ -151,47 +748,93 @@ $plans = $stmt->fetchAll();
   </div>
 </section>
 
-<!-- ═══════════════ TRUSTED BY ════════════════════════════════════ -->
-<section class="py-4 bg-white border-bottom">
-  <div class="container text-center">
-    <p class="text-muted small text-uppercase letter-spacing-2 mb-3">Trusted by businesses across Kenya</p>
-    <div class="d-flex justify-content-center align-items-center gap-4 flex-wrap">
-      <?php $types = ['Schools','Hotels','SACCOs','Hospitals','Salons','Retailers','NGOs','Churches']; ?>
-      <?php foreach($types as $t): ?>
-      <span class="px-3 py-2 rounded-pill border text-muted" style="font-size:.8rem;font-weight:600"><?= $t ?></span>
+<!-- ══════════════════════════════════════════════════════════
+     TRUSTED BY
+══════════════════════════════════════════════════════════ -->
+<section class="trusted-strip">
+  <div class="container">
+    <div class="d-flex flex-column flex-sm-row align-items-center gap-3">
+      <span class="trusted-label text-nowrap">Trusted by</span>
+      <div class="d-flex gap-2 flex-wrap">
+        <?php
+        $industries = [
+          ['Schools',       'fas fa-school'],
+          ['Hotels',        'fas fa-hotel'],
+          ['SACCOs',        'fas fa-piggy-bank'],
+          ['Hospitals',     'fas fa-hospital'],
+          ['Salons',        'fas fa-cut'],
+          ['Retail Shops',  'fas fa-store'],
+          ['Churches',      'fas fa-church'],
+          ['NGOs',          'fas fa-hands-helping'],
+          ['Car Yards',     'fas fa-car'],
+          ['Manufacturing', 'fas fa-industry'],
+        ];
+        foreach($industries as $ind): ?>
+        <span class="industry-pill">
+          <i class="<?=$ind[1]?>" style="color:#1A8A4E"></i> <?=$ind[0]?>
+        </span>
+        <?php endforeach; ?>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     IMPACT STATS
+══════════════════════════════════════════════════════════ -->
+<section class="impact-section">
+  <div class="container">
+    <div class="row g-4 justify-content-center">
+      <?php
+      $stats = [
+        ['500+', '', 'Businesses Served',    'Across Kenya & East Africa'],
+        ['20',   '+', 'Business Modules',    'Cover every industry vertical'],
+        ['99.9', '%', 'Platform Uptime',     'Enterprise-grade reliability'],
+        ['24',   '/7', 'Expert Support',     'Phone, WhatsApp & email'],
+      ];
+      foreach($stats as $i=>$s): ?>
+      <div class="col-6 col-lg-3 <?=$i>0?'border-start border-secondary border-opacity-25':''?>">
+        <div class="impact-stat reveal" data-delay="<?=$i?>">
+          <div class="i-num" data-counter data-target="<?=preg_replace('/\D/','',$s[0])?>">0<span><?=$s[1]?></span></div>
+          <div class="i-label fw-bold text-white mb-1" style="font-size:1rem"><?=$s[2]?></div>
+          <div class="i-label"><?=$s[3]?></div>
+        </div>
+      </div>
       <?php endforeach; ?>
     </div>
   </div>
 </section>
 
-<!-- ═══════════════ FEATURES ══════════════════════════════════════ -->
-<section class="py-6 bg-white" id="features" style="padding:5rem 0">
+<!-- ══════════════════════════════════════════════════════════
+     FEATURES
+══════════════════════════════════════════════════════════ -->
+<section id="features" style="padding:6rem 0;background:white">
   <div class="container">
-    <div class="text-center mb-5">
-      <div class="section-badge">Why Shanfix?</div>
-      <h2 class="section-title">Everything Your Business Needs</h2>
-      <p class="section-sub">Built for the African market with features that matter to your business growth</p>
+    <div class="text-center mb-5 reveal">
+      <span class="od-section-eyebrow">Why OrbitDesk?</span>
+      <h2 class="od-section-title">Built for Real Business<br>Growth in Africa</h2>
+      <p class="od-section-sub">Enterprise features — local pricing. Everything your team needs to run operations seamlessly.</p>
     </div>
     <div class="row g-4">
       <?php
       $features = [
-        ['icon'=>'fas fa-puzzle-piece',   'color'=>'#1A8A4E', 'title'=>'Modular & Flexible',          'desc'=>'Subscribe only to the modules you need. Add or remove anytime as your business grows.'],
-        ['icon'=>'fas fa-shield-alt',     'color'=>'#0B2D4E', 'title'=>'Enterprise Security',         'desc'=>'Role-based access control, encrypted data, and activity logs keep your data safe.'],
-        ['icon'=>'fas fa-mobile-alt',     'color'=>'#8b5cf6', 'title'=>'Mobile Responsive',           'desc'=>'Works perfectly on any device — desktop, tablet, or smartphone.'],
-        ['icon'=>'fas fa-chart-bar',      'color'=>'#f59e0b', 'title'=>'Real-time Analytics',         'desc'=>'Dashboards with live data, charts, and KPIs to drive informed decisions.'],
-        ['icon'=>'fas fa-users',          'color'=>'#ef4444', 'title'=>'Multi-user & Roles',          'desc'=>'Add unlimited staff with custom roles and permissions per module.'],
-        ['icon'=>'fas fa-headset',        'color'=>'#1A8A4E', 'title'=>'24/7 Local Support',          'desc'=>'Dedicated Kenyan support team via phone, WhatsApp, and email at all times.'],
-        ['icon'=>'fas fa-plug',           'color'=>'#0B2D4E', 'title'=>'M-Pesa Integration',          'desc'=>'Native M-Pesa STK push for payments across all billing modules.'],
-        ['icon'=>'fas fa-cloud',          'color'=>'#14b8a6', 'title'=>'Cloud & On-Premise',          'desc'=>'Hosted on our secure servers or deploy on your own cPanel hosting.'],
+        ['icon'=>'fas fa-puzzle-piece',  'bg'=>'#e6f5ee', 'ic'=>'#1A8A4E', 'title'=>'Fully Modular',             'desc'=>'Subscribe only to the modules your business needs. Add or remove at any time with zero setup required.'],
+        ['icon'=>'fas fa-shield-halved', 'bg'=>'#eff6ff', 'ic'=>'#3b82f6', 'title'=>'Enterprise Security',        'desc'=>'Role-based access control, encrypted data storage, CSRF protection, and full activity audit logs.'],
+        ['icon'=>'fas fa-mobile-screen', 'bg'=>'#faf5ff', 'ic'=>'#8b5cf6', 'title'=>'Mobile First Design',        'desc'=>'Optimised for every device. Your team can manage operations from the field, office, or anywhere.'],
+        ['icon'=>'fas fa-chart-mixed',   'bg'=>'#fff7ed', 'ic'=>'#f59e0b', 'title'=>'Real-time Analytics',        'desc'=>'Live dashboards with KPIs, charts, and exportable reports to power every business decision.'],
+        ['icon'=>'fas fa-users-gear',    'bg'=>'#fef2f2', 'ic'=>'#ef4444', 'title'=>'Multi-user & Roles',         'desc'=>'Invite unlimited staff and assign precise module-level permissions to keep your data controlled.'],
+        ['icon'=>'fas fa-headset',       'bg'=>'#ecfdf5', 'ic'=>'#10b981', 'title'=>'Local 24/7 Support',         'desc'=>'Our Nairobi-based support team is available via phone, WhatsApp, and email around the clock.'],
+        ['icon'=>'fas fa-mobile-alt',    'bg'=>'#fef9c3', 'ic'=>'#ca8a04', 'title'=>'M-Pesa Integration',         'desc'=>'Native Daraja API integration. Accept M-Pesa STK push payments across all billing modules.'],
+        ['icon'=>'fas fa-server',        'bg'=>'#f0fdfa', 'ic'=>'#14b8a6', 'title'=>'Cloud or On-Premise',        'desc'=>'Hosted on our secure cloud or deploy to your own cPanel. You own your data, always.'],
       ];
-      foreach($features as $f): ?>
-      <div class="col-md-6 col-lg-3 fade-in">
-        <div class="p-4 h-100" style="border-radius:12px;border:1px solid var(--gray-200);transition:all .2s" onmouseover="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--green)'" onmouseout="this.style.boxShadow='none';this.style.borderColor='var(--gray-200)'">
-          <div class="feature-icon" style="background:<?= $f['color'] ?>1a;color:<?= $f['color'] ?>">
-            <i class="<?= $f['icon'] ?>"></i>
+      foreach($features as $i=>$f): ?>
+      <div class="col-md-6 col-lg-3 reveal delay-<?=$i%4?>">
+        <div class="feature-card">
+          <div class="feat-icon-wrap" style="background:<?=$f['bg']?>;color:<?=$f['ic']?>">
+            <i class="<?=$f['icon']?>"></i>
           </div>
-          <h6 class="fw-700 text-navy mb-2"><?= $f['title'] ?></h6>
-          <p class="text-muted small mb-0" style="line-height:1.6"><?= $f['desc'] ?></p>
+          <h6><?=$f['title']?></h6>
+          <p><?=$f['desc']?></p>
         </div>
       </div>
       <?php endforeach; ?>
@@ -199,203 +842,216 @@ $plans = $stmt->fetchAll();
   </div>
 </section>
 
-<!-- ═══════════════ MODULES ═══════════════════════════════════════ -->
-<section class="modules-section py-6" id="modules" style="padding:5rem 0">
+<!-- ══════════════════════════════════════════════════════════
+     MODULES
+══════════════════════════════════════════════════════════ -->
+<section id="modules" class="od-modules-bg" style="padding:6rem 0">
   <div class="container">
-    <div class="text-center mb-5">
-      <div class="section-badge">20 Powerful Modules</div>
-      <h2 class="section-title">Choose the Modules You Need</h2>
-      <p class="section-sub">Each module is a complete solution. Subscribe to one or combine many for a full ERP experience.</p>
+    <div class="text-center mb-4 reveal">
+      <span class="od-section-eyebrow"><?=count($modules)?> Modules Available</span>
+      <h2 class="od-section-title">Choose the Right Modules<br>for Your Business</h2>
+      <p class="od-section-sub">Each module is a complete, production-ready solution. Combine multiple for a full ERP experience.</p>
     </div>
+
     <div class="row g-3">
       <?php foreach($modules as $m): ?>
-      <div class="col-6 col-md-4 col-lg-3 fade-in">
-        <a href="<?= APP_URL ?>/auth/register.php" class="text-decoration-none">
-          <div class="module-tile">
-            <div class="tile-icon" style="background:<?= e($m['color']) ?>1a;color:<?= e($m['color']) ?>">
-              <i class="<?= e($m['icon']) ?>"></i>
-            </div>
-            <h6><?= e($m['name']) ?></h6>
-            <p><?= e(substr($m['description'], 0, 70)) ?>...</p>
-            <div class="price-tag">From <?= formatCurrency((float)$m['monthly_price']) ?>/mo</div>
+      <div class="col-6 col-md-4 col-lg-3 reveal">
+        <a href="<?= APP_URL ?>/auth/register.php" class="mod-tile">
+          <div class="mod-tile-icon" style="background:<?=e($m['color'])?>1a;color:<?=e($m['color'])?>">
+            <i class="<?=e($m['icon'])?>"></i>
           </div>
+          <h6><?=e($m['name'])?></h6>
+          <p><?=e(mb_substr($m['description'],0,68))?>…</p>
+          <span class="price-pill">From <?=formatCurrency((float)$m['monthly_price'])?>/mo</span>
         </a>
       </div>
       <?php endforeach; ?>
     </div>
-    <div class="text-center mt-5">
-      <a href="<?= APP_URL ?>/auth/register.php" class="btn btn-lg" style="background:var(--navy);color:white;border-radius:50px;padding:.85rem 2.5rem;font-weight:700">
-        Get Started — Choose Your Modules <i class="fas fa-arrow-right ms-2"></i>
+
+    <div class="text-center mt-5 reveal">
+      <a href="<?= APP_URL ?>/auth/register.php" class="btn-od-primary" style="font-size:1rem;padding:.95rem 2.25rem">
+        Get Started — Pick Your Modules <i class="fas fa-arrow-right"></i>
       </a>
+      <p class="text-muted small mt-3">14-day free trial. No credit card needed.</p>
     </div>
   </div>
 </section>
 
-<!-- ═══════════════ HOW IT WORKS ═════════════════════════════════ -->
-<section class="py-6 bg-white" id="how" style="padding:5rem 0">
+<!-- ══════════════════════════════════════════════════════════
+     HOW IT WORKS
+══════════════════════════════════════════════════════════ -->
+<section id="how" class="od-how-bg" style="padding:6rem 0">
   <div class="container">
-    <div class="text-center mb-5">
-      <div class="section-badge">Simple Process</div>
-      <h2 class="section-title">Up & Running in 3 Steps</h2>
+    <div class="text-center mb-5 reveal">
+      <span class="od-section-eyebrow">Simple Onboarding</span>
+      <h2 class="od-section-title">Up & Running in<br>Under 10 Minutes</h2>
     </div>
-    <div class="row g-4 text-center">
-      <div class="col-md-4 fade-in">
-        <div class="step-circle">1</div>
-        <h5 class="fw-bold text-navy">Register Your Business</h5>
-        <p class="text-muted">Sign up with your business email. No credit card required for the 14-day free trial.</p>
-        <div class="d-none d-md-block" style="height:2px;background:linear-gradient(to right,var(--green),var(--navy));margin-top:1rem;opacity:.3"></div>
+    <div class="row g-4 justify-content-center process-row">
+      <div class="process-connector d-none d-md-block"></div>
+      <?php
+      $steps = [
+        ['num'=>'1','icon'=>'fas fa-building','title'=>'Register Your Business','desc'=>'Create your organisation account with your business name and email. No credit card required to get started.'],
+        ['num'=>'2','icon'=>'fas fa-th-large','title'=>'Select Your Modules','desc'=>'Browse the module catalogue and subscribe only to what you need — one module or the full 20-module suite.'],
+        ['num'=>'3','icon'=>'fas fa-rocket','title'=>'Go Live Immediately','desc'=>'Your workspace is provisioned instantly. Invite your team, configure settings, and start managing operations.'],
+      ];
+      foreach($steps as $i=>$s): ?>
+      <div class="col-md-4 reveal delay-<?=$i?>">
+        <div class="process-step">
+          <div class="process-num"><?=$s['num']?></div>
+          <h5><?=$s['title']?></h5>
+          <p><?=$s['desc']?></p>
+        </div>
       </div>
-      <div class="col-md-4 fade-in delay-1">
-        <div class="step-circle">2</div>
-        <h5 class="fw-bold text-navy">Select Your Modules</h5>
-        <p class="text-muted">Pick the modules that fit your business. Accounting, HRM, POS, Hotel, School — or all 20!</p>
-        <div class="d-none d-md-block" style="height:2px;background:linear-gradient(to right,var(--navy),var(--green));margin-top:1rem;opacity:.3"></div>
-      </div>
-      <div class="col-md-4 fade-in delay-2">
-        <div class="step-circle">3</div>
-        <h5 class="fw-bold text-navy">Start Managing</h5>
-        <p class="text-muted">Your workspace is ready instantly. Invite your team, import data, and go live immediately.</p>
-      </div>
+      <?php endforeach; ?>
     </div>
   </div>
 </section>
 
-<!-- ═══════════════ PRICING ═══════════════════════════════════════ -->
-<section class="py-6 bg-light" id="pricing" style="padding:5rem 0">
+<!-- ══════════════════════════════════════════════════════════
+     TESTIMONIALS
+══════════════════════════════════════════════════════════ -->
+<section id="about" class="od-testimonials-bg" style="padding:6rem 0">
   <div class="container">
-    <div class="text-center mb-5">
-      <div class="section-badge">Simple Pricing</div>
-      <h2 class="section-title">Plans for Every Business Size</h2>
-      <p class="section-sub">All prices in Kenyan Shillings. Cancel anytime. 14-day free trial on all plans.</p>
+    <div class="text-center mb-5 reveal">
+      <span class="od-section-eyebrow">Client Success</span>
+      <h2 class="od-section-title">Trusted by Leaders<br>Across Every Industry</h2>
+    </div>
+    <div class="row g-4">
+      <?php
+      $testis = [
+        ['q'=>'OrbitDesk transformed how we manage our school. Fee collection, exam results, attendance — everything is now paperless, accurate, and instant.','name'=>'Mr. James Mwangi','role'=>'Principal, Sunrise Academy','init'=>'JM','bg'=>'#0B2D4E'],
+        ['q'=>'Our SACCO has grown 3x since adopting OrbitDesk. Loan management, savings tracking, and member statements — all handled professionally.','name'=>'Mrs. Grace Otieno','role'=>'CEO, Umoja SACCO','init'=>'GO','bg'=>'#1A8A4E'],
+        ['q'=>'Managing a hotel is complex but OrbitDesk simplified everything. Bookings, housekeeping, billing — one platform, complete visibility.','name'=>'Mr. David Kamau','role'=>'Manager, Savanna Hotel','init'=>'DK','bg'=>'#7c3aed'],
+        ['q'=>'The POS and Accounting module combination is perfect for my shop. Inventory updates in real-time and my books close themselves.','name'=>'Ms. Amina Hassan','role'=>'Owner, Fashion Hub Nairobi','init'=>'AH','bg'=>'#b45309'],
+        ['q'=>'Church member management and tithe tracking is now seamless. Our pastoral team focuses on ministry while OrbitDesk handles admin.','name'=>'Pastor John Mutua','role'=>'Senior Pastor, Life Church','init'=>'JM','bg'=>'#0e7490'],
+        ['q'=>'Payroll that took 3 days now runs in 30 minutes. Every staff member is paid accurately and on time. The HRM module is a game-changer.','name'=>'Ms. Sarah Njeri','role'=>'HR Director, TechCorp Kenya','init'=>'SN','bg'=>'#be185d'],
+      ];
+      foreach($testis as $i=>$t): ?>
+      <div class="col-md-6 col-lg-4 reveal delay-<?=$i%3?>">
+        <div class="testi-card">
+          <div class="testi-stars"><?php for($j=0;$j<5;$j++):?><i class="fas fa-star"></i><?php endfor;?></div>
+          <p class="testi-quote"><?=e($t['q'])?></p>
+          <div class="testi-author">
+            <div class="testi-avatar" style="background:<?=$t['bg']?>"><?=$t['init']?></div>
+            <div>
+              <div class="testi-name"><?=$t['name']?></div>
+              <div class="testi-role"><?=$t['role']?></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <?php endforeach; ?>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     PRICING
+══════════════════════════════════════════════════════════ -->
+<section id="pricing" class="od-pricing-bg" style="padding:6rem 0">
+  <div class="container">
+    <div class="text-center mb-5 reveal">
+      <span class="od-section-eyebrow">Transparent Pricing</span>
+      <h2 class="od-section-title">Plans Built for<br>Every Business Size</h2>
+      <p class="od-section-sub">All prices in Kenyan Shillings. Start free, scale as you grow. No hidden fees.</p>
     </div>
 
     <!-- Billing toggle -->
     <div class="text-center mb-4">
-      <div class="d-inline-flex align-items-center gap-3 bg-white border rounded-pill px-4 py-2">
-        <span class="fw-600" id="lblMonthly">Monthly</span>
-        <div class="form-check form-switch mb-0">
+      <div class="billing-toggle-wrap">
+        <span id="lblMonthly" class="active">Monthly</span>
+        <div class="form-check form-switch mb-0" style="padding-left:2.5em">
           <input class="form-check-input" type="checkbox" id="billingToggle" style="width:44px;height:22px;cursor:pointer">
         </div>
-        <span id="lblAnnual">Annual <span class="badge bg-success small">Save 20%</span></span>
+        <span id="lblAnnual">Annual &nbsp;<span class="badge" style="background:#dcfce7;color:#16a34a;font-size:.7rem;font-weight:700">Save 20%</span></span>
       </div>
     </div>
 
-    <div class="row g-4 align-items-start justify-content-center">
-      <?php foreach($plans as $plan): ?>
-      <div class="col-md-6 col-lg-4 fade-in">
-        <div class="pricing-card <?= $plan['is_popular'] ? 'popular' : '' ?>">
-          <?php if($plan['is_popular']): ?><div class="popular-badge">Most Popular</div><?php endif; ?>
-          <div class="pricing-name mb-2"><?= e($plan['name']) ?></div>
-          <p class="text-muted small mb-3"><?= e($plan['description']) ?></p>
-          <div class="pricing-price mb-1">
-            <sup>KES</sup>
-            <span class="price-monthly"><?= number_format((float)$plan['price_monthly']) ?></span>
-            <span class="price-annual d-none"><?= number_format((float)$plan['price_annual'] / 12) ?></span>
-            <span class="period">/mo</span>
+    <div class="row g-4 justify-content-center align-items-start">
+      <?php foreach($plans as $plan): $pop=(bool)$plan['is_popular']; ?>
+      <div class="col-md-6 col-lg-4 reveal">
+        <div class="od-plan-card <?=$pop?'popular':''?>">
+          <?php if($pop):?><div class="pop-label"><i class="fas fa-fire me-1"></i> Most Popular</div><?php endif;?>
+          <div class="plan-name"><?=e($plan['name'])?></div>
+          <p class="text-muted small mb-3" style="font-size:.82rem"><?=e($plan['description'])?></p>
+          <div class="d-flex align-items-end gap-1 mb-1">
+            <div class="plan-price">
+              <sup>KES</sup><span class="price-monthly"><?=number_format((float)$plan['price_monthly'])?></span><span class="price-annual d-none"><?=number_format((float)$plan['price_annual']/12)?></span><span class="per">/mo</span>
+            </div>
           </div>
-          <p class="text-muted small mb-4">
-            <span class="annual-note d-none">Billed annually — KES <?= number_format((float)$plan['price_annual']) ?>/yr</span>
+          <p class="text-muted mb-0" style="font-size:.78rem;min-height:1.2rem">
+            <span class="annual-note d-none">Billed annually — KES <?=number_format((float)$plan['price_annual'])?>/yr</span>
             <span class="monthly-note">No long-term commitment</span>
           </p>
-          <ul class="pricing-features">
-            <li><i class="fas fa-check"></i> Up to <?= $plan['max_users'] ?> users</li>
-            <li><i class="fas fa-check"></i> <?= $plan['max_modules'] ?> modules included</li>
+          <ul class="plan-features">
+            <li><i class="fas fa-check"></i> Up to <strong><?=$plan['max_users']?> users</strong></li>
+            <li><i class="fas fa-check"></i> <strong><?=$plan['max_modules']?> modules</strong> included</li>
             <li><i class="fas fa-check"></i> Real-time analytics & reports</li>
             <li><i class="fas fa-check"></i> M-Pesa payment integration</li>
+            <li><i class="fas fa-check"></i> 14-day free trial included</li>
             <li><i class="fas fa-check"></i> Email & WhatsApp support</li>
-            <?php if ($plan['max_users'] >= 25): ?>
-            <li><i class="fas fa-check"></i> Priority support</li>
-            <li><i class="fas fa-check"></i> Custom branding</li>
-            <?php endif; ?>
-            <?php if ($plan['max_users'] >= 100): ?>
+            <?php if($plan['max_users']>=25):?>
+            <li><i class="fas fa-check"></i> Priority support queue</li>
+            <li><i class="fas fa-check"></i> Custom branding & logo</li>
+            <?php endif;?>
+            <?php if($plan['max_users']>=100):?>
             <li><i class="fas fa-check"></i> Dedicated account manager</li>
-            <li><i class="fas fa-check"></i> API access & integrations</li>
-            <li><i class="fas fa-check"></i> On-premise option available</li>
-            <?php endif; ?>
+            <li><i class="fas fa-check"></i> API access & webhooks</li>
+            <li><i class="fas fa-check"></i> On-premise deployment option</li>
+            <?php endif;?>
           </ul>
-          <a href="<?= APP_URL ?>/auth/register.php?plan=<?= $plan['id'] ?>"
-             class="btn btn-pricing <?= $plan['is_popular'] ? 'btn-primary' : 'btn-outline-primary' ?>">
-            Start Free Trial
+          <a href="<?=APP_URL?>/auth/register.php?plan=<?=$plan['id']?>" class="<?=$pop?'btn-plan-primary':'btn-plan-outline'?>">
+            Start Free Trial <i class="fas fa-arrow-right ms-1" style="font-size:.8rem"></i>
           </a>
         </div>
       </div>
       <?php endforeach; ?>
     </div>
 
-    <div class="text-center mt-4">
-      <p class="text-muted">Need a custom plan? <a href="#contact" class="text-green fw-600">Contact us</a> for enterprise pricing.</p>
+    <div class="text-center mt-4 reveal">
+      <p class="text-muted small">Need a custom enterprise plan? <a href="#contact" class="fw-700" style="color:var(--od-green)">Talk to our sales team</a> — we'll build a package for your exact needs.</p>
     </div>
   </div>
 </section>
 
-<!-- ═══════════════ TESTIMONIALS ═════════════════════════════════ -->
-<section class="py-6 bg-white" id="about" style="padding:5rem 0">
+<!-- ══════════════════════════════════════════════════════════
+     FAQ
+══════════════════════════════════════════════════════════ -->
+<section id="faq" class="od-faq-bg" style="padding:6rem 0">
   <div class="container">
-    <div class="text-center mb-5">
-      <div class="section-badge">Success Stories</div>
-      <h2 class="section-title">Trusted by Businesses Across Kenya</h2>
-    </div>
-    <div class="row g-4">
-      <?php
-      $testimonials = [
-        ['text'=>'Shanfix completely transformed how we manage our school. From fee collection to grade sheets — everything is now paperless and accurate.', 'name'=>'Mr. James Mwangi', 'role'=>'Principal, Sunrise Academy', 'initials'=>'JM'],
-        ['text'=>'Our SACCO has grown 3x since we started using Shanfix. The loan management and savings tracking has made our operations very professional.', 'name'=>'Mrs. Grace Otieno', 'role'=>'CEO, Umoja SACCO', 'initials'=>'GO'],
-        ['text'=>'Running a hotel is complex but Shanfix made it simple. Room bookings, housekeeping, and billing all in one place. Highly recommended!', 'name'=>'Mr. David Kamau', 'role'=>'Manager, Savanna Hotel', 'initials'=>'DK'],
-        ['text'=>'I subscribed to POS and Accounting modules for my retail shop. The combination is perfect — my books are always balanced automatically.', 'name'=>'Ms. Amina Hassan', 'role'=>'Owner, Fashion Hub Nairobi', 'initials'=>'AH'],
-        ['text'=>'Church member management and offering tracking is now seamless. Our pastoral team can focus on ministry while the system handles admin.', 'name'=>'Pastor John Mutua', 'role'=>'Senior Pastor, Life Church', 'initials'=>'JM'],
-        ['text'=>'The HRM module saved us so much time. Payroll that used to take 3 days now takes 30 minutes. Our staff are paid accurately and on time.', 'name'=>'Ms. Sarah Njeri', 'role'=>'HR Director, TechCorp Kenya', 'initials'=>'SN'],
-      ];
-      foreach($testimonials as $t): ?>
-      <div class="col-md-6 col-lg-4 fade-in">
-        <div class="testimonial-card h-100">
-          <div class="d-flex gap-1 mb-3">
-            <?php for($i=0;$i<5;$i++): ?><i class="fas fa-star text-warning small"></i><?php endfor; ?>
-          </div>
-          <p class="testimonial-text">"<?= $t['text'] ?>"</p>
-          <div class="testimonial-author">
-            <div class="testimonial-avatar"><?= $t['initials'] ?></div>
-            <div>
-              <div class="testimonial-name"><?= $t['name'] ?></div>
-              <div class="testimonial-role"><?= $t['role'] ?></div>
-            </div>
-          </div>
+    <div class="row g-5 align-items-start">
+      <div class="col-lg-4 reveal">
+        <span class="od-section-eyebrow">FAQ</span>
+        <h2 class="od-section-title text-start" style="font-size:2rem">Common<br>Questions</h2>
+        <p class="text-muted mt-3" style="font-size:.9rem">Can't find your answer? <a href="#contact" style="color:var(--od-green);font-weight:700">Chat with our team</a> — we respond within minutes.</p>
+        <div class="mt-4 p-4 rounded-3" style="background:#e6f5ee;border-left:4px solid #1A8A4E">
+          <div class="fw-700 text-navy mb-1" style="font-size:.9rem"><i class="fas fa-headset me-2" style="color:#1A8A4E"></i>Need a live demo?</div>
+          <p class="text-muted small mb-2">We'll walk you through the platform and answer every question.</p>
+          <a href="#contact" class="btn-od-primary" style="font-size:.82rem;padding:.55rem 1.1rem">Book a Demo</a>
         </div>
       </div>
-      <?php endforeach; ?>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════ FAQ ═══════════════════════════════════════════ -->
-<section class="py-6 bg-light" style="padding:5rem 0" id="faq">
-  <div class="container">
-    <div class="text-center mb-5">
-      <div class="section-badge">FAQ</div>
-      <h2 class="section-title">Frequently Asked Questions</h2>
-    </div>
-    <div class="row justify-content-center">
-      <div class="col-lg-8">
-        <div class="accordion" id="faqAccordion">
+      <div class="col-lg-8 reveal delay-1">
+        <div class="accordion od-accordion" id="faqAcc">
           <?php
           $faqs = [
-            ['q'=>'Can I subscribe to just one module?', 'a'=>'Yes! You can subscribe to as few as one module. Our platform is fully modular — pay only for what you use. Add more modules anytime as your needs grow.'],
-            ['q'=>'Is there a free trial available?', 'a'=>'Absolutely! Every new account gets a 14-day free trial with full access to selected modules. No credit card required to start.'],
-            ['q'=>'Can multiple users access the system?', 'a'=>'Yes. You can invite your team members and assign them specific roles and permissions. The number of users depends on your subscription plan.'],
-            ['q'=>'Is my data secure?', 'a'=>'Your data is encrypted, backed up daily, and protected with role-based access control. We follow industry-standard security practices.'],
-            ['q'=>'Can the system be deployed on my own server/cPanel?', 'a'=>'Yes! Shanfix Workspace is designed to run on any cPanel hosting. Our team can assist with deployment and configuration.'],
-            ['q'=>'Do you support M-Pesa payments?', 'a'=>'Yes. M-Pesa STK push is integrated across billing, POS, SACCO, rental, and other payment modules for seamless local transactions.'],
-            ['q'=>'What happens when my subscription expires?', 'a'=>'You will receive email reminders 7 days before expiry. After expiry, your data is retained for 30 days before archiving. Renew anytime to regain access.'],
-            ['q'=>'Can I get a customized module for my specific needs?', 'a'=>'Yes! We offer custom module development. Contact our team to discuss your specific business requirements and get a quote.'],
+            ['q'=>'Can I subscribe to just one module?','a'=>'Yes! You can subscribe to as few as one module. OrbitDesk is fully modular — pay only for what you use. Add or remove modules any time as your business evolves.'],
+            ['q'=>'Is there a free trial available?','a'=>'Every new account gets a 14-day free trial with full access to your selected modules. No credit card is required to start — just sign up and explore.'],
+            ['q'=>'Can multiple users access the system at once?','a'=>'Absolutely. You can invite your entire team and assign them roles with module-specific permissions. User limits depend on your subscription plan.'],
+            ['q'=>'Is my business data secure?','a'=>'Your data is encrypted at rest and in transit, backed up daily, and protected with role-based access control and CSRF tokens on every action. We follow industry-standard security practices.'],
+            ['q'=>'Can I deploy OrbitDesk on my own server?','a'=>'Yes! OrbitDesk is designed to run on standard cPanel hosting — no special server required. Our team will assist with deployment and configuration at no extra cost.'],
+            ['q'=>'How does M-Pesa integration work?','a'=>'OrbitDesk integrates directly with Safaricom\'s Daraja API. Customers can pay via M-Pesa STK push across POS, billing, SACCO, school fees, rental, and all other payment modules.'],
+            ['q'=>'What happens when my subscription expires?','a'=>'You\'ll receive email reminders 7 days before expiry. After expiry, your data is safely retained for 30 days before archiving. Renew at any point to instantly regain full access.'],
+            ['q'=>'Can you build a custom module for my business?','a'=>'Yes! We offer custom module development for unique business requirements. Contact us with your needs and we\'ll scope the project and provide a quote within 48 hours.'],
           ];
-          foreach($faqs as $i => $faq): ?>
-          <div class="accordion-item border mb-2 rounded overflow-hidden">
+          foreach($faqs as $i=>$faq): ?>
+          <div class="accordion-item">
             <h2 class="accordion-header">
-              <button class="accordion-button <?= $i > 0 ? 'collapsed' : '' ?> fw-600" type="button" data-bs-toggle="collapse" data-bs-target="#faq<?= $i ?>">
-                <?= $faq['q'] ?>
+              <button class="accordion-button <?=$i>0?'collapsed':''?>" type="button" data-bs-toggle="collapse" data-bs-target="#faq<?=$i?>">
+                <?=$faq['q']?>
               </button>
             </h2>
-            <div id="faq<?= $i ?>" class="accordion-collapse collapse <?= $i === 0 ? 'show' : '' ?>" data-bs-parent="#faqAccordion">
-              <div class="accordion-body text-muted"><?= $faq['a'] ?></div>
+            <div id="faq<?=$i?>" class="accordion-collapse collapse <?=$i===0?'show':''?>" data-bs-parent="#faqAcc">
+              <div class="accordion-body"><?=$faq['a']?></div>
             </div>
           </div>
           <?php endforeach; ?>
@@ -405,163 +1061,199 @@ $plans = $stmt->fetchAll();
   </div>
 </section>
 
-<!-- ═══════════════ CTA BANNER ════════════════════════════════════ -->
-<section class="cta-section py-6 text-center" style="padding:5rem 0">
-  <div class="container">
-    <div class="row justify-content-center">
-      <div class="col-lg-8">
-        <h2 class="fw-800 mb-3">Ready to Transform Your Business?</h2>
-        <p class="text-white-50 mb-4 fs-5">Join 500+ businesses already running smarter with Shanfix Workspace.</p>
-        <div class="d-flex gap-3 justify-content-center flex-wrap">
-          <a href="<?= APP_URL ?>/auth/register.php" class="btn btn-hero-primary btn-lg">
-            Start Free Trial <i class="fas fa-arrow-right ms-2"></i>
-          </a>
-          <a href="#contact" class="btn btn-hero-outline btn-lg">
-            Talk to Sales
-          </a>
-        </div>
-        <p class="mt-3 text-white-50 small">No credit card required • 14-day free trial • Cancel anytime</p>
-      </div>
+<!-- ══════════════════════════════════════════════════════════
+     CTA BANNER
+══════════════════════════════════════════════════════════ -->
+<section class="od-cta-section text-center">
+  <div class="cta-glow"></div>
+  <div class="container position-relative" style="z-index:2">
+    <div class="reveal">
+      <span class="od-section-eyebrow" style="background:rgba(26,138,78,.2);color:#4ade93;border:1px solid rgba(26,138,78,.3)">Ready to Transform Your Business?</span>
+    </div>
+    <h2 class="reveal delay-1">Join 500+ Businesses<br>Running Smarter with OrbitDesk</h2>
+    <p class="reveal delay-2">Start your free 14-day trial today. No setup fees, no credit card, no commitment.</p>
+    <div class="d-flex justify-content-center gap-3 flex-wrap reveal delay-3">
+      <a href="<?= APP_URL ?>/auth/register.php" class="btn-od-primary" style="font-size:1rem;padding:.95rem 2.25rem">
+        Start Free Trial <i class="fas fa-arrow-right"></i>
+      </a>
+      <a href="#contact" class="btn-od-ghost" style="font-size:1rem;padding:.95rem 2.25rem">
+        <i class="fas fa-calendar-alt"></i> Book a Demo
+      </a>
+    </div>
+    <div class="cta-trust-row reveal delay-4">
+      <div class="cta-trust-item"><i class="fas fa-lock"></i> Enterprise Security</div>
+      <div class="cta-trust-item"><i class="fas fa-bolt"></i> Instant Setup</div>
+      <div class="cta-trust-item"><i class="fas fa-mobile-alt"></i> M-Pesa Ready</div>
+      <div class="cta-trust-item"><i class="fas fa-headset"></i> 24/7 Support</div>
     </div>
   </div>
 </section>
 
-<!-- ═══════════════ CONTACT ═══════════════════════════════════════ -->
-<section class="py-6 bg-white" id="contact" style="padding:5rem 0">
+<!-- ══════════════════════════════════════════════════════════
+     CONTACT
+══════════════════════════════════════════════════════════ -->
+<section id="contact" class="od-contact-bg" style="padding:6rem 0">
   <div class="container">
     <div class="row g-5">
-      <div class="col-lg-5">
-        <div class="section-badge">Get In Touch</div>
-        <h2 class="section-title text-start">We'd Love to Hear From You</h2>
-        <p class="text-muted mt-3">Have questions? Our team is ready to help you find the perfect plan for your business.</p>
-        <div class="mt-4 d-flex flex-column gap-3">
-          <div class="d-flex gap-3 align-items-start">
-            <div style="width:40px;height:40px;background:var(--green-pale);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--green);flex-shrink:0"><i class="fas fa-phone"></i></div>
-            <div><div class="fw-600 text-navy">Phone / WhatsApp</div><div class="text-muted">+254 700 000 000</div></div>
+      <div class="col-lg-5 reveal">
+        <span class="od-section-eyebrow">Get in Touch</span>
+        <h2 class="od-section-title text-start" style="font-size:2.2rem">We'd Love to<br>Hear From You</h2>
+        <p class="text-muted mt-3" style="font-size:.95rem">Whether you have questions about a module, need a custom quote, or want a live demo — our team is ready.</p>
+
+        <div class="mt-4">
+          <div class="contact-info-card">
+            <div class="ci-icon"><i class="fas fa-phone"></i></div>
+            <div>
+              <div class="ci-label">Phone / WhatsApp</div>
+              <div class="ci-value">+254 700 000 000</div>
+            </div>
           </div>
-          <div class="d-flex gap-3 align-items-start">
-            <div style="width:40px;height:40px;background:var(--green-pale);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--green);flex-shrink:0"><i class="fas fa-envelope"></i></div>
-            <div><div class="fw-600 text-navy">Email</div><div class="text-muted">info@shanfix.co.ke</div></div>
+          <div class="contact-info-card">
+            <div class="ci-icon"><i class="fas fa-envelope"></i></div>
+            <div>
+              <div class="ci-label">Email</div>
+              <div class="ci-value">info@orbitdesk.co.ke</div>
+            </div>
           </div>
-          <div class="d-flex gap-3 align-items-start">
-            <div style="width:40px;height:40px;background:var(--green-pale);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--green);flex-shrink:0"><i class="fas fa-map-marker-alt"></i></div>
-            <div><div class="fw-600 text-navy">Office</div><div class="text-muted">Nairobi, Kenya</div></div>
+          <div class="contact-info-card">
+            <div class="ci-icon"><i class="fas fa-map-marker-alt"></i></div>
+            <div>
+              <div class="ci-label">Head Office</div>
+              <div class="ci-value">Nairobi, Kenya</div>
+            </div>
+          </div>
+          <div class="contact-info-card">
+            <div class="ci-icon"><i class="fas fa-clock"></i></div>
+            <div>
+              <div class="ci-label">Business Hours</div>
+              <div class="ci-value">Mon – Sat, 8AM – 8PM EAT</div>
+            </div>
           </div>
         </div>
       </div>
-      <div class="col-lg-7">
-        <div class="card shadow-sm border-0 rounded-xl">
-          <div class="card-body p-4">
-            <?php
-            $contactSent = false;
-            if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['contact_submit'])) {
-                // Simple contact form processing
-                $contactSent = true;
-            }
-            if ($contactSent): ?>
-            <div class="alert alert-success"><i class="fas fa-check-circle me-2"></i> Thank you! We'll get back to you within 24 hours.</div>
-            <?php else: ?>
-            <form method="POST">
-              <div class="row g-3">
-                <div class="col-md-6">
-                  <label class="form-label">Full Name *</label>
-                  <input type="text" name="name" class="form-control" placeholder="Your name" required>
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Email Address *</label>
-                  <input type="email" name="email" class="form-control" placeholder="you@company.com" required>
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Phone Number</label>
-                  <input type="tel" name="phone" class="form-control" placeholder="+254 700 000 000">
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Business Type</label>
-                  <select name="business_type" class="form-select">
-                    <option>Select type</option>
-                    <option>School</option><option>Hospital/Clinic</option><option>Hotel</option>
-                    <option>SACCO</option><option>Retail/Wholesale</option><option>Church</option>
-                    <option>Manufacturing</option><option>Other</option>
-                  </select>
-                </div>
-                <div class="col-12">
-                  <label class="form-label">Modules Interested In</label>
-                  <div class="row g-2">
-                    <?php foreach(array_chunk($modules, 5)[0] ?? [] as $m): ?>
-                    <div class="col-6 col-md-4">
-                      <div class="form-check"><input class="form-check-input" type="checkbox" name="interests[]" value="<?= e($m['slug']) ?>" id="int_<?= e($m['slug']) ?>"><label class="form-check-label small" for="int_<?= e($m['slug']) ?>"><?= e($m['name']) ?></label></div>
+      <div class="col-lg-7 reveal delay-2">
+        <div class="od-contact-form">
+          <h5 class="fw-800 mb-4" style="color:#0B2D4E"><i class="fas fa-paper-plane me-2" style="color:#1A8A4E"></i>Send Us a Message</h5>
+          <?php if($contactSent): ?>
+          <div class="alert border-0 rounded-3" style="background:#e6f5ee;color:#157a42">
+            <i class="fas fa-check-circle me-2"></i> <strong>Message received!</strong> We'll get back to you within 24 hours.
+          </div>
+          <?php else: ?>
+          <form method="POST">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Full Name *</label>
+                <input type="text" name="name" class="form-control" placeholder="Your full name" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Email Address *</label>
+                <input type="email" name="email" class="form-control" placeholder="you@company.com" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Phone Number</label>
+                <input type="tel" name="phone" class="form-control" placeholder="+254 700 000 000">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Business Type</label>
+                <select name="business_type" class="form-select">
+                  <option value="">Select industry…</option>
+                  <option>School / College</option><option>Hospital / Clinic</option><option>Hotel / Hospitality</option>
+                  <option>SACCO / Microfinance</option><option>Retail / Wholesale</option><option>Church / Religious</option>
+                  <option>Manufacturing</option><option>Car Yard</option><option>NGO / Non-Profit</option><option>Other</option>
+                </select>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Modules of Interest</label>
+                <div class="row g-2">
+                  <?php foreach(array_slice($modules,0,10) as $m): ?>
+                  <div class="col-6 col-md-4">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" name="interests[]" value="<?=e($m['slug'])?>" id="int_<?=e($m['slug'])?>">
+                      <label class="form-check-label" style="font-size:.82rem" for="int_<?=e($m['slug'])?>"><?=e($m['name'])?></label>
                     </div>
-                    <?php endforeach; ?>
                   </div>
-                </div>
-                <div class="col-12">
-                  <label class="form-label">Message</label>
-                  <textarea name="message" class="form-control" rows="3" placeholder="Tell us about your business needs..."></textarea>
-                </div>
-                <div class="col-12">
-                  <button type="submit" name="contact_submit" class="btn btn-primary px-4 py-2">
-                    <i class="fas fa-paper-plane me-2"></i> Send Message
-                  </button>
+                  <?php endforeach; ?>
                 </div>
               </div>
-            </form>
-            <?php endif; ?>
-          </div>
+              <div class="col-12">
+                <label class="form-label">Your Message</label>
+                <textarea name="message" class="form-control" rows="3" placeholder="Tell us about your business and what you're looking for…"></textarea>
+              </div>
+              <div class="col-12">
+                <button type="submit" name="contact_submit" class="btn-od-primary w-100" style="justify-content:center;padding:.9rem">
+                  <i class="fas fa-paper-plane"></i> Send Message
+                </button>
+              </div>
+            </div>
+          </form>
+          <?php endif; ?>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ═══════════════ FOOTER ════════════════════════════════════════ -->
-<footer class="site-footer py-5">
-  <div class="container">
-    <div class="row g-4 mb-4">
+<!-- ══════════════════════════════════════════════════════════
+     FOOTER
+══════════════════════════════════════════════════════════ -->
+<footer class="od-footer">
+  <div class="container" style="padding-top:4rem;padding-bottom:2rem">
+    <div class="row g-4 mb-5">
+      <!-- Brand col -->
       <div class="col-lg-4">
-        <div class="footer-brand d-flex align-items-center gap-2 mb-3">
-          <div style="width:36px;height:36px;background:var(--green);border-radius:8px;display:flex;align-items:center;justify-content:center;color:white"><i class="fas fa-cubes"></i></div>
-          <?= APP_NAME ?>
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <div style="width:38px;height:38px;background:linear-gradient(135deg,#1A8A4E,#22c27a);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:900;color:white;font-size:.85rem">OD</div>
+          <div class="foot-logo-name">Orbit<span>Desk</span></div>
         </div>
-        <p style="font-size:.875rem;line-height:1.7"><?= APP_TAGLINE ?>. Built for Kenyan businesses, ready for Africa.</p>
-        <div class="mt-3">
-          <a href="#" class="social-btn"><i class="fab fa-facebook-f"></i></a>
-          <a href="#" class="social-btn"><i class="fab fa-twitter"></i></a>
-          <a href="#" class="social-btn"><i class="fab fa-linkedin-in"></i></a>
-          <a href="#" class="social-btn"><i class="fab fa-whatsapp"></i></a>
-          <a href="#" class="social-btn"><i class="fab fa-youtube"></i></a>
+        <p class="foot-desc"><?=APP_TAGLINE?>. Built for African businesses, trusted across Kenya and East Africa.</p>
+        <div class="social-links">
+          <a href="#" class="soc-btn"><i class="fab fa-facebook-f"></i></a>
+          <a href="#" class="soc-btn"><i class="fab fa-twitter"></i></a>
+          <a href="#" class="soc-btn"><i class="fab fa-linkedin-in"></i></a>
+          <a href="#" class="soc-btn"><i class="fab fa-whatsapp"></i></a>
+          <a href="#" class="soc-btn"><i class="fab fa-youtube"></i></a>
         </div>
       </div>
+      <!-- Modules 1 -->
       <div class="col-6 col-lg-2">
         <h6>Modules</h6>
-        <?php foreach(array_slice($modules, 0, 8) as $m): ?>
-        <a href="<?= APP_URL ?>/auth/register.php" class="footer-link"><?= e($m['name']) ?></a>
+        <?php foreach(array_slice($modules,0,8) as $m): ?>
+        <a href="<?=APP_URL?>/auth/register.php" class="foot-link"><?=e($m['name'])?></a>
         <?php endforeach; ?>
       </div>
+      <!-- Modules 2 -->
       <div class="col-6 col-lg-2">
         <h6>More Modules</h6>
-        <?php foreach(array_slice($modules, 8) as $m): ?>
-        <a href="<?= APP_URL ?>/auth/register.php" class="footer-link"><?= e($m['name']) ?></a>
+        <?php foreach(array_slice($modules,8) as $m): ?>
+        <a href="<?=APP_URL?>/auth/register.php" class="foot-link"><?=e($m['name'])?></a>
         <?php endforeach; ?>
       </div>
+      <!-- Company -->
       <div class="col-6 col-lg-2">
         <h6>Company</h6>
-        <a href="#about"    class="footer-link">About Us</a>
-        <a href="#"         class="footer-link">Careers</a>
-        <a href="#"         class="footer-link">Blog</a>
-        <a href="#contact"  class="footer-link">Contact</a>
-        <a href="#"         class="footer-link">Partners</a>
+        <a href="#about"   class="foot-link">About Us</a>
+        <a href="#"        class="foot-link">Careers</a>
+        <a href="#"        class="foot-link">Blog</a>
+        <a href="#contact" class="foot-link">Contact</a>
+        <a href="#"        class="foot-link">Partners</a>
       </div>
+      <!-- Legal -->
       <div class="col-6 col-lg-2">
         <h6>Legal</h6>
-        <a href="#" class="footer-link">Privacy Policy</a>
-        <a href="#" class="footer-link">Terms of Use</a>
-        <a href="#" class="footer-link">Cookie Policy</a>
-        <a href="#" class="footer-link">Security</a>
+        <a href="#" class="foot-link">Privacy Policy</a>
+        <a href="#" class="foot-link">Terms of Service</a>
+        <a href="#" class="foot-link">Cookie Policy</a>
+        <a href="#" class="foot-link">Security</a>
+        <a href="#" class="foot-link">Compliance</a>
       </div>
     </div>
-    <div class="border-top pt-3 d-flex flex-wrap align-items-center justify-content-between gap-2" style="border-color:rgba(255,255,255,.08)!important">
-      <span style="font-size:.8rem">&copy; <?= APP_YEAR ?> <?= APP_NAME ?>. All rights reserved.</span>
-      <span style="font-size:.8rem">Made with <i class="fas fa-heart text-danger small"></i> in Kenya</span>
+    <div class="foot-bottom d-flex flex-wrap align-items-center justify-content-between gap-3">
+      <p>&copy; <?=APP_YEAR?> <?=APP_NAME?>. All rights reserved. Made with <i class="fas fa-heart" style="color:#ef4444;font-size:.75rem"></i> in Kenya.</p>
+      <div class="foot-badges">
+        <span class="foot-badge"><i class="fas fa-shield-halved"></i> SSL Secured</span>
+        <span class="foot-badge"><i class="fas fa-lock"></i> Data Encrypted</span>
+        <span class="foot-badge"><i class="fas fa-server"></i> 99.9% Uptime</span>
+      </div>
     </div>
   </div>
 </footer>
@@ -569,19 +1261,79 @@ $plans = $stmt->fetchAll();
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="<?= APP_URL ?>/assets/js/app.js"></script>
 <script>
-// Billing toggle
+// ── Scroll progress bar ─────────────────────────────────────
+const progressBar = document.getElementById('scroll-progress');
+window.addEventListener('scroll', () => {
+  const s = document.documentElement;
+  const pct = (s.scrollTop / (s.scrollHeight - s.clientHeight)) * 100;
+  progressBar.style.width = pct + '%';
+}, { passive: true });
+
+// ── Sticky navbar ─────────────────────────────────────────────
+const nav = document.getElementById('odNav');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 30);
+}, { passive: true });
+
+// ── Scroll-reveal (Intersection Observer) ────────────────────
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
+}, { threshold: .12, rootMargin: '0px 0px -40px 0px' });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ── Animated counters ─────────────────────────────────────────
+function animateCounter(el) {
+  const target = +el.dataset.target;
+  const suffix = el.querySelector('span')?.textContent || '';
+  let start = 0;
+  const duration = 1600;
+  const step = timestamp => {
+    if (!start) start = timestamp;
+    const progress = Math.min((timestamp - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - progress, 3);
+    const val = Math.round(ease * target);
+    const span = el.querySelector('span');
+    el.textContent = val.toLocaleString();
+    if (span) el.appendChild(span);
+    if (progress < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+const counterObserver = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      animateCounter(e.target);
+      counterObserver.unobserve(e.target);
+    }
+  });
+}, { threshold: .5 });
+document.querySelectorAll('[data-counter]').forEach(el => counterObserver.observe(el));
+
+// ── Billing toggle ────────────────────────────────────────────
 const toggle = document.getElementById('billingToggle');
 if (toggle) {
   toggle.addEventListener('change', () => {
-    const isAnnual = toggle.checked;
-    document.querySelectorAll('.price-monthly').forEach(el => el.classList.toggle('d-none', isAnnual));
-    document.querySelectorAll('.price-annual').forEach(el => el.classList.toggle('d-none', !isAnnual));
-    document.querySelectorAll('.annual-note').forEach(el => el.classList.toggle('d-none', !isAnnual));
-    document.querySelectorAll('.monthly-note').forEach(el => el.classList.toggle('d-none', isAnnual));
-    document.getElementById('lblMonthly').style.opacity = isAnnual ? '.5' : '1';
-    document.getElementById('lblAnnual').style.opacity  = isAnnual ? '1'  : '.5';
+    const annual = toggle.checked;
+    document.querySelectorAll('.price-monthly').forEach(el => el.classList.toggle('d-none', annual));
+    document.querySelectorAll('.price-annual').forEach(el => el.classList.toggle('d-none', !annual));
+    document.querySelectorAll('.annual-note').forEach(el => el.classList.toggle('d-none', !annual));
+    document.querySelectorAll('.monthly-note').forEach(el => el.classList.toggle('d-none', annual));
+    document.getElementById('lblMonthly').className = annual ? '' : 'active';
+    document.getElementById('lblAnnual').className  = annual ? 'active' : '';
   });
 }
+
+// ── Active nav link on scroll ──────────────────────────────────
+const sections = document.querySelectorAll('section[id]');
+const navLinks = document.querySelectorAll('.od-nav-links a');
+window.addEventListener('scroll', () => {
+  let current = '';
+  sections.forEach(s => { if (window.scrollY >= s.offsetTop - 100) current = s.id; });
+  navLinks.forEach(a => {
+    a.style.color = a.getAttribute('href') === '#' + current ? 'white' : '';
+    a.style.background = a.getAttribute('href') === '#' + current ? 'rgba(255,255,255,.1)' : '';
+  });
+}, { passive: true });
 </script>
 </body>
 </html>

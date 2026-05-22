@@ -11,8 +11,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
 
 -- Default values (safe to re-run — INSERT IGNORE)
 INSERT IGNORE INTO system_settings (`key`, `value`) VALUES
-  ('app_name',           'Shanfix Workspace'),
-  ('support_email',      'support@shanfix.co.ke'),
+  ('app_name',           'OrbitDesk Workspace'),
+  ('support_email',      'support@orbitdesk.co.ke'),
   ('default_currency',   'KES'),
   ('default_timezone',   'Africa/Nairobi'),
   ('trial_days',         '14'),
@@ -22,8 +22,8 @@ INSERT IGNORE INTO system_settings (`key`, `value`) VALUES
   ('smtp_user',          ''),
   ('smtp_pass',          ''),
   ('smtp_enc',           'tls'),
-  ('mail_from',          'noreply@shanfix.co.ke'),
-  ('mail_from_name',     'Shanfix Workspace'),
+  ('mail_from',          'noreply@orbitdesk.co.ke'),
+  ('mail_from_name',     'OrbitDesk Workspace'),
   ('mpesa_consumer_key', ''),
   ('mpesa_consumer_secret',''),
   ('mpesa_shortcode',    ''),
