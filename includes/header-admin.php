@@ -72,6 +72,18 @@ function markNotifsRead() {
       <i class="fas fa-bell"></i><span>Notifications</span></a>
     <a href="<?= APP_URL ?>/admin/security.php"      class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'security.php'      ? 'active' : '' ?>">
       <i class="fas fa-shield-alt"></i><span>Security</span></a>
+    <a href="<?= APP_URL ?>/admin/support.php"       class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'support.php'       ? 'active' : '' ?>">
+      <i class="fas fa-headset"></i><span>Support</span>
+      <?php
+      try {
+        $__openTk = $pdo->query("SELECT COUNT(*) FROM support_tickets WHERE status IN ('open','in_progress')");
+        $__tkCount = (int)$__openTk->fetchColumn();
+        if ($__tkCount > 0) echo '<span class="badge bg-warning text-dark ms-auto" style="font-size:.6rem">' . $__tkCount . '</span>';
+      } catch(Exception $e) {}
+      ?>
+    </a>
+    <a href="<?= APP_URL ?>/admin/reports.php"       class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'reports.php'       ? 'active' : '' ?>">
+      <i class="fas fa-chart-bar"></i><span>Reports</span></a>
     <a href="<?= APP_URL ?>/admin/activity.php"      class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'activity.php'      ? 'active' : '' ?>">
       <i class="fas fa-history"></i><span>Activity Log</span></a>
     <a href="<?= APP_URL ?>/admin/settings.php"      class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'settings.php'      ? 'active' : '' ?>">

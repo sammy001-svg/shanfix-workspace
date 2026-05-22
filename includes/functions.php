@@ -176,6 +176,7 @@ function currentUser(): array {
 
 function hasModuleAccess(int $orgId, string $moduleSlug): bool {
     global $pdo;
+    // Check org subscription includes this module
     $stmt = $pdo->prepare("
         SELECT sm.id FROM subscription_modules sm
         JOIN subscriptions s ON sm.subscription_id = s.id
@@ -184,7 +185,22 @@ function hasModuleAccess(int $orgId, string $moduleSlug): bool {
           AND s.status IN ('active','trial') AND sm.status = 'active'
     ");
     $stmt->execute([$orgId, $moduleSlug]);
-    return (bool)$stmt->fetch();
+    if (!$stmt->fetch()) return false;
+
+    // Staff users need an explicit per-user module grant
+    $user = currentUser();
+    if (($user['role'] ?? '') === 'staff') {
+        try {
+            $s2 = $pdo->prepare("SELECT id FROM user_module_access WHERE user_id=? AND module_slug=? AND org_id=?");
+            $s2->execute([$user['id'], $moduleSlug, $orgId]);
+            return (bool)$s2->fetch();
+        } catch (Exception $e) {
+            // Table doesn't exist yet (pre-migration) — fail open for staff
+            return true;
+        }
+    }
+
+    return true; // client_admin gets all org modules
 }
 
 function requireModuleAccess(string $slug): void {

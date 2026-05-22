@@ -69,10 +69,25 @@ function markNotifsRead() {
     <div class="nav-label">ACCOUNT</div>
     <a href="<?= APP_URL ?>/client/billing.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'billing.php' ? 'active' : '' ?>">
       <i class="fas fa-file-invoice-dollar"></i><span>Billing</span></a>
+    <a href="<?= APP_URL ?>/client/support.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'support.php' ? 'active' : '' ?>">
+      <i class="fas fa-headset"></i><span>Support</span>
+      <?php
+      try {
+        $__openTk = $pdo->prepare("SELECT COUNT(*) FROM support_tickets WHERE org_id=? AND status IN ('open','in_progress')");
+        $__openTk->execute([(int)$user['org_id']]);
+        $__tkCount = (int)$__openTk->fetchColumn();
+        if ($__tkCount > 0) echo '<span class="badge bg-warning text-dark ms-auto" style="font-size:.6rem">' . $__tkCount . '</span>';
+      } catch(Exception $e) {}
+      ?>
+    </a>
     <a href="<?= APP_URL ?>/client/search.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'search.php' ? 'active' : '' ?>">
       <i class="fas fa-search"></i><span>Search</span></a>
     <a href="<?= APP_URL ?>/client/profile.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'profile.php' ? 'active' : '' ?>">
       <i class="fas fa-user-circle"></i><span>Profile</span></a>
+    <?php if (($user['role'] ?? '') === 'client_admin'): ?>
+    <a href="<?= APP_URL ?>/client/users.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'users.php' ? 'active' : '' ?>">
+      <i class="fas fa-users-cog"></i><span>Team</span></a>
+    <?php endif; ?>
     <a href="<?= APP_URL ?>/auth/logout.php" class="nav-item text-danger">
       <i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
   </div>
