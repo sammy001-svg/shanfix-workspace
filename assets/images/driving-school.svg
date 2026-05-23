@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+
+  <!-- Background tile -->
+  <rect width="64" height="64" rx="14" fill="#1a237e"/>
+
+  <!-- Subtle top-centre highlight for depth -->
+  <ellipse cx="32" cy="8" rx="22" ry="14" fill="white" opacity="0.06"/>
+
+  <!-- ── Road surface ── -->
+  <rect x="4" y="50" width="56" height="11" rx="4" fill="#0d1660"/>
+
+  <!-- Road edge lines -->
+  <rect x="4"  y="50" width="56" height="2" rx="1" fill="white" opacity="0.12"/>
+  <rect x="4"  y="59" width="56" height="2" rx="1" fill="white" opacity="0.12"/>
+
+  <!-- Centre dashes (yellow) -->
+  <rect x="10" y="53.5" width="9" height="3" rx="1.5" fill="#ffd600" opacity="0.9"/>
+  <rect x="27" y="53.5" width="9" height="3" rx="1.5" fill="#ffd600" opacity="0.9"/>
+  <rect x="44" y="53.5" width="9" height="3" rx="1.5" fill="#ffd600" opacity="0.9"/>
+
+  <!-- ── Steering wheel ── -->
+
+  <!-- Outer ring -->
+  <circle cx="32" cy="28" r="18" fill="none" stroke="white" stroke-width="4.5"/>
+
+  <!-- Spoke: top (straight up) -->
+  <line x1="32"  y1="22.5" x2="32"  y2="10"  stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Spoke: lower-left  (210° from top, 120° spacing) -->
+  <line x1="27.2" y1="30.8" x2="16.4" y2="37" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Spoke: lower-right (330° from top) -->
+  <line x1="36.8" y1="30.8" x2="47.6" y2="37" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Centre hub — gold disc -->
+  <circle cx="32" cy="28" r="6"   fill="#ffd600"/>
+  <!-- Hub shine -->
+  <circle cx="32" cy="28" r="2.5" fill="white" opacity="0.75"/>
+
+</svg>

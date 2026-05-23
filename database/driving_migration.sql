@@ -9,7 +9,7 @@ INSERT INTO modules
 VALUES
     ('driving', 'Driving School',
      'Manage students, instructors, vehicles, lessons, tests and licenses for a driving school',
-     'fas fa-steering-wheel', '#1a237e', 'Education', 4500, 45000, 22, 'active')
+     'fas fa-car-side', '#1a237e', 'Education', 4500, 45000, 22, 'active')
 ON DUPLICATE KEY UPDATE
     icon   = VALUES(icon),
     status = 'active';

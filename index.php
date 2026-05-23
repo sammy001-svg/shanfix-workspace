@@ -13,6 +13,46 @@ $modules = $stmt->fetchAll();
 $stmt  = $pdo->query("SELECT * FROM subscription_plans WHERE status='active' ORDER BY price_monthly");
 $plans = $stmt->fetchAll();
 
+// ── Module feature lists (shown in popup) ─────────────────────
+$moduleFeatures = [
+    'accounting'    => ['General ledger & chart of accounts','Invoice & receipt generation','Expense tracking & categorisation','VAT & tax computation reports','Bank reconciliation','Profit & loss and balance sheet'],
+    'crm'           => ['Lead & opportunity pipeline','Contact & company management','Activity & follow-up logging','Deal stages & conversion tracking','Customer interaction history','Sales performance analytics'],
+    'sales'         => ['Sales order management','Quotation & proposal builder','Customer & pricing management','Product catalogue with variants','Sales rep performance reports','Revenue & margin analytics'],
+    'meetings'      => ['Meeting scheduling & invites','Agenda creation & management','Attendee RSVP tracking','Minutes & action item recording','Follow-up task assignments','Calendar & timeline view'],
+    'school'        => ['Student enrollment & profiles','Fee collection & receipts','Exam results & grade reports','Attendance tracking','Class timetable management','Teacher & subject allocation'],
+    'health'        => ['Patient records & history','Appointment booking & scheduling','Prescription & drug management','Doctor & department management','Billing & insurance claims','Lab results & diagnostics'],
+    'pos'           => ['Fast barcode & manual checkout','Real-time inventory deduction','Receipt printing & emailing','Shift & cashier management','Daily sales & Z-report','Multi-payment method support'],
+    'sacco'         => ['Member savings accounts','Loan application & processing','Share & dividend management','Repayment schedule tracking','Member statements & passbook','Compliance & audit reports'],
+    'rental'        => ['Property & unit management','Tenant onboarding & profiles','Rent invoicing & collection','Maintenance request tracking','Lease agreement management','Vacancy & occupancy reports'],
+    'church'        => ['Member registry & profiles','Offering & tithe collection','Cell & small group management','Event & service scheduling','Pastoral care records','SMS & communication tools'],
+    'finance'       => ['Budget creation & monitoring','Income & expense categorisation','Multi-account management','Cash flow forecasting','Financial dashboard & KPIs','Exportable financial reports'],
+    'hotel'         => ['Room inventory & type setup','Online & walk-in reservations','Check-in & check-out management','Housekeeping task tracking','Guest folios & billing','Occupancy & revenue reports'],
+    'salon'         => ['Appointment booking & calendar','Service & pricing catalogue','Stylist & staff scheduling','Client visit history & notes','POS & product sales','Loyalty points & membership'],
+    'retail'        => ['Product & category management','Supplier & purchase orders','Stock level alerts & reordering','Customer accounts & credit','Barcode label printing','Profit margin & sales reports'],
+    'tour'          => ['Tour package creation & pricing','Booking & itinerary management','Guide & vehicle assignment','Customer billing & receipts','Booking calendar & availability','Revenue & booking reports'],
+    'events'        => ['Event creation & scheduling','Ticket tiers & sales management','Attendee registration & check-in','Budget & vendor management','Sponsorship tracking','Post-event analytics & reports'],
+    'manufacturing' => ['Production order management','Bill of materials (BOM)','Raw material stock tracking','Quality control & inspections','Production cost analysis','Manufacturing performance reports'],
+    'hrm'           => ['Employee profiles & contracts','Payroll computation & payslips','Leave application & approvals','Attendance & time tracking','Performance appraisals','Departments & org chart'],
+    'caryard'       => ['Vehicle stock management','Sales & commission tracking','Test drive scheduling','Financing & instalment plans','Customer CRM & follow-ups','Dealer performance reports'],
+    'shopping-mall' => ['Shop unit & floor management','Tenant onboarding & leases','Automated rent billing','Maintenance & service requests','Utility billing management','Mall occupancy & revenue analytics'],
+    'courier'       => ['Parcel creation & tracking','Delivery agent management','Real-time status updates','Route & branch management','Payment & invoice processing','Delivery performance reports'],
+    'driving'       => ['Student enrollment & profiles','Instructor scheduling & assignments','Vehicle fleet management','Lesson booking & progress tracking','Theory & practical test management','Driving licence issuance records'],
+];
+
+// Build JS-ready module map
+$moduleMap = [];
+foreach ($modules as $m) {
+    $moduleMap[$m['slug']] = [
+        'name'     => $m['name'],
+        'desc'     => $m['description'],
+        'icon'     => $m['icon'],
+        'color'    => $m['color'],
+        'category' => $m['category'],
+        'price'    => (float)$m['monthly_price'],
+        'features' => $moduleFeatures[$m['slug']] ?? [],
+    ];
+}
+
 $contactSent = false;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['contact_submit'])) {
     $contactSent = true;
@@ -102,38 +142,72 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
 .od-hero {
   position: relative;
   min-height: 100vh;
-  background: #050f1f;
+  /* Photo background */
+  background-image: url('assets/images/Gemini_Generated_Image_dt5jpmdt5jpmdt5j.png');
+  background-size: cover;
+  background-position: center 30%;
+  background-attachment: fixed; /* subtle parallax on scroll */
   display: flex; align-items: center;
   padding: 120px 0 80px;
   overflow: hidden;
 }
-/* Mesh grid overlay */
+
+/* Layer 1 – deep navy colour wash over the photo */
 .od-hero::before {
   content: '';
-  position: absolute; inset: 0;
+  position: absolute; inset: 0; z-index: 0;
+  background: linear-gradient(
+    120deg,
+    rgba(5,15,31,.88)  0%,
+    rgba(7,25,52,.82)  40%,
+    rgba(5,15,31,.70)  100%
+  );
+}
+
+/* Layer 2 – green accent gradient on right side */
+.od-hero::after {
+  content: '';
+  position: absolute; inset: 0; z-index: 0;
+  background:
+    radial-gradient(ellipse 55% 70% at 90% 50%, rgba(26,138,78,.22) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 60% at 10% 10%, rgba(11,45,78,.5) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Mesh grid overlay (sits above colour layers) */
+.od-hero .hero-mesh {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background-image:
-    linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
   background-size: 60px 60px;
   mask-image: radial-gradient(ellipse 80% 80% at 50% 0%, black 40%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 0%, black 40%, transparent 100%);
 }
+
+/* Frosted shimmer line at the very bottom */
+.od-hero .hero-bottom-shimmer {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 1px; z-index: 3;
+  background: linear-gradient(90deg, transparent, rgba(74,222,147,.35), rgba(56,189,248,.2), transparent);
+}
+
 /* Glow orbs */
 .od-hero .orb-1 {
-  position: absolute; top: -80px; right: -80px;
+  position: absolute; top: -80px; right: -80px; z-index: 2;
   width: 600px; height: 600px; border-radius: 50%;
   background: radial-gradient(circle, rgba(26,138,78,.18) 0%, transparent 70%);
   pointer-events: none;
 }
 .od-hero .orb-2 {
-  position: absolute; bottom: -120px; left: -60px;
+  position: absolute; bottom: -120px; left: -60px; z-index: 2;
   width: 500px; height: 500px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(11,45,78,.4) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(11,45,78,.35) 0%, transparent 70%);
   pointer-events: none;
 }
 .od-hero .orb-3 {
-  position: absolute; top: 40%; left: 40%;
+  position: absolute; top: 40%; left: 40%; z-index: 2;
   width: 300px; height: 300px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(26,138,78,.08) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(26,138,78,.09) 0%, transparent 70%);
   animation: orb-float 8s ease-in-out infinite;
   pointer-events: none;
 }
@@ -631,10 +705,14 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
      HERO
 ══════════════════════════════════════════════════════════ -->
 <section class="od-hero" id="hero">
+  <!-- Overlay layers -->
+  <div class="hero-mesh"></div>
+  <div class="hero-bottom-shimmer"></div>
+  <!-- Glow orbs -->
   <div class="orb-1"></div>
   <div class="orb-2"></div>
   <div class="orb-3"></div>
-  <div class="container position-relative" style="z-index:2">
+  <div class="container position-relative" style="z-index:4">
     <div class="row align-items-center g-5">
       <!-- Left: Copy -->
       <div class="col-lg-6">
@@ -857,14 +935,17 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
     <div class="row g-3">
       <?php foreach($modules as $m): ?>
       <div class="col-6 col-md-4 col-lg-3 reveal">
-        <a href="<?= APP_URL ?>/auth/register.php" class="mod-tile">
+        <div class="mod-tile" role="button" tabindex="0"
+             onclick="openModuleModal('<?=e($m['slug'])?>')"
+             onkeydown="if(event.key==='Enter')openModuleModal('<?=e($m['slug'])?>') "
+             style="cursor:pointer">
           <div class="mod-tile-icon" style="background:<?=e($m['color'])?>1a;color:<?=e($m['color'])?>">
             <i class="<?=e($m['icon'])?>"></i>
           </div>
           <h6><?=e($m['name'])?></h6>
           <p><?=e(mb_substr($m['description'],0,68))?>…</p>
           <span class="price-pill">From <?=formatCurrency((float)$m['monthly_price'])?>/mo</span>
-        </a>
+        </div>
       </div>
       <?php endforeach; ?>
     </div>
@@ -1197,6 +1278,61 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
 <!-- ══════════════════════════════════════════════════════════
      FOOTER
 ══════════════════════════════════════════════════════════ -->
+<!-- ══ Module Detail Modal ══════════════════════════════════════ -->
+<div class="modal fade" id="modDetailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:580px">
+    <div class="modal-content border-0 shadow-lg" style="border-radius:20px;overflow:hidden">
+
+      <!-- Coloured header -->
+      <div id="mmHeader" style="padding:1.75rem 2rem 1.5rem;position:relative">
+        <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="d-flex align-items-center gap-3">
+          <div id="mmIconWrap" style="width:56px;height:56px;border-radius:14px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:white;flex-shrink:0">
+            <i id="mmIcon"></i>
+          </div>
+          <div>
+            <div id="mmCat" style="color:rgba(255,255,255,.72);font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;font-weight:700;margin-bottom:3px"></div>
+            <h4 id="mmName" class="fw-800 text-white mb-0" style="font-size:1.25rem;line-height:1.2"></h4>
+          </div>
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body px-4 pt-4 pb-3">
+        <p id="mmDesc" class="text-muted mb-4" style="font-size:.9rem;line-height:1.75"></p>
+
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <span style="width:22px;height:22px;border-radius:50%;background:#f59e0b;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="fas fa-star" style="color:white;font-size:.58rem"></i>
+          </span>
+          <h6 class="fw-700 text-dark mb-0" style="font-size:.9rem">Key Features</h6>
+        </div>
+
+        <div class="row g-2" id="mmFeatures"></div>
+      </div>
+
+      <!-- Footer -->
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 px-4 py-3"
+           style="background:#f8fafc;border-top:1px solid #e9ecef">
+        <div>
+          <div class="text-muted" style="font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;font-weight:600">Starting from</div>
+          <div class="fw-800 text-dark" id="mmPrice" style="font-size:1.15rem"></div>
+          <div class="text-muted" style="font-size:.7rem">per month + VAT</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+          <a href="<?= APP_URL ?>/auth/register.php" class="btn fw-700 text-white px-4"
+             style="border-radius:50px;background:#1A8A4E">
+            <i class="fas fa-rocket me-2"></i>Start Free Trial
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<!-- ══ /Module Detail Modal ══════════════════════════════════════ -->
+
 <footer class="od-footer">
   <div class="container" style="padding-top:4rem;padding-bottom:2rem">
     <div class="row g-4 mb-5">
@@ -1322,6 +1458,36 @@ if (toggle) {
     document.getElementById('lblMonthly').className = annual ? '' : 'active';
     document.getElementById('lblAnnual').className  = annual ? 'active' : '';
   });
+}
+
+// ── Module detail modal ────────────────────────────────────────
+const MOD_INFO = <?= json_encode($moduleMap, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
+
+function openModuleModal(slug) {
+  const m = MOD_INFO[slug];
+  if (!m) return;
+
+  // Header colour (gradient from the module's brand colour)
+  document.getElementById('mmHeader').style.background =
+    `linear-gradient(135deg, ${m.color}f0 0%, ${m.color}b0 100%)`;
+
+  document.getElementById('mmIcon').className = m.icon;
+  document.getElementById('mmCat').textContent  = m.category;
+  document.getElementById('mmName').textContent = m.name;
+  document.getElementById('mmDesc').textContent = m.desc;
+  document.getElementById('mmPrice').textContent =
+    'KES ' + Number(m.price).toLocaleString('en-KE', {minimumFractionDigits: 0});
+
+  // Feature list — 2-column grid
+  document.getElementById('mmFeatures').innerHTML = (m.features || []).map(f => `
+    <div class="col-sm-6">
+      <div class="d-flex align-items-start gap-2 px-2 py-2 rounded-2" style="background:#f0fdf4">
+        <i class="fas fa-check-circle flex-shrink-0 mt-1" style="color:#1A8A4E;font-size:.72rem"></i>
+        <span style="font-size:.8rem;color:#1e293b;line-height:1.45">${f}</span>
+      </div>
+    </div>`).join('');
+
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('modDetailModal')).show();
 }
 
 // ── Active nav link on scroll ──────────────────────────────────

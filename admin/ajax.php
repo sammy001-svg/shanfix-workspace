@@ -171,6 +171,107 @@ switch ($action) {
         }
         break;
 
+    // ── Send single invoice reminder ──────────────────────────────
+    case 'send_invoice_reminder':
+        $id = (int)($input['id'] ?? 0);
+        if (!$id) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid invoice ID']);
+            break;
+        }
+        $invRow = $pdo->prepare("
+            SELECT i.*, o.name AS org_name, o.email AS org_email
+            FROM invoices i JOIN organizations o ON i.org_id = o.id
+            WHERE i.id = ?
+        ");
+        $invRow->execute([$id]);
+        $invRow = $invRow->fetch();
+        if (!$invRow || !$invRow['org_email']) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invoice or client email not found']);
+            break;
+        }
+        require_once __DIR__ . '/../includes/mailer.php';
+        $invData = [
+            'invoice_number' => $invRow['invoice_number'],
+            'amount'         => $invRow['amount'],
+            'tax'            => $invRow['tax'],
+            'total'          => $invRow['total'],
+            'due_date'       => $invRow['due_date'],
+        ];
+        $ok = mailer()->sendInvoice($invRow['org_email'], $invRow['org_name'], $invData);
+        logActivity('send_invoice_reminder', 'admin', "Reminder sent for invoice {$invRow['invoice_number']}");
+        echo json_encode([
+            'success' => $ok,
+            'message' => $ok
+                ? "Reminder sent to {$invRow['org_email']}"
+                : 'Failed to send email. Check SMTP settings.',
+        ]);
+        break;
+
+    // ── Bulk mark paid ────────────────────────────────────────────
+    case 'bulk_mark_paid':
+        $ids = array_filter(array_map('intval', $input['ids'] ?? []));
+        if (empty($ids)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'No invoice IDs provided']);
+            break;
+        }
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        $pdo->prepare("UPDATE invoices SET status='paid', paid_at=NOW() WHERE id IN ($ph)")->execute($ids);
+        logActivity('bulk_mark_paid', 'admin', count($ids) . ' invoices marked paid');
+        echo json_encode(['success' => true, 'message' => count($ids) . ' invoice(s) marked as paid.']);
+        break;
+
+    // ── Bulk mark overdue ─────────────────────────────────────────
+    case 'bulk_mark_overdue':
+        $ids = array_filter(array_map('intval', $input['ids'] ?? []));
+        if (empty($ids)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'No invoice IDs provided']);
+            break;
+        }
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        $pdo->prepare("UPDATE invoices SET status='overdue' WHERE id IN ($ph) AND status != 'paid'")->execute($ids);
+        logActivity('bulk_mark_overdue', 'admin', count($ids) . ' invoices marked overdue');
+        echo json_encode(['success' => true, 'message' => count($ids) . ' invoice(s) marked as overdue.']);
+        break;
+
+    // ── Bulk send reminders ───────────────────────────────────────
+    case 'bulk_send_reminder':
+        $ids = array_filter(array_map('intval', $input['ids'] ?? []));
+        if (empty($ids)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'No invoice IDs provided']);
+            break;
+        }
+        require_once __DIR__ . '/../includes/mailer.php';
+        $ph       = implode(',', array_fill(0, count($ids), '?'));
+        $bulkStmt = $pdo->prepare("
+            SELECT i.*, o.name AS org_name, o.email AS org_email
+            FROM invoices i JOIN organizations o ON i.org_id = o.id
+            WHERE i.id IN ($ph) AND i.status != 'paid'
+        ");
+        $bulkStmt->execute($ids);
+        $sent = 0; $failed = 0;
+        foreach ($bulkStmt->fetchAll() as $inv) {
+            if (!$inv['org_email']) { $failed++; continue; }
+            $invData = [
+                'invoice_number' => $inv['invoice_number'],
+                'amount'         => $inv['amount'],
+                'tax'            => $inv['tax'],
+                'total'          => $inv['total'],
+                'due_date'       => $inv['due_date'],
+            ];
+            mailer()->sendInvoice($inv['org_email'], $inv['org_name'], $invData) ? $sent++ : $failed++;
+        }
+        logActivity('bulk_send_reminder', 'admin', "$sent reminders sent, $failed failed");
+        echo json_encode([
+            'success' => true,
+            'message' => "$sent reminder(s) sent" . ($failed ? ", $failed failed." : '.'),
+        ]);
+        break;
+
     // ── Delete user ──────────────────────────────────────────────
     case 'delete_user':
         $id = (int)($input['id'] ?? 0);

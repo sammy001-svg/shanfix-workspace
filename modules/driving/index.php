@@ -1,7 +1,7 @@
 <?php
 $moduleSlug  = 'driving';
 $moduleName  = 'Driving School';
-$moduleIcon  = 'fas fa-car';
+$moduleIcon  = 'fas fa-car-side';
 $moduleColor = '#1a237e';
 $moduleNav   = [
     ['url' => 'index.php',       'icon' => 'fas fa-tachometer-alt',      'label' => 'Dashboard'],
