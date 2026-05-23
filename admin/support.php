@@ -2,6 +2,50 @@
 $pageTitle = 'Support Tickets';
 require_once __DIR__ . '/../includes/header-admin.php';
 
+// ── Attachment helpers ────────────────────────────────────────────
+function adminAttachmentChip(array $att): string {
+    $icons = ['pdf'=>'fa-file-pdf','doc'=>'fa-file-word','docx'=>'fa-file-word',
+              'xls'=>'fa-file-excel','xlsx'=>'fa-file-excel','zip'=>'fa-file-archive',
+              'txt'=>'fa-file-alt','jpg'=>'fa-file-image','jpeg'=>'fa-file-image',
+              'png'=>'fa-file-image','gif'=>'fa-file-image','csv'=>'fa-file-csv'];
+    $ext  = strtolower(pathinfo($att['original_name'], PATHINFO_EXTENSION));
+    $icon = $icons[$ext] ?? 'fa-file';
+    $size = $att['file_size'] > 1048576
+          ? round($att['file_size']/1048576, 1) . ' MB'
+          : round($att['file_size']/1024, 1) . ' KB';
+    $url  = APP_URL . '/uploads/tickets/' . rawurlencode($att['filename']);
+    return '<a href="' . $url . '" target="_blank" download="' . htmlspecialchars($att['original_name'], ENT_QUOTES) . '"
+              class="d-inline-flex align-items-center gap-1 px-2 py-1 rounded text-decoration-none"
+              style="background:#f1f5f9;border:1px solid #e2e8f0;font-size:.75rem;color:#0B2D4E;max-width:220px">
+             <i class="fas ' . $icon . ' text-muted flex-shrink-0"></i>
+             <span class="text-truncate">' . htmlspecialchars($att['original_name'], ENT_QUOTES) . '</span>
+             <span class="text-muted flex-shrink-0" style="font-size:.65rem">(' . $size . ')</span>
+           </a>';
+}
+
+function saveAdminTicketFiles(PDO $pdo, int $ticketId, ?int $replyId, int $orgId, int $userId): void {
+    if (empty($_FILES['attachments']['name'][0])) return;
+    $uploadDir = __DIR__ . '/../uploads/tickets/';
+    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+    $allowed = ['jpg','jpeg','png','gif','pdf','doc','docx','txt','zip','xlsx','csv'];
+    $maxSize = 5 * 1024 * 1024;
+    foreach ($_FILES['attachments']['name'] as $i => $origName) {
+        if (!$origName || $_FILES['attachments']['error'][$i] !== UPLOAD_ERR_OK) continue;
+        if ($_FILES['attachments']['size'][$i] > $maxSize) continue;
+        $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+        if (!in_array($ext, $allowed)) continue;
+        $safe     = preg_replace('/[^a-z0-9._-]/', '_', strtolower(basename($origName)));
+        $filename = $ticketId . '_' . ($replyId ?? 0) . '_' . uniqid() . '_' . $safe;
+        if (move_uploaded_file($_FILES['attachments']['tmp_name'][$i], $uploadDir . $filename)) {
+            $pdo->prepare("INSERT INTO ticket_attachments (ticket_id, reply_id, org_id, uploaded_by, filename, original_name, file_size, mime_type)
+                VALUES (?,?,?,?,?,?,?,?)")
+                ->execute([$ticketId, $replyId, $orgId, $userId, $filename,
+                           $origName, (int)$_FILES['attachments']['size'][$i],
+                           $_FILES['attachments']['type'][$i] ?? '']);
+        }
+    }
+}
+
 // ── POST: Update status ──────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_status') {
     verifyCsrf();
@@ -25,21 +69,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reply
     $message  = trim($_POST['message'] ?? '');
     $newStatus = $_POST['new_status'] ?? '';
     if ($ticketId && $message) {
-        $pdo->prepare("INSERT INTO ticket_replies (ticket_id, user_id, is_admin, message) VALUES (?,?,1,?)")
-            ->execute([$ticketId, (int)$user['id'], $message]);
-        $update = "UPDATE support_tickets SET updated_at=NOW(), admin_id=?";
-        $params = [(int)$user['id']];
-        if (in_array($newStatus, ['open','in_progress','resolved','closed'])) {
-            $update .= ", status=?";
-            $params[] = $newStatus;
-            if (in_array($newStatus, ['resolved','closed'])) $update .= ", closed_at=NOW()";
-        } else {
-            $update .= ", status='in_progress'";
+        $isInternal = isset($_POST['is_internal']) ? 1 : 0;
+        $pdo->prepare("INSERT INTO ticket_replies (ticket_id, user_id, is_admin, is_internal, message) VALUES (?,?,1,?,?)")
+            ->execute([$ticketId, (int)$user['id'], $isInternal, $message]);
+        $replyId = (int)$pdo->lastInsertId();
+        try {
+            $tkOrg = $pdo->prepare("SELECT org_id FROM support_tickets WHERE id=?");
+            $tkOrg->execute([$ticketId]);
+            $tkOrgId = (int)($tkOrg->fetchColumn() ?: 0);
+            saveAdminTicketFiles($pdo, $ticketId, $replyId, $tkOrgId, (int)$user['id']);
+        } catch (Exception $e) {}
+        // Only update ticket status/timestamp for non-internal replies
+        if (!$isInternal) {
+            $update = "UPDATE support_tickets SET updated_at=NOW(), admin_id=?";
+            $params = [(int)$user['id']];
+            if (in_array($newStatus, ['open','in_progress','resolved','closed'])) {
+                $update .= ", status=?";
+                $params[] = $newStatus;
+                if (in_array($newStatus, ['resolved','closed'])) $update .= ", closed_at=NOW()";
+            } else {
+                $update .= ", status='in_progress'";
+            }
+            $update .= " WHERE id=?";
+            $params[] = $ticketId;
+            $pdo->prepare($update)->execute($params);
         }
-        $update .= " WHERE id=?";
-        $params[] = $ticketId;
-        $pdo->prepare($update)->execute($params);
-        setFlash('success', 'Reply sent.');
+        setFlash('success', $isInternal ? 'Internal note saved.' : 'Reply sent.');
+
+        // Notify ticket creator when admin posts a visible reply
+        if (!$isInternal) {
+            try {
+                require_once __DIR__ . '/../includes/notifications.php';
+                require_once __DIR__ . '/../includes/mailer.php';
+                $creatorStmt = $pdo->prepare("
+                    SELECT u.id, u.name, u.email, t.ticket_number, t.subject, t.org_id
+                    FROM support_tickets t
+                    JOIN users u ON t.user_id = u.id
+                    WHERE t.id = ?
+                ");
+                $creatorStmt->execute([$ticketId]);
+                $creator = $creatorStmt->fetch();
+                if ($creator) {
+                    createNotification(
+                        (int)$creator['org_id'],
+                        (int)$creator['id'],
+                        'Reply on ticket #' . $creator['ticket_number'],
+                        'Support has responded to: "' . $creator['subject'] . '".',
+                        'info',
+                        APP_URL . '/client/support.php?view=' . $ticketId
+                    );
+                    _sendNotifEmail(
+                        $creator['email'],
+                        $creator['name'],
+                        'New reply on ticket #' . $creator['ticket_number'],
+                        'Support has responded to your ticket: "' . $creator['subject'] . '". Click below to view the reply.',
+                        'info',
+                        APP_URL . '/client/support.php?view=' . $ticketId
+                    );
+                }
+            } catch (Exception $e) {
+                error_log('[support reply notify] ' . $e->getMessage());
+            }
+        }
     }
     redirect(APP_URL . '/admin/support.php?view=' . $ticketId);
 }
@@ -71,9 +162,21 @@ if ($viewId) {
         $s->execute([$viewId]);
         $ticket = $s->fetch();
         if ($ticket) {
-            $r = $pdo->prepare("SELECT tr.*, u.name as user_name FROM ticket_replies tr JOIN users u ON tr.user_id=u.id WHERE tr.ticket_id=? ORDER BY tr.created_at ASC");
+            $r = $pdo->prepare("SELECT tr.*, u.name as user_name, COALESCE(tr.is_internal,0) as is_internal
+                                FROM ticket_replies tr JOIN users u ON tr.user_id=u.id
+                                WHERE tr.ticket_id=? ORDER BY tr.created_at ASC");
             $r->execute([$viewId]);
             $replies = $r->fetchAll();
+            // Attachments keyed by 'ticket' or 'r{reply_id}'
+            $attachments = [];
+            try {
+                $a = $pdo->prepare("SELECT * FROM ticket_attachments WHERE ticket_id=? ORDER BY created_at");
+                $a->execute([$viewId]);
+                foreach ($a->fetchAll() as $att) {
+                    $key = $att['reply_id'] ? 'r' . $att['reply_id'] : 'ticket';
+                    $attachments[$key][] = $att;
+                }
+            } catch (Exception $e) {}
         }
     } catch (Exception $e) {}
 }
@@ -110,7 +213,8 @@ $whereStr = implode(' AND ', $where);
 try {
     $stmt = $pdo->prepare("
         SELECT t.*, u.name as user_name, o.name as org_name,
-               (SELECT COUNT(*) FROM ticket_replies WHERE ticket_id=t.id) as reply_count
+               (SELECT COUNT(*) FROM ticket_replies WHERE ticket_id=t.id) as reply_count,
+               (SELECT COALESCE(is_admin,1) FROM ticket_replies WHERE ticket_id=t.id ORDER BY created_at DESC LIMIT 1) as last_reply_is_admin
         FROM support_tickets t
         JOIN users u ON t.user_id = u.id
         JOIN organizations o ON t.org_id = o.id
@@ -176,25 +280,41 @@ $categoryIcons  = ['billing'=>'fa-file-invoice-dollar','technical'=>'fa-wrench',
             <span class="text-muted small ms-auto"><?= formatDateTime($ticket['created_at']) ?></span>
           </div>
           <div class="small" style="white-space:pre-wrap"><?= e($ticket['message']) ?></div>
+          <?php if (!empty($attachments['ticket'])): ?>
+          <div class="mt-2 pt-2 border-top d-flex flex-wrap gap-2">
+            <?php foreach ($attachments['ticket'] as $att): echo adminAttachmentChip($att); endforeach; ?>
+          </div>
+          <?php endif; ?>
         </div>
       </div>
     </div>
 
     <!-- Replies -->
-    <?php foreach ($replies as $r): ?>
-    <div class="card mb-2" style="<?= $r['is_admin'] ? 'border-left:3px solid #1A8A4E' : 'border-left:3px solid #94a3b8' ?>">
+    <?php foreach ($replies as $r):
+      $isInternal = (bool)($r['is_internal'] ?? 0);
+      $borderColor = $isInternal ? '#f59e0b' : ($r['is_admin'] ? '#1A8A4E' : '#94a3b8');
+      $bgColor     = $isInternal ? '#fffbeb' : 'white';
+    ?>
+    <div class="card mb-2" style="border-left:3px solid <?= $borderColor ?>;background:<?= $bgColor ?>">
       <div class="card-body py-3">
         <div class="d-flex align-items-center gap-2 mb-2">
-          <div class="avatar-sm" style="background:<?= $r['is_admin'] ? '#1A8A4E' : 'var(--navy)' ?>;width:28px;height:28px;font-size:.65rem">
+          <div class="avatar-sm" style="background:<?= $isInternal ? '#f59e0b' : ($r['is_admin'] ? '#1A8A4E' : 'var(--navy)') ?>;width:28px;height:28px;font-size:.65rem">
             <?= strtoupper(substr($r['user_name'],0,2)) ?>
           </div>
           <span class="fw-600 small"><?= e($r['user_name']) ?></span>
-          <?php if ($r['is_admin']): ?>
+          <?php if ($isInternal): ?>
+          <span class="badge bg-warning text-dark" style="font-size:.6rem"><i class="fas fa-lock me-1"></i>Internal Note</span>
+          <?php elseif ($r['is_admin']): ?>
           <span class="badge bg-success" style="font-size:.6rem">Support Team</span>
           <?php endif; ?>
           <span class="text-muted small ms-auto"><?= formatDateTime($r['created_at']) ?></span>
         </div>
         <div class="small" style="white-space:pre-wrap"><?= e($r['message']) ?></div>
+        <?php if (!empty($attachments['r' . $r['id']])): ?>
+        <div class="mt-2 pt-2 border-top d-flex flex-wrap gap-2">
+          <?php foreach ($attachments['r' . $r['id']] as $att): echo adminAttachmentChip($att); endforeach; ?>
+        </div>
+        <?php endif; ?>
       </div>
     </div>
     <?php endforeach; ?>
@@ -203,25 +323,37 @@ $categoryIcons  = ['billing'=>'fa-file-invoice-dollar','technical'=>'fa-wrench',
     <div class="card">
       <div class="card-header fw-600"><i class="fas fa-reply me-2 text-green"></i>Reply to Ticket</div>
       <div class="card-body">
-        <form method="POST">
+        <form method="POST" enctype="multipart/form-data">
           <?= csrfField() ?>
           <input type="hidden" name="action" value="reply">
           <input type="hidden" name="ticket_id" value="<?= $ticket['id'] ?>">
           <div class="mb-3">
-            <textarea name="message" class="form-control" rows="5"
+            <textarea name="message" id="replyMessage" class="form-control" rows="5"
                       placeholder="Write your response..." required></textarea>
           </div>
+          <div class="mb-3">
+            <label class="form-label small fw-600">Attachments <span class="text-muted fw-400">(optional · max 5 MB each)</span></label>
+            <input type="file" name="attachments[]" class="form-control form-control-sm" multiple
+                   accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.txt,.zip,.xlsx,.csv">
+          </div>
           <div class="d-flex align-items-center gap-3 flex-wrap">
-            <div class="d-flex align-items-center gap-2">
-              <label class="form-label mb-0 small fw-600">After reply, set status to:</label>
-              <select name="new_status" class="form-select form-select-sm" style="width:auto">
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" name="is_internal" id="isInternal"
+                     onchange="document.getElementById('replySubmitBtn').className=this.checked?'btn btn-warning ms-auto':'btn btn-primary ms-auto'">
+              <label class="form-check-label small fw-600" for="isInternal">
+                <i class="fas fa-lock me-1"></i>Internal note <span class="text-muted fw-400">(hidden from client)</span>
+              </label>
+            </div>
+            <div class="d-flex align-items-center gap-2 ms-auto">
+              <label class="form-label mb-0 small fw-600">Status after reply:</label>
+              <select name="new_status" id="newStatusSel" class="form-select form-select-sm" style="width:auto">
                 <option value="in_progress" <?= $ticket['status']==='in_progress'?'selected':'' ?>>In Progress</option>
                 <option value="open">Open</option>
                 <option value="resolved" <?= $ticket['status']==='resolved'?'selected':'' ?>>Resolved</option>
                 <option value="closed">Closed</option>
               </select>
             </div>
-            <button type="submit" class="btn btn-primary ms-auto">
+            <button type="submit" id="replySubmitBtn" class="btn btn-primary">
               <i class="fas fa-paper-plane me-2"></i>Send Reply
             </button>
           </div>
@@ -414,7 +546,15 @@ $categoryIcons  = ['billing'=>'fa-file-invoice-dollar','technical'=>'fa-wrench',
               <a href="?view=<?= $tk['id'] ?>" class="fw-600 text-dark text-decoration-none">
                 <?= e($tk['subject']) ?>
               </a>
-              <div class="text-muted" style="font-size:.72rem"><?= e($tk['user_name']) ?></div>
+              <div class="d-flex align-items-center gap-2 mt-1 flex-wrap">
+                <span class="text-muted" style="font-size:.72rem"><?= e($tk['user_name']) ?></span>
+                <?php if (($tk['reply_count'] ?? 0) > 0 && ($tk['last_reply_is_admin'] ?? 1) == 0
+                          && !in_array($tk['status'], ['resolved','closed'])): ?>
+                <span class="badge bg-warning text-dark" style="font-size:.6rem">
+                  <i class="fas fa-comment-dots me-1"></i>Client replied
+                </span>
+                <?php endif; ?>
+              </div>
             </td>
             <td class="small">
               <i class="fas <?= $categoryIcons[$tk['category']] ?? 'fa-tag' ?> text-muted me-1"></i>

@@ -85,7 +85,7 @@ class Mailer
               <tr style='background:#f0f9f4'><td style='padding:8px;border:1px solid #eee;font-weight:700'>Total Due</td><td style='padding:8px;border:1px solid #eee;font-weight:700;color:#1A8A4E'>KES " . number_format($invoice['total'],2) . "</td></tr>
               <tr><td style='padding:8px;border:1px solid #eee;color:#666'>Due Date</td><td style='padding:8px;border:1px solid #eee;color:#e67e22;font-weight:600'>{$invoice['due_date']}</td></tr>
             </table>
-            <p style='color:#666;font-size:.85rem'>Pay via M-Pesa: Paybill <strong>123456</strong>, Account: <strong>{$invoice['invoice_number']}</strong></p>
+            <p style='color:#666;font-size:.85rem'>Pay via M-Pesa: Paybill <strong>" . (function_exists('getSettings') ? (getSettings(['mpesa_paybill'])['mpesa_paybill'] ?: 'N/A') : 'N/A') . "</strong>, Account: <strong>{$invoice['invoice_number']}</strong></p>
             <a href='" . APP_URL . "/client/billing.php' style='background:#1A8A4E;color:white;padding:12px 28px;border-radius:50px;text-decoration:none;font-weight:700;display:inline-block'>
               View &amp; Pay Invoice
             </a>
@@ -179,7 +179,7 @@ class Mailer
               </a>
             </div>
             <p style='color:#666;font-size:.85rem'>
-              Need help? Contact us at info@shanfix.co.ke or call +254 700 000 000.
+              Need help? Contact us at " . (function_exists('getSettings') ? (getSettings(['support_email'])['support_email'] ?: 'support@orbitdesk.co.ke') : 'support@orbitdesk.co.ke') . ".
             </p>
         ");
         return $this->send($toEmail, $subject, $body);
@@ -310,31 +310,25 @@ class Mailer
  */
 function mailer(): Mailer
 {
+    $cfg = [];
+    try {
+        if (function_exists('getSettings')) {
+            $cfg = getSettings(['smtp_host','smtp_port','smtp_user','smtp_pass','smtp_enc','mail_from','mail_from_name']);
+        }
+    } catch (Exception $e) { /* DB not ready yet */ }
+
     return new Mailer([
-        'host'       => defined('SMTP_HOST')      ? SMTP_HOST      : 'localhost',
-        'port'       => defined('SMTP_PORT')      ? (int)SMTP_PORT : 587,
-        'username'   => defined('SMTP_USER')      ? SMTP_USER      : '',
-        'password'   => defined('SMTP_PASS')      ? SMTP_PASS      : '',
-        'encryption' => defined('SMTP_ENC')       ? SMTP_ENC       : 'tls',
-        'from_name'  => defined('MAIL_FROM_NAME') ? MAIL_FROM_NAME : APP_NAME,
-        'from_email' => defined('MAIL_FROM')      ? MAIL_FROM      : 'noreply@shanfix.co.ke',
+        'host'       => ($cfg['smtp_host']      ?? '') ?: (defined('SMTP_HOST')      ? SMTP_HOST      : 'localhost'),
+        'port'       => (int)(($cfg['smtp_port'] ?? '') ?: (defined('SMTP_PORT')      ? SMTP_PORT      : 587)),
+        'username'   => ($cfg['smtp_user']      ?? '') ?: (defined('SMTP_USER')      ? SMTP_USER      : ''),
+        'password'   => ($cfg['smtp_pass']      ?? '') ?: (defined('SMTP_PASS')      ? SMTP_PASS      : ''),
+        'encryption' => ($cfg['smtp_enc']       ?? '') ?: (defined('SMTP_ENC')       ? SMTP_ENC       : 'tls'),
+        'from_name'  => ($cfg['mail_from_name'] ?? '') ?: (defined('MAIL_FROM_NAME') ? MAIL_FROM_NAME : APP_NAME),
+        'from_email' => ($cfg['mail_from']      ?? '') ?: (defined('MAIL_FROM')      ? MAIL_FROM      : 'noreply@orbitdesk.co.ke'),
     ]);
 }
 
 function sendEmail($to, string $subject, string $body): bool
 {
-    static $mailer = null;
-    if (!$mailer) {
-        // Load SMTP config from DB settings (simplified — use constants in production)
-        $mailer = new Mailer([
-            'host'       => defined('SMTP_HOST')     ? SMTP_HOST     : 'localhost',
-            'port'       => defined('SMTP_PORT')     ? SMTP_PORT     : 587,
-            'username'   => defined('SMTP_USER')     ? SMTP_USER     : '',
-            'password'   => defined('SMTP_PASS')     ? SMTP_PASS     : '',
-            'encryption' => defined('SMTP_ENC')      ? SMTP_ENC      : 'tls',
-            'from_name'  => APP_NAME,
-            'from_email' => defined('MAIL_FROM')     ? MAIL_FROM     : 'noreply@shanfix.co.ke',
-        ]);
-    }
-    return $mailer->send($to, $subject, $body);
+    return mailer()->send($to, $subject, $body);
 }

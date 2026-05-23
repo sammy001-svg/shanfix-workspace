@@ -766,8 +766,9 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
           ['Retail Shops',  'fas fa-store'],
           ['Churches',      'fas fa-church'],
           ['NGOs',          'fas fa-hands-helping'],
-          ['Car Yards',     'fas fa-car'],
-          ['Manufacturing', 'fas fa-industry'],
+          ['Car Yards',       'fas fa-car'],
+          ['Driving Schools', 'fas fa-steering-wheel'],
+          ['Manufacturing',   'fas fa-industry'],
         ];
         foreach($industries as $ind): ?>
         <span class="industry-pill">
@@ -1159,7 +1160,7 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
                   <option value="">Select industry…</option>
                   <option>School / College</option><option>Hospital / Clinic</option><option>Hotel / Hospitality</option>
                   <option>SACCO / Microfinance</option><option>Retail / Wholesale</option><option>Church / Religious</option>
-                  <option>Manufacturing</option><option>Car Yard</option><option>NGO / Non-Profit</option><option>Other</option>
+                  <option>Manufacturing</option><option>Car Yard</option><option>Driving School</option><option>NGO / Non-Profit</option><option>Other</option>
                 </select>
               </div>
               <div class="col-12">

@@ -73,6 +73,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare("INSERT INTO invoices (org_id, subscription_id, invoice_number, amount, tax, total, status, due_date, notes) VALUES (?,?,?,?,?,?,'sent',?,?)")
                     ->execute([$orgId, $subId, $invoiceNo, $amount, $tax, $total, $dueDate, $notes]);
                 $invId = (int)$pdo->lastInsertId();
+
+                // Notify org users in-app and email the client admin
+                try {
+                    require_once __DIR__ . '/../includes/notifications.php';
+                    require_once __DIR__ . '/../includes/mailer.php';
+                    notifyOrg($orgId,
+                        'New Invoice: ' . $invoiceNo,
+                        'A renewal invoice of KES ' . number_format($total, 2) . ' has been generated, due on ' . date('d M Y', strtotime($dueDate)) . '.',
+                        'info',
+                        APP_URL . '/client/billing.php'
+                    );
+                    $admRow = $pdo->prepare("SELECT name, email FROM users WHERE org_id=? AND role='client_admin' LIMIT 1");
+                    $admRow->execute([$orgId]);
+                    $adm = $admRow->fetch();
+                    if ($adm) {
+                        mailer()->sendInvoice($adm['email'], $adm['name'], [
+                            'invoice_number' => $invoiceNo,
+                            'amount'         => $amount,
+                            'tax'            => $tax,
+                            'total'          => $total,
+                            'due_date'       => date('d M Y', strtotime($dueDate)),
+                        ]);
+                    }
+                } catch (Exception $e) {
+                    error_log('[invoice notify] ' . $e->getMessage());
+                }
+
                 logActivity('generate_invoice', 'admin', "Renewal invoice {$invoiceNo} for org #{$orgId}");
                 setFlash('success', "Renewal invoice <strong>{$invoiceNo}</strong> generated. <a href='" . APP_URL . "/admin/invoice-pdf.php?id={$invId}' target='_blank'>View PDF →</a>");
             }

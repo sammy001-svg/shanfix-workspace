@@ -10,7 +10,6 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/mailer.php';
 require_once __DIR__ . '/../includes/notifications.php';
 
-$mailer = mailer();
 $today  = date('Y-m-d');
 $sent   = 0;
 $suspended = 0;
@@ -18,16 +17,37 @@ $errors = 0;
 
 echo date('Y-m-d H:i:s') . " — check-subscriptions.php starting...\n";
 
+// ── Dedup helpers ─────────────────────────────────────────────────
+function subAlreadySent(PDO $pdo, string $eventType, int $subId, string $periodDate): bool
+{
+    try {
+        $s = $pdo->prepare("SELECT id FROM scheduled_email_log WHERE event_type=? AND reference_id=? AND period_date=?");
+        $s->execute([$eventType, $subId, $periodDate]);
+        return (bool)$s->fetch();
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+function subMarkSent(PDO $pdo, string $eventType, int $subId, string $periodDate): void
+{
+    try {
+        $pdo->prepare("INSERT IGNORE INTO scheduled_email_log (event_type, reference_id, period_date) VALUES (?,?,?)")
+            ->execute([$eventType, $subId, $periodDate]);
+    } catch (Exception $e) {}
+}
+
 // ── 1. Renewal reminders for active paid subscriptions ────────────
 // Send at 7 days, 3 days, and 1 day before ends_at
 $targetDays = [7, 3, 1];
 
 foreach ($targetDays as $days) {
     $targetDate = date('Y-m-d', strtotime("+{$days} days"));
+    $eventType  = 'sub_reminder_' . $days . 'd';
 
     try {
         $stmt = $pdo->prepare("
-            SELECT s.id, s.ends_at, s.amount,
+            SELECT s.id, s.org_id, s.ends_at, s.amount,
                    o.name  AS org_name,
                    o.email AS org_email,
                    u.name  AS admin_name,
@@ -48,7 +68,15 @@ foreach ($targetDays as $days) {
     }
 
     foreach ($subs as $sub) {
-        $ok = $mailer->sendSubscriptionExpiry(
+        $subId      = (int)$sub['id'];
+        $periodDate = date('Y-m-d', strtotime($sub['ends_at']));
+
+        if (subAlreadySent($pdo, $eventType, $subId, $periodDate)) {
+            echo "  [SKIP] $eventType sub#$subId ($periodDate) already sent\n";
+            continue;
+        }
+
+        $ok = mailer()->sendSubscriptionExpiry(
             $sub['org_email'],
             $sub['admin_name'],
             $days,
@@ -58,6 +86,7 @@ foreach ($targetDays as $days) {
 
         if ($ok) {
             $sent++;
+            subMarkSent($pdo, $eventType, $subId, $periodDate);
         } else {
             $errors++;
             error_log('[check-subscriptions] Email failed to ' . $sub['org_email']);

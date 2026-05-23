@@ -271,9 +271,63 @@ try {
         FROM activity_log al
         LEFT JOIN users u ON al.user_id = u.id
         WHERE al.org_id=?
-        ORDER BY al.created_at DESC LIMIT 15");
+        ORDER BY al.created_at DESC LIMIT 10");
     $s->execute([$orgId]);
     $recentActivity = $s->fetchAll();
+} catch (Exception $e) {}
+
+// ── Unpaid invoices ───────────────────────────────────────────────
+$unpaidInvoices = [];
+$unpaidTotal    = 0.0;
+try {
+    $s = $pdo->prepare("
+        SELECT id, invoice_number, total, due_date, status
+        FROM   invoices
+        WHERE  org_id=? AND status IN ('sent','pending','overdue')
+        ORDER BY due_date ASC LIMIT 5");
+    $s->execute([$orgId]);
+    $unpaidInvoices = $s->fetchAll();
+    $unpaidTotal    = array_sum(array_column($unpaidInvoices, 'total'));
+} catch (Exception $e) {}
+
+// ── Renewal countdown ─────────────────────────────────────────────
+$renewalDaysLeft = null;
+$renewalUrgency  = 'success';
+if ($sub && !empty($sub['ends_at']) && in_array($sub['status'], ['active'])) {
+    $renewalDaysLeft = max(0, (int)ceil((strtotime($sub['ends_at']) - time()) / 86400));
+    $renewalUrgency  = $renewalDaysLeft <= 7 ? 'danger' : ($renewalDaysLeft <= 14 ? 'warning' : 'success');
+}
+
+// ── Unread notifications ──────────────────────────────────────────
+$unreadNotifs = 0;
+try {
+    $s = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE org_id=? AND is_read=0");
+    $s->execute([$orgId]);
+    $unreadNotifs = (int)$s->fetchColumn();
+} catch (Exception $e) {}
+
+// ── Recent open tickets ───────────────────────────────────────────
+$recentTickets = [];
+try {
+    $s = $pdo->prepare("
+        SELECT id, subject, status, priority, created_at
+        FROM   support_tickets
+        WHERE  org_id=? AND status IN ('open','in_progress')
+        ORDER BY created_at DESC LIMIT 5");
+    $s->execute([$orgId]);
+    $recentTickets = $s->fetchAll();
+} catch (Exception $e) {}
+
+// ── Recent invoices (all statuses) ───────────────────────────────
+$recentInvoices = [];
+try {
+    $s = $pdo->prepare("
+        SELECT id, invoice_number, total, status, due_date, created_at
+        FROM   invoices
+        WHERE  org_id=?
+        ORDER BY created_at DESC LIMIT 5");
+    $s->execute([$orgId]);
+    $recentInvoices = $s->fetchAll();
 } catch (Exception $e) {}
 
 // ── Quick-action links ────────────────────────────────────────────
@@ -312,6 +366,34 @@ $actIcons = [
   </div>
 </div>
 
+<?php if (!empty($unpaidInvoices)): ?>
+<!-- Unpaid invoice alert -->
+<div class="alert mb-4 d-flex align-items-center gap-3 p-3" style="background:#fff7ed;border:1.5px solid #fed7aa;border-radius:10px">
+  <div style="width:40px;height:40px;border-radius:10px;background:#f97316;color:white;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0">
+    <i class="fas fa-file-invoice-dollar"></i>
+  </div>
+  <div class="flex-grow-1">
+    <div class="fw-700 text-dark" style="font-size:.92rem">
+      <?= count($unpaidInvoices) === 1 ? '1 unpaid invoice' : count($unpaidInvoices) . ' unpaid invoices' ?>
+      &nbsp;— <?= formatCurrency($unpaidTotal) ?> outstanding
+    </div>
+    <div class="text-muted small">
+      <?php foreach ($unpaidInvoices as $i => $inv):
+          $isOverdue = $inv['status'] === 'overdue' || (!empty($inv['due_date']) && strtotime($inv['due_date']) < time());
+      ?>
+        <?php if ($i > 0): ?>&nbsp;·&nbsp;<?php endif; ?>
+        <span class="<?= $isOverdue ? 'text-danger fw-600' : '' ?>">
+          <?= e($inv['invoice_number']) ?><?= $isOverdue ? ' (overdue)' : '' ?>
+        </span>
+      <?php endforeach; ?>
+    </div>
+  </div>
+  <a href="<?= APP_URL ?>/client/billing.php" class="btn btn-sm btn-warning fw-700 flex-shrink-0">
+    <i class="fas fa-credit-card me-1"></i>Pay Now
+  </a>
+</div>
+<?php endif; ?>
+
 <!-- Quick action pill buttons -->
 <?php if (!empty($quickActions)): ?>
 <div class="d-flex flex-wrap gap-2 mb-4">
@@ -346,10 +428,12 @@ $actIcons = [
     </div>
   </div>
   <div class="col-6 col-md-3">
-    <div class="stat-card green">
-      <div class="stat-icon green-bg"><i class="fas fa-bolt"></i></div>
-      <div><div class="stat-value"><?= $todayActivity ?></div><div class="stat-label">Today's Actions</div></div>
-    </div>
+    <a href="<?= APP_URL ?>/client/notifications.php" class="text-decoration-none">
+      <div class="stat-card <?= $unreadNotifs > 0 ? 'warning' : 'green' ?>">
+        <div class="stat-icon <?= $unreadNotifs > 0 ? 'warning' : 'green' ?>-bg"><i class="fas fa-bell<?= $unreadNotifs > 0 ? '' : '-slash' ?>"></i></div>
+        <div><div class="stat-value"><?= $unreadNotifs ?></div><div class="stat-label">Unread Alerts</div></div>
+      </div>
+    </a>
   </div>
 </div>
 
@@ -476,38 +560,82 @@ $actIcons = [
 
   </div>
 
-  <!-- RIGHT: Activity + Subscription -->
+  <!-- RIGHT: Tickets + Invoices + Subscription + Activity -->
   <div class="col-lg-5">
 
-    <!-- Recent activity timeline -->
+    <!-- Open support tickets -->
     <div class="card mb-4">
       <div class="card-header d-flex align-items-center justify-content-between fw-bold">
-        <span><i class="fas fa-history text-green me-2"></i>Recent Activity</span>
-        <a href="<?= APP_URL ?>/client/search.php" class="btn btn-xs btn-outline-secondary btn-sm">Search</a>
+        <span><i class="fas fa-headset text-green me-2"></i>Open Tickets
+          <?php if ($openTickets > 0): ?><span class="badge bg-danger ms-1 rounded-pill" style="font-size:.65rem"><?= $openTickets ?></span><?php endif; ?>
+        </span>
+        <a href="<?= APP_URL ?>/client/support.php" class="btn btn-xs btn-outline-primary btn-sm">New Ticket</a>
       </div>
-      <div style="max-height:320px;overflow-y:auto">
-        <?php if (empty($recentActivity)): ?>
-        <div class="text-center py-4 text-muted small">No activity recorded yet.</div>
-        <?php else: foreach ($recentActivity as $act):
-            $ai = $actIcons[$act['action']] ?? ['i' => 'fas fa-circle', 'c' => '#94a3b8'];
+      <?php if (empty($recentTickets)): ?>
+      <div class="card-body text-center py-3 text-muted small">
+        <i class="fas fa-check-circle text-success fa-2x mb-2 d-block opacity-60"></i>
+        No open tickets — all clear!
+      </div>
+      <?php else: ?>
+      <div class="list-group list-group-flush">
+        <?php
+        $pColors = ['high'=>'#ef4444','medium'=>'#f59e0b','low'=>'#6366f1','urgent'=>'#dc2626'];
+        foreach ($recentTickets as $tk):
+            $pc = $pColors[$tk['priority']] ?? '#94a3b8';
         ?>
-        <div class="d-flex gap-3 px-3 py-2 border-bottom" style="font-size:.8rem">
-          <div class="flex-shrink-0 pt-1">
-            <i class="<?= $ai['i'] ?>" style="color:<?= $ai['c'] ?>;width:14px;text-align:center;font-size:.75rem"></i>
+        <a href="<?= APP_URL ?>/client/support.php?id=<?= $tk['id'] ?>" class="list-group-item list-group-item-action py-2 px-3">
+          <div class="d-flex align-items-center gap-2">
+            <span style="width:8px;height:8px;border-radius:50%;background:<?= $pc ?>;flex-shrink:0"></span>
+            <div class="flex-grow-1 overflow-hidden">
+              <div class="fw-600 text-dark text-truncate small"><?= e($tk['subject']) ?></div>
+              <div class="text-muted" style="font-size:.68rem">
+                <?= ucfirst(str_replace('_',' ',$tk['status'])) ?> &nbsp;·&nbsp; <?= timeAgo($tk['created_at']) ?>
+              </div>
+            </div>
+            <span class="badge rounded-pill flex-shrink-0" style="background:<?= $pc ?>18;color:<?= $pc ?>;font-size:.6rem"><?= ucfirst($tk['priority']) ?></span>
           </div>
-          <div class="flex-grow-1 overflow-hidden">
-            <div class="text-dark text-truncate"><?= e($act['description'] ?: ucfirst($act['action'])) ?></div>
-            <div class="text-muted" style="font-size:.68rem">
-              <?= e($act['user_name'] ?? 'System') ?> &nbsp;·&nbsp; <?= timeAgo($act['created_at']) ?>
+        </a>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+    </div>
+
+    <!-- Recent invoices -->
+    <div class="card mb-4">
+      <div class="card-header d-flex align-items-center justify-content-between fw-bold">
+        <span><i class="fas fa-file-invoice-dollar text-green me-2"></i>Recent Invoices</span>
+        <a href="<?= APP_URL ?>/client/billing.php" class="btn btn-xs btn-outline-secondary btn-sm">View All</a>
+      </div>
+      <?php if (empty($recentInvoices)): ?>
+      <div class="card-body text-center py-3 text-muted small">No invoices yet.</div>
+      <?php else: ?>
+      <div class="list-group list-group-flush">
+        <?php
+        $invStatusColors = ['paid'=>'#1A8A4E','sent'=>'#3b82f6','pending'=>'#f59e0b','overdue'=>'#ef4444','draft'=>'#94a3b8'];
+        foreach ($recentInvoices as $inv):
+            $ic = $invStatusColors[$inv['status']] ?? '#94a3b8';
+        ?>
+        <a href="<?= APP_URL ?>/client/billing.php?inv=<?= $inv['id'] ?>" class="list-group-item list-group-item-action py-2 px-3">
+          <div class="d-flex align-items-center gap-2">
+            <div class="flex-grow-1 overflow-hidden">
+              <div class="d-flex justify-content-between">
+                <span class="fw-600 small text-dark"><?= e($inv['invoice_number']) ?></span>
+                <span class="fw-700 small" style="color:<?= $ic ?>"><?= formatCurrency((float)$inv['total']) ?></span>
+              </div>
+              <div class="text-muted" style="font-size:.68rem">
+                <span class="badge rounded-pill me-1" style="background:<?= $ic ?>18;color:<?= $ic ?>;font-size:.6rem"><?= ucfirst($inv['status']) ?></span>
+                <?= !empty($inv['due_date']) ? 'Due ' . date('d M Y', strtotime($inv['due_date'])) : timeAgo($inv['created_at']) ?>
+              </div>
             </div>
           </div>
-        </div>
-        <?php endforeach; endif; ?>
+        </a>
+        <?php endforeach; ?>
       </div>
+      <?php endif; ?>
     </div>
 
     <!-- Subscription snapshot -->
-    <div class="card">
+    <div class="card mb-4">
       <div class="card-header fw-bold"><i class="fas fa-layer-group text-green me-2"></i>Subscription</div>
       <div class="card-body">
         <?php if ($sub): ?>
@@ -538,14 +666,29 @@ $actIcons = [
           <strong class="text-green"><?= formatCurrency((float)$sub['amount']) ?>/mo</strong>
         </div>
         <?php if ($sub['ends_at']): ?>
-        <div class="d-flex justify-content-between mb-3 small">
+        <div class="d-flex justify-content-between mb-2 small">
           <span class="text-muted">Renews</span>
-          <strong><?= formatDate($sub['ends_at']) ?></strong>
+          <div class="text-end">
+            <strong><?= formatDate($sub['ends_at']) ?></strong>
+            <?php if ($renewalDaysLeft !== null): ?>
+            <div>
+              <span class="badge bg-<?= $renewalUrgency ?> mt-1" style="font-size:.65rem">
+                <?= $renewalDaysLeft === 0 ? 'Due today' : $renewalDaysLeft . ' day' . ($renewalDaysLeft != 1 ? 's' : '') . ' left' ?>
+              </span>
+            </div>
+            <?php endif; ?>
+          </div>
+        </div>
+        <?php endif; ?>
+        <?php if ($unpaidTotal > 0): ?>
+        <div class="d-flex justify-content-between mb-2 small">
+          <span class="text-muted">Outstanding</span>
+          <strong class="text-danger"><?= formatCurrency($unpaidTotal) ?></strong>
         </div>
         <?php endif; ?>
         <div class="d-grid gap-2 mt-3">
-          <a href="<?= APP_URL ?>/client/billing.php" class="btn btn-sm btn-outline-primary">
-            <i class="fas fa-file-invoice-dollar me-1"></i>Billing &amp; Invoices
+          <a href="<?= APP_URL ?>/client/billing.php" class="btn btn-sm <?= $unpaidTotal > 0 ? 'btn-warning' : 'btn-outline-primary' ?>">
+            <i class="fas fa-file-invoice-dollar me-1"></i><?= $unpaidTotal > 0 ? 'Pay Outstanding Balance' : 'Billing &amp; Invoices' ?>
           </a>
           <?php if (in_array($sub['status'], ['trial'])): ?>
           <a href="<?= APP_URL ?>/client/billing.php?tab=plans" class="btn btn-sm btn-success">
@@ -561,6 +704,33 @@ $actIcons = [
           <div class="mt-2"><a href="<?= APP_URL ?>/client/billing.php?tab=plans" class="btn btn-sm btn-primary">Choose a Plan</a></div>
         </div>
         <?php endif; ?>
+      </div>
+    </div>
+
+    <!-- Recent activity timeline -->
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between fw-bold">
+        <span><i class="fas fa-history text-green me-2"></i>Recent Activity</span>
+        <a href="<?= APP_URL ?>/client/search.php" class="btn btn-xs btn-outline-secondary btn-sm">Search</a>
+      </div>
+      <div style="max-height:260px;overflow-y:auto">
+        <?php if (empty($recentActivity)): ?>
+        <div class="text-center py-4 text-muted small">No activity recorded yet.</div>
+        <?php else: foreach ($recentActivity as $act):
+            $ai = $actIcons[$act['action']] ?? ['i' => 'fas fa-circle', 'c' => '#94a3b8'];
+        ?>
+        <div class="d-flex gap-3 px-3 py-2 border-bottom" style="font-size:.8rem">
+          <div class="flex-shrink-0 pt-1">
+            <i class="<?= $ai['i'] ?>" style="color:<?= $ai['c'] ?>;width:14px;text-align:center;font-size:.75rem"></i>
+          </div>
+          <div class="flex-grow-1 overflow-hidden">
+            <div class="text-dark text-truncate"><?= e($act['description'] ?: ucfirst($act['action'])) ?></div>
+            <div class="text-muted" style="font-size:.68rem">
+              <?= e($act['user_name'] ?? 'System') ?> &nbsp;·&nbsp; <?= timeAgo($act['created_at']) ?>
+            </div>
+          </div>
+        </div>
+        <?php endforeach; endif; ?>
       </div>
     </div>
 

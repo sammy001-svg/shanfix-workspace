@@ -1375,7 +1375,8 @@ INSERT IGNORE INTO modules (slug, name, description, icon, color, category, mont
 ('hrm',            'HRM System',                 'Employees, payroll, leave, attendance, appraisals & HR analytics',          'fas fa-users-cog',    '#2c3e50','HR',            3500,  35000,18),
 ('caryard',        'Car Yard Management',        'Vehicle stock, sales, test drives, financing & dealer reports',             'fas fa-car',          '#e67e22','Automotive',    3000,  30000,19),
 ('shopping-mall',  'Shopping Mall System',       'Shops, tenants, leases, rent billing, maintenance & mall analytics',        'fas fa-store-alt',    '#1abc9c','Real Estate',   5000,  50000,20),
-('courier',        'Courier Management',         'Parcel tracking, delivery agents, payments, agreements & route management',  'fas fa-shipping-fast','#1565c0','Logistics',     3000,  30000,21);
+('courier',        'Courier Management',         'Parcel tracking, delivery agents, payments, agreements & route management',  'fas fa-shipping-fast','#1565c0','Logistics',     3000,  30000,21),
+('driving',        'Driving School',             'Manage students, instructors, vehicles, lessons, tests and licenses for a driving school', 'fas fa-steering-wheel','#1a237e','Education',     4500,  45000,22);
 
 INSERT IGNORE INTO subscription_plans (name, description, max_users, max_modules, price_monthly, price_annual, is_popular) VALUES
 ('Starter',      'Perfect for small businesses just getting started',               5,  3, 4999,  49990, 0),

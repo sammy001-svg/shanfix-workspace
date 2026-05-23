@@ -9,6 +9,50 @@ $user  = currentUser();
 $orgId = (int)$user['org_id'];
 $uid   = (int)$user['id'];
 
+// ── Attachment helpers ────────────────────────────────────────────
+function attachmentChip(array $att): string {
+    $icons = ['pdf'=>'fa-file-pdf','doc'=>'fa-file-word','docx'=>'fa-file-word',
+              'xls'=>'fa-file-excel','xlsx'=>'fa-file-excel','zip'=>'fa-file-archive',
+              'txt'=>'fa-file-alt','jpg'=>'fa-file-image','jpeg'=>'fa-file-image',
+              'png'=>'fa-file-image','gif'=>'fa-file-image','csv'=>'fa-file-csv'];
+    $ext  = strtolower(pathinfo($att['original_name'], PATHINFO_EXTENSION));
+    $icon = $icons[$ext] ?? 'fa-file';
+    $size = $att['file_size'] > 1048576
+          ? round($att['file_size']/1048576, 1) . ' MB'
+          : round($att['file_size']/1024, 1) . ' KB';
+    $url  = APP_URL . '/uploads/tickets/' . rawurlencode($att['filename']);
+    return '<a href="' . $url . '" target="_blank" download="' . htmlspecialchars($att['original_name'], ENT_QUOTES) . '"
+              class="d-inline-flex align-items-center gap-1 px-2 py-1 rounded text-decoration-none"
+              style="background:#f1f5f9;border:1px solid #e2e8f0;font-size:.75rem;color:#0B2D4E;max-width:220px">
+             <i class="fas ' . $icon . ' text-muted flex-shrink-0"></i>
+             <span class="text-truncate">' . htmlspecialchars($att['original_name'], ENT_QUOTES) . '</span>
+             <span class="text-muted flex-shrink-0" style="font-size:.65rem">(' . $size . ')</span>
+           </a>';
+}
+
+function saveTicketFiles(PDO $pdo, int $ticketId, ?int $replyId, int $orgId, int $userId): void {
+    if (empty($_FILES['attachments']['name'][0])) return;
+    $uploadDir = __DIR__ . '/../uploads/tickets/';
+    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+    $allowed = ['jpg','jpeg','png','gif','pdf','doc','docx','txt','zip','xlsx','csv'];
+    $maxSize = 5 * 1024 * 1024;
+    foreach ($_FILES['attachments']['name'] as $i => $origName) {
+        if (!$origName || $_FILES['attachments']['error'][$i] !== UPLOAD_ERR_OK) continue;
+        if ($_FILES['attachments']['size'][$i] > $maxSize) continue;
+        $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+        if (!in_array($ext, $allowed)) continue;
+        $safe     = preg_replace('/[^a-z0-9._-]/', '_', strtolower(basename($origName)));
+        $filename = $ticketId . '_' . ($replyId ?? 0) . '_' . uniqid() . '_' . $safe;
+        if (move_uploaded_file($_FILES['attachments']['tmp_name'][$i], $uploadDir . $filename)) {
+            $pdo->prepare("INSERT INTO ticket_attachments (ticket_id, reply_id, org_id, uploaded_by, filename, original_name, file_size, mime_type)
+                VALUES (?,?,?,?,?,?,?,?)")
+                ->execute([$ticketId, $replyId, $orgId, $userId, $filename,
+                           $origName, (int)$_FILES['attachments']['size'][$i],
+                           $_FILES['attachments']['type'][$i] ?? '']);
+        }
+    }
+}
+
 // ── POST: Create ticket ──────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create_ticket') {
     verifyCsrf();
@@ -27,7 +71,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
         $pdo->prepare("INSERT INTO support_tickets (org_id, user_id, ticket_number, subject, category, priority, message)
             VALUES (?,?,?,?,?,?,?)")->execute([$orgId, $uid, $ticketNo, $subject, $category, $priority, $message]);
         $newId = (int)$pdo->lastInsertId();
+        try { saveTicketFiles($pdo, $newId, null, $orgId, $uid); } catch (Exception $e) {}
         logActivity('create', 'support', "Ticket {$ticketNo}: {$subject}");
+
+        // Notify super_admin of new ticket via email
+        try {
+            require_once __DIR__ . '/../includes/notifications.php';
+            require_once __DIR__ . '/../includes/mailer.php';
+            $orgRow = $pdo->query("SELECT name FROM organizations WHERE id={$orgId} LIMIT 1")->fetch();
+            $orgName = $orgRow['org_name'] ?? $orgRow['name'] ?? 'Unknown Org';
+            $saStmt = $pdo->query("SELECT name, email FROM users WHERE role='super_admin' LIMIT 5");
+            foreach ($saStmt->fetchAll() as $sa) {
+                _sendNotifEmail(
+                    $sa['email'],
+                    $sa['name'],
+                    "New ticket #{$ticketNo} from {$orgName}",
+                    "A new support ticket has been submitted:\n\nSubject: {$subject}\nOrg: {$orgName}\nPriority: {$priority}\nCategory: {$category}",
+                    'info',
+                    APP_URL . '/admin/support.php?view=' . $newId
+                );
+            }
+        } catch (Exception $e) {
+            error_log('[new ticket notify] ' . $e->getMessage());
+        }
+
         setFlash('success', "Ticket <strong>{$ticketNo}</strong> submitted. We'll respond within 24 hours.");
         redirect(APP_URL . '/client/support.php?view=' . $newId);
     }
@@ -48,7 +115,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reply
     if ($tk && $message && !in_array($tk['status'], ['resolved','closed'])) {
         $pdo->prepare("INSERT INTO ticket_replies (ticket_id, user_id, is_admin, message) VALUES (?,?,0,?)")
             ->execute([$ticketId, $uid, $message]);
+        $replyId = (int)$pdo->lastInsertId();
         $pdo->prepare("UPDATE support_tickets SET status='open', updated_at=NOW() WHERE id=?")->execute([$ticketId]);
+        try { saveTicketFiles($pdo, $ticketId, $replyId, $orgId, $uid); } catch (Exception $e) {}
+
+        // Notify super_admin of client reply via email
+        try {
+            require_once __DIR__ . '/../includes/notifications.php';
+            require_once __DIR__ . '/../includes/mailer.php';
+            $saStmt = $pdo->query("SELECT name, email FROM users WHERE role='super_admin' LIMIT 5");
+            foreach ($saStmt->fetchAll() as $sa) {
+                _sendNotifEmail(
+                    $sa['email'],
+                    $sa['name'],
+                    'Client replied to ticket #' . $tk['ticket_number'],
+                    'A client has replied to ticket: "' . $tk['subject'] . '". Click below to view and respond.',
+                    'info',
+                    APP_URL . '/admin/support.php?view=' . $ticketId
+                );
+            }
+        } catch (Exception $e) {
+            error_log('[client reply notify] ' . $e->getMessage());
+        }
+
         setFlash('success', 'Reply sent.');
     }
     redirect(APP_URL . '/client/support.php?view=' . $ticketId);
@@ -73,9 +162,22 @@ if ($viewId) {
     $s->execute([$viewId, $orgId]);
     $ticket = $s->fetch();
     if ($ticket) {
-        $r = $pdo->prepare("SELECT tr.*, u.name as user_name FROM ticket_replies tr JOIN users u ON tr.user_id=u.id WHERE tr.ticket_id=? ORDER BY tr.created_at ASC");
+        $r = $pdo->prepare("SELECT tr.*, u.name as user_name, COALESCE(tr.is_internal,0) as is_internal
+                            FROM ticket_replies tr JOIN users u ON tr.user_id=u.id
+                            WHERE tr.ticket_id=? AND COALESCE(tr.is_internal,0)=0
+                            ORDER BY tr.created_at ASC");
         $r->execute([$viewId]);
         $replies = $r->fetchAll();
+        // Attachments keyed by 'ticket' or 'r{reply_id}'
+        $attachments = [];
+        try {
+            $a = $pdo->prepare("SELECT * FROM ticket_attachments WHERE ticket_id=? ORDER BY created_at");
+            $a->execute([$viewId]);
+            foreach ($a->fetchAll() as $att) {
+                $key = $att['reply_id'] ? 'r' . $att['reply_id'] : 'ticket';
+                $attachments[$key][] = $att;
+            }
+        } catch (Exception $e) {}
     }
 }
 
@@ -166,6 +268,13 @@ $categoryIcons  = ['billing'=>'fa-file-invoice-dollar','technical'=>'fa-wrench',
             <span class="text-muted small ms-auto"><?= formatDateTime($ticket['created_at']) ?></span>
           </div>
           <div class="small" style="white-space:pre-wrap"><?= e($ticket['message']) ?></div>
+          <?php if (!empty($attachments['ticket'])): ?>
+          <div class="mt-2 pt-2 border-top d-flex flex-wrap gap-2">
+            <?php foreach ($attachments['ticket'] as $att): ?>
+            <?= attachmentChip($att) ?>
+            <?php endforeach; ?>
+          </div>
+          <?php endif; ?>
         </div>
       </div>
     </div>
@@ -185,6 +294,13 @@ $categoryIcons  = ['billing'=>'fa-file-invoice-dollar','technical'=>'fa-wrench',
           <span class="text-muted small ms-auto"><?= formatDateTime($r['created_at']) ?></span>
         </div>
         <div class="small" style="white-space:pre-wrap"><?= e($r['message']) ?></div>
+        <?php if (!empty($attachments['r' . $r['id']])): ?>
+        <div class="mt-2 pt-2 border-top d-flex flex-wrap gap-2">
+          <?php foreach ($attachments['r' . $r['id']] as $att): ?>
+          <?= attachmentChip($att) ?>
+          <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
       </div>
     </div>
     <?php endforeach; ?>
@@ -194,13 +310,18 @@ $categoryIcons  = ['billing'=>'fa-file-invoice-dollar','technical'=>'fa-wrench',
     <div class="card">
       <div class="card-header fw-600"><i class="fas fa-reply me-2 text-green"></i>Add Reply</div>
       <div class="card-body">
-        <form method="POST">
+        <form method="POST" enctype="multipart/form-data">
           <?= csrfField() ?>
           <input type="hidden" name="action" value="reply">
           <input type="hidden" name="ticket_id" value="<?= $ticket['id'] ?>">
           <div class="mb-3">
             <textarea name="message" class="form-control" rows="4"
                       placeholder="Describe your question or provide additional details..." required></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-600">Attachments <span class="text-muted fw-400">(optional · max 5 MB each · jpg, png, pdf, doc, zip…)</span></label>
+            <input type="file" name="attachments[]" class="form-control form-control-sm" multiple
+                   accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.txt,.zip,.xlsx,.csv">
           </div>
           <div class="d-flex gap-2">
             <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane me-2"></i>Send Reply</button>
@@ -362,7 +483,7 @@ $categoryIcons  = ['billing'=>'fa-file-invoice-dollar','technical'=>'fa-wrench',
         <h5 class="modal-title"><i class="fas fa-ticket-alt me-2 text-green"></i>Open Support Ticket</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <form method="POST">
+      <form method="POST" enctype="multipart/form-data">
         <?= csrfField() ?>
         <input type="hidden" name="action" value="create_ticket">
         <div class="modal-body">
@@ -396,6 +517,11 @@ $categoryIcons  = ['billing'=>'fa-file-invoice-dollar','technical'=>'fa-wrench',
             <label class="form-label fw-600">Message <span class="text-danger">*</span></label>
             <textarea name="message" class="form-control" rows="6" required
                       placeholder="Describe your issue in detail. Include any error messages, steps to reproduce, or relevant information."></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-600">Attachments <span class="text-muted fw-400 small">(optional · max 5 MB each)</span></label>
+            <input type="file" name="attachments[]" class="form-control form-control-sm" multiple
+                   accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.txt,.zip,.xlsx,.csv">
           </div>
           <div class="alert alert-info small mb-0">
             <i class="fas fa-info-circle me-2"></i>

@@ -3,13 +3,16 @@
 -- Run ONCE. Safe: all statements use IF NOT EXISTS.
 -- ============================================================
 
--- Register module
-INSERT IGNORE INTO modules
+-- Register module (INSERT if missing, UPDATE icon/status if row already exists)
+INSERT INTO modules
     (slug, name, description, icon, color, category, monthly_price, annual_price, sort_order, status)
 VALUES
     ('driving', 'Driving School',
      'Manage students, instructors, vehicles, lessons, tests and licenses for a driving school',
-     'fas fa-car', '#1a237e', 'Education', 4500, 45000, 22, 'active');
+     'fas fa-steering-wheel', '#1a237e', 'Education', 4500, 45000, 22, 'active')
+ON DUPLICATE KEY UPDATE
+    icon   = VALUES(icon),
+    status = 'active';
 
 -- 1. Instructors
 CREATE TABLE IF NOT EXISTS driving_instructors (

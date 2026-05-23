@@ -462,7 +462,7 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
 
         <!-- M-Pesa -->
         <div class="border rounded p-3 mb-3">
-          <div class="fw-bold mb-2"><i class="fas fa-mobile-alt text-success me-2"></i>M-Pesa STK Push</div>
+          <div class="fw-bold mb-2"><i class="fas fa-mobile-alt text-success me-2"></i>KopoKopo M-Pesa STK Push</div>
           <div class="mb-2">
             <label class="form-label small fw-semibold">M-Pesa Phone Number</label>
             <input type="tel" id="mpesaPhone" class="form-control"
@@ -471,7 +471,7 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
           </div>
           <button class="btn btn-success w-100"
                   onclick="initiateMpesa(<?= $focusInv['id'] ?>, <?= $focusInv['total'] ?>)">
-            <i class="fas fa-mobile-alt me-2"></i>Send M-Pesa STK Push — <?= formatCurrency((float)$focusInv['total']) ?>
+            <i class="fas fa-mobile-alt me-2"></i>Pay via KopoKopo M-Pesa — <?= formatCurrency((float)$focusInv['total']) ?>
           </button>
           <?php if (!empty($pmtCfg['mpesa_paybill'])): ?>
           <p class="text-muted small text-center mt-2 mb-0">
@@ -607,7 +607,8 @@ function initiateMpesa(invoiceId, amount) {
   }
   const btn = event.currentTarget;
   btn.disabled = true;
-  btn.innerHTML = \'<i class="fas fa-spinner fa-spin me-2"></i>Sending...\';
+  btn.innerHTML = \'<i class="fas fa-spinner fa-spin me-2"></i>Sending STK Push…\';
+
   fetch("' . APP_URL . '/api/mpesa-stk.php", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -615,19 +616,58 @@ function initiateMpesa(invoiceId, amount) {
   })
   .then(r => r.json())
   .then(data => {
-    btn.disabled = false;
-    btn.innerHTML = \'<i class="fas fa-mobile-alt me-2"></i>Send M-Pesa STK Push\';
-    if (data.success) {
-      Swal.fire({ icon: "success", title: "STK Push Sent!", text: data.message, confirmButtonColor: "#1A8A4E" });
-    } else {
+    if (!data.success) {
+      btn.disabled = false;
+      btn.innerHTML = \'<i class="fas fa-mobile-alt me-2"></i>Pay via KopoKopo M-Pesa\';
       Swal.fire({ icon: "error", title: "Failed", text: data.message });
+      return;
     }
+    // STK sent — show waiting state and start polling
+    btn.innerHTML = \'<i class="fas fa-spinner fa-spin me-2"></i>Waiting for M-Pesa confirmation…\';
+    pollPayment(data.checkout_id, btn, 0);
   })
   .catch(() => {
     btn.disabled = false;
-    btn.innerHTML = \'<i class="fas fa-mobile-alt me-2"></i>Send M-Pesa STK Push\';
+    btn.innerHTML = \'<i class="fas fa-mobile-alt me-2"></i>Pay via KopoKopo M-Pesa\';
     Swal.fire({ icon: "error", title: "Network Error", text: "Could not reach payment server." });
   });
+}
+
+function pollPayment(checkoutId, btn, attempts) {
+  const MAX_ATTEMPTS = 40; // 40 × 3 s = 2 minutes
+  if (attempts >= MAX_ATTEMPTS) {
+    btn.disabled = false;
+    btn.innerHTML = \'<i class="fas fa-mobile-alt me-2"></i>Pay via KopoKopo M-Pesa\';
+    Swal.fire({
+      icon: "warning",
+      title: "Timeout",
+      text: "We did not receive payment confirmation. If you completed the M-Pesa prompt, please refresh this page to check your invoice status.",
+      confirmButtonColor: "#1A8A4E"
+    });
+    return;
+  }
+  setTimeout(() => {
+    fetch("' . APP_URL . '/api/check-payment.php?id=" + encodeURIComponent(checkoutId))
+      .then(r => r.json())
+      .then(res => {
+        if (res.status === "completed") {
+          Swal.fire({
+            icon: "success",
+            title: "Payment Confirmed!",
+            html: "Your M-Pesa payment has been received.<br><strong>Receipt: " + (res.receipt || "") + "</strong>",
+            confirmButtonColor: "#1A8A4E",
+            confirmButtonText: "View Invoice"
+          }).then(() => location.reload());
+        } else if (res.status === "failed") {
+          btn.disabled = false;
+          btn.innerHTML = \'<i class="fas fa-mobile-alt me-2"></i>Pay via KopoKopo M-Pesa\';
+          Swal.fire({ icon: "error", title: "Payment Failed", text: "The M-Pesa payment was not completed. Please try again." });
+        } else {
+          pollPayment(checkoutId, btn, attempts + 1);
+        }
+      })
+      .catch(() => pollPayment(checkoutId, btn, attempts + 1));
+  }, 3000);
 }
 </script>';
 require_once __DIR__ . '/../includes/footer.php';

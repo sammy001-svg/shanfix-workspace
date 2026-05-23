@@ -118,9 +118,11 @@ switch ($action) {
         $section = $input['section'] ?? '';
         $data    = $input['data']    ?? [];
         $allowed = [
-            'general'  => ['app_name','support_email','default_currency','default_timezone','trial_days','max_users'],
+            'general'  => ['app_name','app_tagline','support_email','default_currency','default_timezone','trial_days','max_users'],
+            'company'  => ['company_address','company_website'],
+            'billing'  => ['invoice_prefix','invoice_tax_rate','invoice_footer','invoice_notes','mpesa_paybill','mpesa_account_ref','bank_name','bank_account','bank_branch'],
             'email'    => ['smtp_host','smtp_port','smtp_user','smtp_pass','smtp_enc','mail_from','mail_from_name'],
-            'mpesa'    => ['mpesa_consumer_key','mpesa_consumer_secret','mpesa_shortcode','mpesa_passkey','mpesa_env'],
+            'kopokopo' => ['kopokopo_client_id','kopokopo_client_secret','kopokopo_till_number','kopokopo_api_secret','kopokopo_env'],
             'security' => ['session_timeout','max_login_attempts'],
         ];
         if (!isset($allowed[$section])) {
