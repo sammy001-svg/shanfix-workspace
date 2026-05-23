@@ -30,4 +30,18 @@ INSERT IGNORE INTO system_settings (`key`, `value`) VALUES
   ('mpesa_passkey',      ''),
   ('mpesa_env',          'sandbox'),
   ('session_timeout',    '8'),
-  ('max_login_attempts', '5');
+  ('max_login_attempts', '5'),
+  -- Company / branding
+  ('company_address',    'P.O. Box 00100, Nairobi, Kenya'),
+  ('company_website',    ''),
+  -- Invoice settings
+  ('invoice_prefix',     'INV'),
+  ('invoice_tax_rate',   '16'),
+  ('invoice_footer',     'Thank you for your business. Please pay within the due date to avoid service interruption.'),
+  ('invoice_notes',      'Payment is due within 30 days of invoice date.'),
+  -- Payment details (shown on invoices)
+  ('mpesa_paybill',      ''),
+  ('mpesa_account_ref',  'Invoice Number'),
+  ('bank_name',          ''),
+  ('bank_account',       ''),
+  ('bank_branch',        '');

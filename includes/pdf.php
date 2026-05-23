@@ -27,7 +27,7 @@ class OrbitDeskPDF
     public function invoice(array $invoice, array $org, array $items = []): void
     {
         if (!$this->fpdfAvailable) {
-            $this->htmlFallback('invoice', $invoice, $org, $items);
+            $this->htmlInvoiceFallback($invoice, $org, $items);
             return;
         }
 
@@ -74,10 +74,16 @@ class OrbitDeskPDF
         // Invoice details (right)
         $detailY = 40;
         $detailX = 130;
+        $issueDateStr = !empty($invoice['issue_date'])
+            ? date('d M Y', strtotime($invoice['issue_date']))
+            : date('d M Y', strtotime($invoice['created_at'] ?? 'now'));
+        $dueDateStr = !empty($invoice['due_date'])
+            ? date('d M Y', strtotime($invoice['due_date']))
+            : '—';
         $detailRows = [
             ['Invoice #:',  $invoice['invoice_number']    ?? ''],
-            ['Issue Date:', date('d M Y')],
-            ['Due Date:',   date('d M Y', strtotime($invoice['due_date'] ?? 'now'))],
+            ['Issue Date:', $issueDateStr],
+            ['Due Date:',   $dueDateStr],
             ['Status:',     strtoupper($invoice['status'] ?? 'SENT')],
         ];
         foreach ($detailRows as $row) {
@@ -144,14 +150,35 @@ class OrbitDeskPDF
         $pdf->Cell(65, 9, '  TOTAL DUE: KES ' . number_format($invoice['total'] ?? 0, 2), 0, 1, 'R', true);
         $pdf->SetTextColor(50, 50, 50);
 
-        // Payment info
-        $pdf->SetY($pdf->GetY() + 10);
-        $pdf->SetFont('Arial', 'B', 9);
-        $pdf->SetTextColor(26, 138, 78);
-        $pdf->Cell(0, 6, 'PAYMENT INFORMATION', 0, 1);
-        $pdf->SetFont('Arial', '', 9);
-        $pdf->SetTextColor(50, 50, 50);
-        $pdf->MultiCell(0, 5, "Pay via M-Pesa: Paybill 123456, Account: " . ($invoice['invoice_number'] ?? '') . "\nBank Transfer: Equity Bank, A/C: 1234567890, Branch: Nairobi\nFor queries: billing@shanfix.co.ke | +254 700 000 000");
+        // Payment info (from system settings)
+        $pmtCfg = getSettings([
+            'mpesa_paybill', 'mpesa_account_ref',
+            'bank_name', 'bank_account', 'bank_branch',
+            'support_email',
+        ]);
+        $pmtLines = [];
+        if (!empty($pmtCfg['mpesa_paybill'])) {
+            $acctRef = !empty($pmtCfg['mpesa_account_ref']) ? $pmtCfg['mpesa_account_ref'] : ($invoice['invoice_number'] ?? '');
+            $pmtLines[] = 'M-Pesa Paybill: ' . $pmtCfg['mpesa_paybill'] . ', Account: ' . $acctRef;
+        }
+        if (!empty($pmtCfg['bank_name'])) {
+            $bankLine = 'Bank: ' . $pmtCfg['bank_name'];
+            if (!empty($pmtCfg['bank_account'])) $bankLine .= ', A/C: ' . $pmtCfg['bank_account'];
+            if (!empty($pmtCfg['bank_branch']))  $bankLine .= ', Branch: ' . $pmtCfg['bank_branch'];
+            $pmtLines[] = $bankLine;
+        }
+        if (!empty($pmtCfg['support_email'])) {
+            $pmtLines[] = 'Queries: ' . $pmtCfg['support_email'];
+        }
+        if (!empty($pmtLines) && ($invoice['status'] ?? '') !== 'paid') {
+            $pdf->SetY($pdf->GetY() + 10);
+            $pdf->SetFont('Arial', 'B', 9);
+            $pdf->SetTextColor(26, 138, 78);
+            $pdf->Cell(0, 6, 'PAYMENT INFORMATION', 0, 1);
+            $pdf->SetFont('Arial', '', 9);
+            $pdf->SetTextColor(50, 50, 50);
+            $pdf->MultiCell(0, 5, implode("\n", $pmtLines));
+        }
 
         if (!empty($invoice['notes'])) {
             $pdf->SetY($pdf->GetY() + 3);
@@ -177,7 +204,7 @@ class OrbitDeskPDF
     public function payslip(array $payroll, array $employee, array $org): void
     {
         if (!$this->fpdfAvailable) {
-            $this->htmlFallback('payslip', $payroll, $org);
+            $this->htmlFallback('payslip');
             return;
         }
 
@@ -291,7 +318,7 @@ class OrbitDeskPDF
         array  $color    = [11, 45, 78]
     ): void {
         if (!$this->fpdfAvailable) {
-            $this->htmlFallback('report', [], []);
+            $this->htmlFallback('report');
             return;
         }
 
@@ -409,17 +436,33 @@ class OrbitDeskPDF
         exit;
     }
 
-    /** HTML fallback when FPDF is not installed */
-    private function htmlFallback(string $type, array $data, array $org, array $items = []): void
+    /** Invoice HTML fallback — uses the shared HTML renderer (no FPDF needed) */
+    private function htmlInvoiceFallback(array $invoice, array $org, array $items): void
+    {
+        $cfg = function_exists('getSettings') ? getSettings([
+            'invoice_tax_rate', 'invoice_footer', 'invoice_notes',
+            'mpesa_paybill', 'mpesa_shortcode', 'mpesa_account_ref',
+            'bank_name', 'bank_account', 'bank_branch',
+            'company_address', 'support_email',
+        ]) : [];
+        $invoiceBackUrl   = APP_URL . '/client/billing.php';
+        $invoiceAdminMode = false;
+        require __DIR__ . '/invoice-html.php';
+    }
+
+    /** HTML fallback for payslip/report when FPDF is not installed */
+    private function htmlFallback(string $type): void
     {
         header('Content-Type: text/html');
-        echo '<div style="font-family:Arial;max-width:800px;margin:20px auto;padding:20px;border:1px solid #ddd">
-            <div style="background:#0B2D4E;color:white;padding:16px;margin-bottom:16px">
-              <h2 style="margin:0">' . APP_NAME . ' — ' . strtoupper($type) . '</h2>
-              <div style="font-size:.85rem;opacity:.7">FPDF library not installed. <a href="http://www.fpdf.org/en/download.php" style="color:#22B864">Download FPDF</a> and place fpdf.php in /vendor/fpdf/</div>
+        echo '<div style="font-family:Arial;max-width:700px;margin:40px auto;padding:24px;border:1px solid #e2e8f0;border-radius:8px">
+            <div style="background:#0B2D4E;color:white;padding:16px 20px;border-radius:6px;margin-bottom:16px">
+              <strong>' . APP_NAME . ' — ' . strtoupper($type) . '</strong>
             </div>
-            <p style="color:#e74c3c">⚠ PDF generation requires FPDF. Please install the library and refresh.</p>
-            <p>Instructions in SETUP.md — Section: PDF Generation Setup</p>
+            <p style="color:#e74c3c;margin-bottom:8px">&#9888; FPDF library not installed.</p>
+            <p style="color:#475569;font-size:.9rem">
+              Download <a href="http://www.fpdf.org/en/download.php">fpdf.php</a>
+              and place it at <code>/vendor/fpdf/fpdf.php</code>.
+            </p>
         </div>';
         exit;
     }
@@ -428,12 +471,12 @@ class OrbitDeskPDF
 // ── Global PDF helper ────────────────────────────────────────────
 function generateInvoicePDF(array $invoice, array $org, array $items = []): void
 {
-    (new OrbitDeskPDF())->invoice($invoice, $org, $items);
+    new OrbitDeskPDF()->invoice($invoice, $org, $items);
 }
 
 function generatePayslipPDF(array $payroll, array $employee, array $org): void
 {
-    (new OrbitDeskPDF())->payslip($payroll, $employee, $org);
+    new OrbitDeskPDF()->payslip($payroll, $employee, $org);
 }
 
 /**
@@ -456,5 +499,5 @@ function generateModuleReportPDF(
     string $filename  = 'report.pdf',
     array  $color     = [11, 45, 78]
 ): void {
-    (new OrbitDeskPDF())->report($title, $subtitle, $summary, $cols, $rows, $filename, $color);
+    new OrbitDeskPDF()->report($title, $subtitle, $summary, $cols, $rows, $filename, $color);
 }

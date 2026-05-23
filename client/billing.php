@@ -82,6 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
 
 // ── Render page (HTML starts here) ──────────────────────────────
 $pageTitle = 'Billing & Subscription';
+$pmtCfg = getSettings(['mpesa_paybill', 'mpesa_account_ref', 'bank_name', 'bank_account', 'bank_branch', 'support_email']);
 require_once __DIR__ . '/../includes/header-client.php';
 
 $plans = $pdo->query("SELECT * FROM subscription_plans WHERE status='active' ORDER BY price_monthly")->fetchAll();
@@ -158,6 +159,32 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
 
 <!-- ═══════════════ OVERVIEW ═══════════════ -->
 <?php if ($activeTab === 'overview'): ?>
+
+<?php if ($sub && $sub['status'] === 'trial'): ?>
+<?php
+  $trialLeft = $sub['trial_ends_at'] ? max(0, (int)ceil((strtotime($sub['trial_ends_at']) - time()) / 86400)) : 0;
+  $trialPct  = $sub['trial_ends_at'] ? max(0, min(100, round(((14 - $trialLeft) / 14) * 100))) : 100;
+?>
+<div class="card border-warning mb-4" style="border-width:2px!important">
+  <div class="card-body py-3">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      <div class="flex-shrink-0 text-warning" style="font-size:1.75rem"><i class="fas fa-hourglass-half"></i></div>
+      <div class="flex-grow-1">
+        <div class="fw-700 mb-1">
+          <?= $trialLeft > 0 ? "Free trial — <strong>{$trialLeft} day" . ($trialLeft > 1 ? 's' : '') . " remaining</strong>" : "Your free trial <strong>ends today</strong>" ?>
+        </div>
+        <div class="progress" style="height:6px;max-width:320px">
+          <div class="progress-bar bg-warning" style="width:<?= $trialPct ?>%"></div>
+        </div>
+        <div class="text-muted small mt-1">Trial ends <?= $sub['trial_ends_at'] ? date('d M Y', strtotime($sub['trial_ends_at'])) : '—' ?> · Upgrade to keep your workspace and data.</div>
+      </div>
+      <a href="?tab=plans" class="btn btn-warning fw-bold flex-shrink-0">
+        <i class="fas fa-arrow-up me-1"></i>Upgrade Now
+      </a>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
 
 <div class="row g-3 mb-4">
   <div class="col-sm-4">
@@ -369,7 +396,7 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
         <?php else: ?>
         <div class="list-group list-group-flush">
           <?php foreach ($unpaidInvoices as $inv):
-            $isSelected = ($focusInv && $focusInv['id'] === $inv['id']);
+            $isSelected = $focusInv && $focusInv['id'] === $inv['id'];
             $sc = $statusColors[$inv['status']] ?? 'secondary';
           ?>
           <a href="?tab=pay&inv=<?= $inv['id'] ?>"
@@ -446,9 +473,12 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
                   onclick="initiateMpesa(<?= $focusInv['id'] ?>, <?= $focusInv['total'] ?>)">
             <i class="fas fa-mobile-alt me-2"></i>Send M-Pesa STK Push — <?= formatCurrency((float)$focusInv['total']) ?>
           </button>
+          <?php if (!empty($pmtCfg['mpesa_paybill'])): ?>
           <p class="text-muted small text-center mt-2 mb-0">
-            Paybill: <strong>123456</strong> · Account: <strong><?= e($user['email']) ?></strong>
+            Paybill: <strong><?= e($pmtCfg['mpesa_paybill']) ?></strong>
+            · Account: <strong><?= e(!empty($pmtCfg['mpesa_account_ref']) ? $pmtCfg['mpesa_account_ref'] : $user['email']) ?></strong>
           </p>
+          <?php endif; ?>
         </div>
 
         <!-- Cash / Bank Transfer -->
@@ -509,7 +539,7 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
 
 <div class="row g-3 justify-content-center">
   <?php foreach ($plans as $p):
-    $isCurrent = ($sub && $sub['plan_id'] == $p['id']);
+    $isCurrent = $sub && $sub['plan_id'] == $p['id'];
   ?>
   <div class="col-md-4">
     <div class="card h-100 <?= $isCurrent ? 'border-success border-2' : ($p['is_popular'] ? 'border-primary border-2 shadow' : '') ?>">

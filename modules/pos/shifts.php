@@ -59,6 +59,45 @@ if($view){
     }
 }
 $openShifts=countRows('pos_shifts','org_id=? AND status=?',[$orgId,'open']);
+
+// Pre-fetch live totals for all open shifts → passed to JS for reconciliation modal
+$openShiftTotals = [];
+try {
+    $openIds = array_values(array_map(fn($s) => $s['id'], array_filter($shifts, fn($s) => $s['status'] === 'open')));
+    foreach ($openIds as $sid) {
+        $ts = $pdo->prepare(
+            "SELECT COALESCE(SUM(total),0) AS total_sales,
+                    COALESCE(SUM(CASE WHEN payment_method='cash'  THEN total ELSE 0 END),0) AS cash_sales,
+                    COALESCE(SUM(CASE WHEN payment_method='mpesa' THEN total ELSE 0 END),0) AS mpesa_sales,
+                    COALESCE(SUM(CASE WHEN payment_method='card'  THEN total ELSE 0 END),0) AS card_sales,
+                    COUNT(*) AS txn_count
+             FROM pos_sales WHERE org_id=? AND shift_id=? AND status!='void'"
+        );
+        $ts->execute([$orgId, $sid]);
+        $totRow = $ts->fetch();
+
+        $te = $pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM pos_expenses WHERE org_id=? AND shift_id=?");
+        $te->execute([$orgId, $sid]);
+        $expTotal = (float)$te->fetchColumn();
+
+        $openShiftTotals[$sid] = [
+            'total_sales' => (float)$totRow['total_sales'],
+            'cash_sales'  => (float)$totRow['cash_sales'],
+            'mpesa_sales' => (float)$totRow['mpesa_sales'],
+            'card_sales'  => (float)$totRow['card_sales'],
+            'txn_count'   => (int)$totRow['txn_count'],
+            'expenses'    => $expTotal,
+        ];
+    }
+} catch (Exception $e) {}
+
+// Index open shift rows by id for JS (opening_float lookup)
+$openShiftFloats = [];
+foreach ($shifts as $sh) {
+    if ($sh['status'] === 'open') {
+        $openShiftFloats[$sh['id']] = (float)$sh['opening_float'];
+    }
+}
 ?>
 <?= flashAlert() ?>
 <div class="page-header d-flex align-items-center justify-content-between mb-4">
@@ -167,24 +206,125 @@ $openShifts=countRows('pos_shifts','org_id=? AND status=?',[$orgId,'open']);
 </div></div></div>
 
 <!-- Close Shift Modal -->
-<div class="modal fade" id="closeShiftModal" tabindex="-1"><div class="modal-dialog modal-sm"><div class="modal-content">
-  <div class="modal-header"><h5 class="modal-title"><i class="fas fa-stop me-2 text-danger"></i>Close Shift</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal fade" id="closeShiftModal" tabindex="-1" data-bs-backdrop="static"><div class="modal-dialog"><div class="modal-content">
+  <div class="modal-header bg-danger text-white"><h5 class="modal-title"><i class="fas fa-stop me-2"></i>Close Shift — Cash Reconciliation</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
   <form method="POST"><div class="modal-body">
-    <?=csrfField()?><input type="hidden" name="action" value="close"><input type="hidden" name="id" id="closeShiftId" value="<?=$openShift['id']??0?>">
-    <div class="mb-3"><label class="form-label fw-semibold">Closing Float (Count cash in drawer)</label><input type="number" name="closing_float" class="form-control" min="0" step="0.01" value="0" required></div>
-    <div class="mb-3"><label class="form-label fw-semibold">Notes</label><textarea name="notes" class="form-control" rows="2"></textarea></div>
+    <?=csrfField()?>
+    <input type="hidden" name="action" value="close">
+    <input type="hidden" name="id" id="closeShiftId" value="<?=$openShift['id']??0?>">
+
+    <!-- Reconciliation summary (populated by JS) -->
+    <div class="mb-3 p-3 rounded border" style="background:#f8f9fa;font-size:.85rem" id="reconSummary">
+      <div class="fw-semibold mb-2 text-navy"><i class="fas fa-calculator me-2"></i>Shift Summary</div>
+      <div class="d-flex justify-content-between py-1 border-bottom"><span class="text-muted">Opening Float</span><span id="rOpenFloat">—</span></div>
+      <div class="d-flex justify-content-between py-1 border-bottom"><span class="text-muted"><i class="fas fa-money-bill-wave me-1 text-success"></i>Cash Sales</span><span id="rCashSales" class="text-success">—</span></div>
+      <div class="d-flex justify-content-between py-1 border-bottom"><span class="text-muted"><i class="fas fa-mobile-alt me-1 text-info"></i>M-Pesa Sales</span><span id="rMpesaSales" class="text-info">—</span></div>
+      <div class="d-flex justify-content-between py-1 border-bottom"><span class="text-muted"><i class="fas fa-credit-card me-1 text-primary"></i>Card Sales</span><span id="rCardSales" class="text-primary">—</span></div>
+      <div class="d-flex justify-content-between py-1 border-bottom"><span class="text-muted"><i class="fas fa-wallet me-1 text-danger"></i>Cash Expenses</span><span id="rExpenses" class="text-danger">—</span></div>
+      <div class="d-flex justify-content-between py-1 border-bottom"><span class="text-muted">Transactions</span><span id="rTxns">—</span></div>
+      <div class="d-flex justify-content-between pt-2 fw-bold"><span>Expected Cash in Drawer</span><span id="rExpected" class="text-success">—</span></div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Actual Cash Counted <span class="text-danger">*</span></label>
+      <input type="number" name="closing_float" id="closingFloatInput" class="form-control" min="0" step="0.01" value="0" required oninput="updateVariance()">
+      <div class="mt-2 p-2 rounded text-center fw-bold" id="varianceDisplay" style="display:none;font-size:.9rem"></div>
+    </div>
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Handover Notes</label>
+      <textarea name="notes" class="form-control" rows="2" placeholder="Observations, discrepancies, handover instructions…"></textarea>
+    </div>
   </div>
-  <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-danger">Close Shift</button></div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+    <a href="shift-report.php?id=<?=$openShift['id']??0?>" target="_blank" id="reportLink" class="btn btn-outline-secondary">
+      <i class="fas fa-file-alt me-1"></i>Preview Report
+    </a>
+    <button type="submit" class="btn btn-danger"><i class="fas fa-stop me-1"></i>Close Shift</button>
+  </div>
   </form>
 </div></div></div>
 
-<?php $extraJs=<<<JS
+<?php
+$jsShiftTotals  = json_encode($openShiftTotals,  JSON_UNESCAPED_UNICODE);
+$jsShiftFloats  = json_encode($openShiftFloats,   JSON_UNESCAPED_UNICODE);
+$currSymbol     = addslashes(CURRENCY_SYMBOL);
+$extraJs = <<<JS
 <script>
-document.querySelectorAll('.close-shift-btn').forEach(btn=>{
-  btn.addEventListener('click',function(){
-    document.getElementById('closeShiftId').value=this.dataset.id;
+const SHIFT_TOTALS = $jsShiftTotals;
+const SHIFT_FLOATS = $jsShiftFloats;
+const CURR = '$currSymbol';
+
+function fmt(n) {
+  return CURR + parseFloat(n||0).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function populateCloseModal(shiftId) {
+  document.getElementById('closeShiftId').value = shiftId;
+
+  const reportLink = document.getElementById('reportLink');
+  if (reportLink) reportLink.href = 'shift-report.php?id=' + shiftId;
+
+  const t = SHIFT_TOTALS[shiftId];
+  const float = SHIFT_FLOATS[shiftId] || 0;
+
+  if (!t) {
+    document.getElementById('reconSummary').style.display = 'none';
+    return;
+  }
+  document.getElementById('reconSummary').style.display = '';
+  const expected = float + t.cash_sales - t.expenses;
+
+  document.getElementById('rOpenFloat').textContent  = fmt(float);
+  document.getElementById('rCashSales').textContent  = fmt(t.cash_sales);
+  document.getElementById('rMpesaSales').textContent = fmt(t.mpesa_sales);
+  document.getElementById('rCardSales').textContent  = fmt(t.card_sales);
+  document.getElementById('rExpenses').textContent   = '− ' + fmt(t.expenses);
+  document.getElementById('rTxns').textContent        = t.txn_count + ' transactions';
+  document.getElementById('rExpected').textContent   = fmt(expected);
+  document.getElementById('rExpected').dataset.expected = expected;
+
+  // Preset closing float to expected and trigger variance
+  document.getElementById('closingFloatInput').value = expected.toFixed(2);
+  updateVariance();
+}
+
+function updateVariance() {
+  const el       = document.getElementById('varianceDisplay');
+  const expected = parseFloat(document.getElementById('rExpected').dataset.expected || 0);
+  const actual   = parseFloat(document.getElementById('closingFloatInput').value) || 0;
+  const variance = actual - expected;
+
+  el.style.display = 'block';
+  if (Math.abs(variance) < 0.01) {
+    el.style.background = '#d1fae5';
+    el.style.color      = '#065f46';
+    el.textContent      = '✓ Balanced — no variance';
+  } else if (variance > 0) {
+    el.style.background = '#dbeafe';
+    el.style.color      = '#1e40af';
+    el.textContent      = 'Over by ' + fmt(variance) + ' (cash surplus)';
+  } else {
+    el.style.background = '#fee2e2';
+    el.style.color      = '#991b1b';
+    el.textContent      = 'Short by ' + fmt(Math.abs(variance)) + ' (cash deficit)';
+  }
+}
+
+// Wire all close-shift buttons
+document.querySelectorAll('.close-shift-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    populateCloseModal(parseInt(this.dataset.id));
   });
 });
+
+// Wire the header "Close Current Shift" button
+const headerCloseBtn = document.querySelector('[data-bs-target="#closeShiftModal"][data-id]');
+if (headerCloseBtn) {
+  headerCloseBtn.addEventListener('click', function() {
+    populateCloseModal(parseInt(this.dataset.id));
+  });
+}
 </script>
 JS;
 require_once __DIR__.'/../../includes/footer.php';?>

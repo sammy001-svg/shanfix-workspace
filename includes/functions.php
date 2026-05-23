@@ -159,6 +159,76 @@ function requireClientAdmin(): void {
     if (!in_array($_SESSION['user_role'] ?? '', ['client_admin', 'staff'])) {
         redirect('/auth/login.php');
     }
+    enforceSubscriptionStatus();
+}
+
+/**
+ * Auto-expire stale subscriptions and redirect blocked orgs.
+ * Exempt pages: billing, support, expired, profile, logout.
+ */
+function enforceSubscriptionStatus(): void {
+    $exemptPages = ['billing.php', 'support.php', 'expired.php', 'profile.php', 'logout.php', 'notifications.php'];
+    $currentPage = basename($_SERVER['PHP_SELF'] ?? '');
+    if (in_array($currentPage, $exemptPages)) return;
+
+    $user  = currentUser();
+    $orgId = (int)$user['org_id'];
+    if (!$orgId) return;
+
+    global $pdo;
+    $sub = getOrgSubscription($orgId);
+    if (!$sub) return;
+
+    $now    = time();
+    $status = $sub['status'];
+
+    // Auto-expire trial that has lapsed
+    if ($status === 'trial' && !empty($sub['trial_ends_at']) && strtotime($sub['trial_ends_at']) < $now) {
+        $pdo->prepare("UPDATE subscriptions SET status='expired' WHERE id=?")->execute([$sub['id']]);
+        redirect(APP_URL . '/client/expired.php?reason=trial');
+    }
+
+    // Auto-expire active subscription past its end date
+    if ($status === 'active' && !empty($sub['ends_at']) && strtotime($sub['ends_at']) < $now) {
+        $pdo->prepare("UPDATE subscriptions SET status='expired' WHERE id=?")->execute([$sub['id']]);
+        redirect(APP_URL . '/client/expired.php?reason=expired');
+    }
+
+    // Hard block on expired / cancelled / suspended
+    if (in_array($status, ['expired', 'cancelled', 'suspended'])) {
+        redirect(APP_URL . '/client/expired.php?reason=' . urlencode($status));
+    }
+}
+
+/**
+ * Returns an array describing an upcoming expiry warning, or null if none.
+ */
+function getSubscriptionWarning(int $orgId): ?array {
+    $sub = getOrgSubscription($orgId);
+    if (!$sub) return null;
+
+    $now         = time();
+    $warningDays = 7;
+
+    if ($sub['status'] === 'trial' && !empty($sub['trial_ends_at'])) {
+        $ends     = strtotime($sub['trial_ends_at']);
+        $daysLeft = (int)ceil(($ends - $now) / 86400);
+        if ($daysLeft >= 0 && $daysLeft <= $warningDays) {
+            return ['type' => 'trial', 'days' => $daysLeft, 'date' => date('d M Y', $ends),
+                    'severity' => $daysLeft <= 2 ? 'danger' : 'warning'];
+        }
+    }
+
+    if ($sub['status'] === 'active' && !empty($sub['ends_at'])) {
+        $ends     = strtotime($sub['ends_at']);
+        $daysLeft = (int)ceil(($ends - $now) / 86400);
+        if ($daysLeft >= 0 && $daysLeft <= $warningDays) {
+            return ['type' => 'subscription', 'days' => $daysLeft, 'date' => date('d M Y', $ends),
+                    'severity' => $daysLeft <= 2 ? 'danger' : 'warning'];
+        }
+    }
+
+    return null;
 }
 
 function currentUser(): array {

@@ -7,6 +7,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $act = $_POST['action'] ?? '';
 
     if ($act === 'extend_subscription') {
+        verifyCsrf();
         $subId   = (int)($_POST['sub_id']  ?? 0);
         $endsAt  = $_POST['ends_at']       ?? '';
         $status  = $_POST['status']        ?? 'active';
@@ -28,6 +29,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             setFlash('danger', 'Subscription ID and end date are required.');
         }
         redirect(APP_URL . '/admin/subscriptions.php' . (isset($_POST['org_id']) ? '?org=' . (int)$_POST['org_id'] : ''));
+    }
+
+    if ($act === 'suspend_subscription') {
+        verifyCsrf();
+        $subId = (int)($_POST['sub_id'] ?? 0);
+        if ($subId) {
+            $pdo->prepare("UPDATE subscriptions SET status='suspended' WHERE id=?")->execute([$subId]);
+            logActivity('suspend_subscription', 'admin', "Subscription #$subId suspended");
+            setFlash('warning', 'Subscription suspended.');
+        }
+        redirect(APP_URL . '/admin/subscriptions.php' . (isset($_POST['org_id']) ? '?org=' . (int)$_POST['org_id'] : ''));
+    }
+
+    if ($act === 'reactivate_subscription') {
+        verifyCsrf();
+        $subId = (int)($_POST['sub_id'] ?? 0);
+        if ($subId) {
+            $pdo->prepare("UPDATE subscriptions SET status='active' WHERE id=?")->execute([$subId]);
+            logActivity('reactivate_subscription', 'admin', "Subscription #$subId reactivated");
+            setFlash('success', 'Subscription reactivated.');
+        }
+        redirect(APP_URL . '/admin/subscriptions.php' . (isset($_POST['org_id']) ? '?org=' . (int)$_POST['org_id'] : ''));
+    }
+
+    if ($act === 'generate_renewal_invoice') {
+        verifyCsrf();
+        $subId = (int)($_POST['sub_id'] ?? 0);
+        $orgId = (int)($_POST['org_id'] ?? 0);
+        if ($subId && $orgId) {
+            $s      = $pdo->prepare("SELECT s.*, p.name AS plan_name FROM subscriptions s LEFT JOIN subscription_plans p ON s.plan_id=p.id WHERE s.id=?");
+            $s->execute([$subId]);
+            $subRow = $s->fetch();
+            if ($subRow) {
+                $amount    = (float)$subRow['amount'];
+                $tax       = round($amount * 0.16, 2);
+                $total     = $amount + $tax;
+                $prefix    = 'INV';
+                try { $r = $pdo->query("SELECT `value` FROM system_settings WHERE `key`='invoice_prefix' LIMIT 1"); $prefix = $r->fetchColumn() ?: 'INV'; } catch (Exception $e) {}
+                $invoiceNo = $prefix . '-' . strtoupper(substr(md5(uniqid($orgId, true)), 0, 8));
+                $dueDate   = date('Y-m-d', strtotime('+30 days'));
+                $notes     = 'Renewal: ' . ($subRow['plan_name'] ?? 'Subscription') . ' (' . ($subRow['billing_cycle'] ?? 'monthly') . ')';
+                $pdo->prepare("INSERT INTO invoices (org_id, subscription_id, invoice_number, amount, tax, total, status, due_date, notes) VALUES (?,?,?,?,?,?,'sent',?,?)")
+                    ->execute([$orgId, $subId, $invoiceNo, $amount, $tax, $total, $dueDate, $notes]);
+                $invId = (int)$pdo->lastInsertId();
+                logActivity('generate_invoice', 'admin', "Renewal invoice {$invoiceNo} for org #{$orgId}");
+                setFlash('success', "Renewal invoice <strong>{$invoiceNo}</strong> generated. <a href='" . APP_URL . "/admin/invoice-pdf.php?id={$invId}' target='_blank'>View PDF →</a>");
+            }
+        }
+        redirect(APP_URL . '/admin/subscriptions.php' . ($orgId ? '?org=' . $orgId : ''));
     }
 
     if ($act === 'save_sub_modules') {
@@ -190,9 +240,38 @@ $counts = [
                         ]), ENT_QUOTES) ?>)">
                   <i class="fas fa-cog"></i>
                 </button>
-                <a href="<?= APP_URL ?>/admin/invoices.php" class="btn btn-xs btn-outline-warning" title="Generate invoice">
-                  <i class="fas fa-file-invoice"></i>
-                </a>
+                <!-- Generate renewal invoice -->
+                <form method="POST" class="d-inline" onsubmit="return confirm('Generate a renewal invoice for <?= addslashes($s['org_name']) ?>?')">
+                  <?= csrfField() ?>
+                  <input type="hidden" name="action" value="generate_renewal_invoice">
+                  <input type="hidden" name="sub_id" value="<?= $s['id'] ?>">
+                  <input type="hidden" name="org_id" value="<?= $s['org_id'] ?>">
+                  <button type="submit" class="btn btn-xs btn-outline-warning" title="Generate renewal invoice">
+                    <i class="fas fa-file-invoice"></i>
+                  </button>
+                </form>
+                <!-- Suspend / Reactivate -->
+                <?php if (in_array($s['status'], ['active','trial'])): ?>
+                <form method="POST" class="d-inline" onsubmit="return confirm('Suspend <?= addslashes($s['org_name']) ?>? They will lose access immediately.')">
+                  <?= csrfField() ?>
+                  <input type="hidden" name="action" value="suspend_subscription">
+                  <input type="hidden" name="sub_id" value="<?= $s['id'] ?>">
+                  <input type="hidden" name="org_id" value="<?= $s['org_id'] ?>">
+                  <button type="submit" class="btn btn-xs btn-outline-danger" title="Suspend subscription">
+                    <i class="fas fa-pause"></i>
+                  </button>
+                </form>
+                <?php elseif (in_array($s['status'], ['suspended','expired','cancelled'])): ?>
+                <form method="POST" class="d-inline" onsubmit="return confirm('Reactivate subscription for <?= addslashes($s['org_name']) ?>?')">
+                  <?= csrfField() ?>
+                  <input type="hidden" name="action" value="reactivate_subscription">
+                  <input type="hidden" name="sub_id" value="<?= $s['id'] ?>">
+                  <input type="hidden" name="org_id" value="<?= $s['org_id'] ?>">
+                  <button type="submit" class="btn btn-xs btn-outline-success" title="Reactivate subscription">
+                    <i class="fas fa-play"></i>
+                  </button>
+                </form>
+                <?php endif; ?>
               </div>
             </td>
           </tr>

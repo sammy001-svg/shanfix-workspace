@@ -149,3 +149,17 @@ function markNotifsRead() {
 
   <main class="main-content">
     <?= flashAlert() ?>
+    <?php
+    $__subWarn = getSubscriptionWarning((int)$user['org_id']);
+    if ($__subWarn):
+        $__wIcon = $__subWarn['type'] === 'trial' ? 'fas fa-hourglass-half' : 'fas fa-calendar-exclamation';
+        $__wText = $__subWarn['type'] === 'trial'
+            ? ($__subWarn['days'] === 0 ? 'Your free trial <strong>expires today</strong>.' : 'Your free trial expires in <strong>' . $__subWarn['days'] . ' day' . ($__subWarn['days'] > 1 ? 's' : '') . '</strong> on ' . $__subWarn['date'] . '.')
+            : ($__subWarn['days'] === 0 ? 'Your subscription <strong>expires today</strong>.' : 'Your subscription expires in <strong>' . $__subWarn['days'] . ' day' . ($__subWarn['days'] > 1 ? 's' : '') . '</strong> on ' . $__subWarn['date'] . '.');
+    ?>
+    <div class="alert alert-<?= $__subWarn['severity'] ?> alert-dismissible d-flex align-items-center gap-3 py-2 mb-3 rounded-2" role="alert" style="font-size:.9rem">
+      <i class="<?= $__wIcon ?> flex-shrink-0"></i>
+      <div><?= $__wText ?> <a href="<?= APP_URL ?>/client/billing.php?tab=plans" class="fw-bold alert-link ms-2">Upgrade now →</a></div>
+      <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+    </div>
+    <?php endif; ?>
