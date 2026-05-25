@@ -165,7 +165,7 @@ $subjectName='';foreach($subjects as $s){if($s['subject_id']==$fSubject)$subject
         <td class="small text-muted"><?=e($st['admission_no']??'—')?></td>
         <td><input type="number" name="marks[<?=$st['id']?>]" class="form-control form-control-sm mark-input"
           data-max="<?=$maxMarks?>" data-student="<?=$st['id']?>"
-          value="<?=$cur['marks']!==null&&$cur['marks']!==''?e($cur['marks']):'?>''" min="0" max="<?=$maxMarks?>" step="0.5" placeholder="—"></td>
+          value="<?=$cur['marks']!==null&&$cur['marks']!==''?e($cur['marks']):''?>" min="0" max="<?=$maxMarks?>" step="0.5" placeholder="—"></td>
         <td><span class="badge bg-secondary grade-badge" id="grade_<?=$st['id']?>"><?=e($cur['grade']??'—')?></span></td>
         <td><input type="text" name="remarks[<?=$st['id']?>]" class="form-control form-control-sm" value="<?=e($cur['remarks']??'')?>" placeholder="Optional"></td>
       </tr>

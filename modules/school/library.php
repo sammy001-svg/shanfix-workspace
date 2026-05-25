@@ -161,7 +161,7 @@ $staff=[];try{$s=$pdo->prepare("SELECT id,CONCAT(first_name,' ',last_name) AS na
     <tr class="<?=$overdue?'table-danger-subtle':''?>">
       <td class="fw-semibold"><?=e($ln['book_title']??'—')?></td>
       <td><?=e($ln['borrower_name'])?></td>
-      <td><span class="badge bg-<?=$ln['borrower_type']==='student'?'primary':'info?>''"><?=ucfirst($ln['borrower_type'])?></span></td>
+      <td><span class="badge bg-<?=$ln['borrower_type']==='student'?'primary':'info'?>"><?=ucfirst($ln['borrower_type'])?></span></td>
       <td class="small"><?=formatDate($ln['issue_date'])?></td>
       <td class="small <?=$overdue?'text-danger fw-semibold':''?>"><?=formatDate($ln['due_date'])?><?php if($overdue):?> <span class="badge bg-danger ms-1"><?=ceil((strtotime(date('Y-m-d'))-strtotime($ln['due_date']))/86400)?>d</span><?php endif;?></td>
       <td><span class="badge bg-<?=$statusC?>"><?=$statusL?></span></td>
