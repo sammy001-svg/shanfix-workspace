@@ -53,6 +53,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'recor
     redirect(APP_URL . '/client/billing.php?tab=invoices');
 }
 
+// ── POST: Pay invoice from wallet ────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'pay_from_wallet') {
+    verifyCsrf();
+    $invoiceId = (int)$_POST['invoice_id'];
+
+    $inv = $pdo->prepare("SELECT * FROM invoices WHERE id=? AND org_id=? AND status IN ('draft','sent','overdue')");
+    $inv->execute([$invoiceId, $orgId]);
+    $inv = $inv->fetch();
+
+    if (!$inv) {
+        setFlash('danger', 'Invoice not found or already paid.');
+        redirect(APP_URL . '/client/billing.php?tab=pay');
+    }
+
+    $total = (float)$inv['total'];
+
+    $pdo->beginTransaction();
+    try {
+        $wb = $pdo->prepare("SELECT wallet_balance FROM organizations WHERE id=? FOR UPDATE");
+        $wb->execute([$orgId]);
+        $balance = (float)($wb->fetchColumn() ?: 0);
+
+        if ($balance < $total) {
+            $pdo->rollBack();
+            setFlash('danger', 'Insufficient wallet balance. Please top up first.');
+            redirect(APP_URL . '/client/billing.php?tab=wallet');
+        }
+
+        $newBal = $balance - $total;
+        $pdo->prepare("UPDATE organizations SET wallet_balance=? WHERE id=?")->execute([$newBal, $orgId]);
+        $pdo->prepare("UPDATE invoices SET status='paid', paid_at=NOW() WHERE id=?")->execute([$invoiceId]);
+
+        $pdo->prepare("INSERT INTO wallet_transactions (org_id,type,amount,balance_after,description,invoice_id,status) VALUES (?,?,?,?,?,?,'completed')")
+            ->execute([$orgId, 'deduction', $total, $newBal, 'Invoice ' . $inv['invoice_number'], $invoiceId]);
+
+        // Activate module if linked
+        if (!empty($inv['module_id'])) {
+            $subRow = $pdo->prepare("SELECT id FROM subscriptions WHERE org_id=? ORDER BY created_at DESC LIMIT 1");
+            $subRow->execute([$orgId]);
+            $subId = $subRow->fetchColumn();
+            if ($subId) {
+                $pdo->prepare("INSERT INTO subscription_modules (subscription_id,module_id,status) VALUES (?,?,'active') ON DUPLICATE KEY UPDATE status='active'")
+                    ->execute([$subId, $inv['module_id']]);
+            }
+            $modName = $pdo->prepare("SELECT name FROM modules WHERE id=?")->execute([$inv['module_id']]) ?
+                $pdo->prepare("SELECT name FROM modules WHERE id=?")->execute([$inv['module_id']]) : '';
+            $mn = $pdo->prepare("SELECT name FROM modules WHERE id=?");
+            $mn->execute([$inv['module_id']]);
+            $modName = $mn->fetchColumn() ?: 'Module';
+        }
+
+        $pdo->commit();
+        logActivity('wallet_payment', 'billing', "Invoice {$inv['invoice_number']} paid from wallet — KES {$total}. Balance: {$newBal}");
+        $msg = "Invoice <strong>{$inv['invoice_number']}</strong> paid from wallet.";
+        if (!empty($modName)) $msg .= " <strong>{$modName}</strong> is now active.";
+        setFlash('success', $msg);
+
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        setFlash('danger', 'Payment failed. Please try again.');
+    }
+    redirect(APP_URL . '/client/billing.php?tab=invoices');
+}
+
 // ── POST: Request plan upgrade (generates invoice) ───────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'request_upgrade') {
     verifyCsrf();
@@ -90,6 +154,21 @@ $plans = $pdo->query("SELECT * FROM subscription_plans WHERE status='active' ORD
 // ── Data ─────────────────────────────────────────────────────────
 $activeTab    = $_GET['tab'] ?? 'overview';
 $highlightInv = (int)($_GET['inv'] ?? 0);
+
+// ── Wallet data ───────────────────────────────────────────────────
+$walletBalance = 0.00;
+$walletTxns    = [];
+try {
+    $walletBalance = (float)($pdo->prepare("SELECT wallet_balance FROM organizations WHERE id=?")
+        ->execute([$orgId]) ? $pdo->prepare("SELECT wallet_balance FROM organizations WHERE id=?")->execute([$orgId]) : 0);
+    $wb = $pdo->prepare("SELECT wallet_balance FROM organizations WHERE id=?");
+    $wb->execute([$orgId]);
+    $walletBalance = (float)($wb->fetchColumn() ?: 0);
+
+    $wt = $pdo->prepare("SELECT * FROM wallet_transactions WHERE org_id=? ORDER BY created_at DESC LIMIT 50");
+    $wt->execute([$orgId]);
+    $walletTxns = $wt->fetchAll();
+} catch (Exception $e) {}
 
 $invoices = [];
 try {
@@ -153,6 +232,14 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
   <li class="nav-item">
     <a href="?tab=plans" class="nav-link <?= $activeTab==='plans' ? 'active' : '' ?>">
       <i class="fas fa-layer-group me-1"></i>Plans
+    </a>
+  </li>
+  <li class="nav-item">
+    <a href="?tab=wallet" class="nav-link <?= $activeTab==='wallet' ? 'active' : '' ?>">
+      <i class="fas fa-wallet me-1"></i>Wallet
+      <?php if ($walletBalance > 0): ?>
+      <span class="badge bg-success ms-1"><?= formatCurrency($walletBalance) ?></span>
+      <?php endif; ?>
     </a>
   </li>
 </ul>
@@ -460,6 +547,38 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
       <div class="card-header fw-bold"><i class="fas fa-credit-card text-green me-2"></i>Choose Payment Method</div>
       <div class="card-body">
 
+        <!-- Wallet -->
+        <?php if ($walletBalance >= (float)$focusInv['total']): ?>
+        <div class="border border-success rounded p-3 mb-3" style="background:#f0fdf4">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="fw-bold"><i class="fas fa-wallet text-success me-2"></i>Pay from Wallet</div>
+            <span class="badge bg-success">Balance: <?= formatCurrency($walletBalance) ?></span>
+          </div>
+          <p class="text-muted small mb-3">Deduct <?= formatCurrency((float)$focusInv['total']) ?> from your wallet balance instantly — no M-Pesa prompt needed.</p>
+          <form method="POST">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="pay_from_wallet">
+            <input type="hidden" name="invoice_id" value="<?= $focusInv['id'] ?>">
+            <button type="submit" class="btn btn-success w-100 fw-bold"
+                    onclick="return confirm('Pay <?= formatCurrency((float)$focusInv['total']) ?> from your wallet balance?')">
+              <i class="fas fa-wallet me-2"></i>Pay <?= formatCurrency((float)$focusInv['total']) ?> from Wallet
+            </button>
+          </form>
+        </div>
+        <?php elseif ($walletBalance > 0): ?>
+        <div class="border rounded p-3 mb-3" style="background:#fefce8">
+          <div class="fw-bold mb-1"><i class="fas fa-wallet text-warning me-2"></i>Wallet Balance: <?= formatCurrency($walletBalance) ?></div>
+          <p class="text-muted small mb-2">Your wallet balance is insufficient for this invoice (<?= formatCurrency((float)$focusInv['total']) ?>).
+            <a href="?tab=wallet" class="fw-bold">Top up →</a>
+          </p>
+        </div>
+        <?php else: ?>
+        <div class="border rounded p-3 mb-3" style="background:#f8fafc">
+          <div class="fw-bold mb-1 text-muted"><i class="fas fa-wallet me-2"></i>Wallet: KES 0.00</div>
+          <p class="text-muted small mb-0"><a href="?tab=wallet" class="fw-bold">Load your wallet</a> to pay invoices instantly without entering M-Pesa PIN each time.</p>
+        </div>
+        <?php endif; ?>
+
         <!-- M-Pesa -->
         <div class="border rounded p-3 mb-3">
           <div class="fw-bold mb-2"><i class="fas fa-mobile-alt text-success me-2"></i>KopoKopo M-Pesa STK Push</div>
@@ -595,10 +714,178 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
   <?php endforeach; ?>
 </div>
 
+<!-- ═══════════════ WALLET ═══════════════ -->
+<?php elseif ($activeTab === 'wallet'): ?>
+
+<div class="row g-4">
+  <!-- Left: Balance + Top-up -->
+  <div class="col-lg-5">
+    <div class="card mb-3" style="background:linear-gradient(135deg,#0B2D4E,#1A8A4E);color:white;border:none">
+      <div class="card-body text-center py-4">
+        <div class="mb-1" style="font-size:.85rem;opacity:.8"><i class="fas fa-wallet me-1"></i>Wallet Balance</div>
+        <div style="font-size:2.5rem;font-weight:800;letter-spacing:-1px"><?= formatCurrency($walletBalance) ?></div>
+        <div style="font-size:.8rem;opacity:.7">Available for invoice payments</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header fw-bold"><i class="fas fa-plus-circle text-green me-2"></i>Top Up via M-Pesa</div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Amount (KES)</label>
+          <div class="d-flex gap-2 flex-wrap mb-2">
+            <?php foreach ([500, 1000, 2000, 5000, 10000] as $preset): ?>
+            <button type="button" class="btn btn-sm btn-outline-secondary preset-btn"
+                    onclick="setTopupAmount(<?= $preset ?>)">
+              <?= number_format($preset) ?>
+            </button>
+            <?php endforeach; ?>
+          </div>
+          <input type="number" id="topupAmount" class="form-control" min="10" max="150000"
+                 placeholder="Enter amount…" oninput="updateTopupBtn()">
+          <div class="form-text">Min KES 10 · Max KES 150,000 per top-up</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">M-Pesa Phone Number</label>
+          <input type="tel" id="topupPhone" class="form-control"
+                 placeholder="+254 700 000 000"
+                 value="<?= e(preg_replace('/[^0-9+]/', '', $user['phone'] ?? '')) ?>">
+        </div>
+        <button class="btn btn-success w-100 fw-bold" id="topupBtn" onclick="initiateTopUp(this)" disabled>
+          <i class="fas fa-wallet me-2"></i>Top Up Wallet
+        </button>
+        <div class="alert alert-info small mt-3 mb-0">
+          <i class="fas fa-info-circle me-1"></i>
+          Funds are credited instantly after M-Pesa confirmation. Use your wallet to pay any invoice with one click.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Transaction history -->
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header fw-bold"><i class="fas fa-history text-green me-2"></i>Transaction History</div>
+      <div class="card-body p-0">
+        <?php if (empty($walletTxns)): ?>
+        <div class="text-center py-5 text-muted">
+          <i class="fas fa-wallet fa-2x mb-2 d-block opacity-25"></i>
+          No transactions yet. Top up your wallet to get started.
+        </div>
+        <?php else: ?>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr><th>Date</th><th>Description</th><th>Amount</th><th>Balance</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <?php foreach ($walletTxns as $tx):
+                $txColor = match($tx['type']) {
+                    'topup'     => 'text-success',
+                    'deduction' => 'text-danger',
+                    'refund'    => 'text-info',
+                    default     => '',
+                };
+                $txSign = $tx['type'] === 'topup' || $tx['type'] === 'refund' ? '+' : '-';
+                $txIcon = match($tx['type']) {
+                    'topup'     => 'fa-arrow-down',
+                    'deduction' => 'fa-arrow-up',
+                    'refund'    => 'fa-undo',
+                    default     => 'fa-circle',
+                };
+              ?>
+              <tr>
+                <td class="small text-muted"><?= formatDate($tx['created_at']) ?></td>
+                <td class="small">
+                  <i class="fas <?= $txIcon ?> <?= $txColor ?> me-1 small"></i>
+                  <?= e($tx['description'] ?: ucfirst($tx['type'])) ?>
+                  <?php if ($tx['mpesa_receipt']): ?>
+                  <div class="text-muted" style="font-size:.7rem"><?= e($tx['mpesa_receipt']) ?></div>
+                  <?php endif; ?>
+                </td>
+                <td class="fw-semibold <?= $txColor ?>">
+                  <?= $txSign ?><?= formatCurrency((float)$tx['amount']) ?>
+                </td>
+                <td class="small"><?= $tx['status'] === 'completed' ? formatCurrency((float)$tx['balance_after']) : '—' ?></td>
+                <td><?= statusBadge($tx['status']) ?></td>
+              </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+        <?php endif; ?>
+      </div>
+    </div>
+  </div>
+</div>
+
 <?php endif; ?>
 
 <?php
 $extraJs = '<script>
+function initiateTopUp(btn) {
+  const phone  = document.getElementById("topupPhone").value.trim();
+  const amount = parseFloat(document.getElementById("topupAmount").value) || 0;
+  if (!phone) { Swal.fire({ icon:"warning", title:"Phone Required", text:"Enter your M-Pesa phone number." }); return; }
+  if (amount < 10) { Swal.fire({ icon:"warning", title:"Amount Too Low", text:"Minimum top-up is KES 10." }); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = \'<i class="fas fa-spinner fa-spin me-2"></i>Sending STK Push…\';
+
+  fetch("' . APP_URL . '/api/wallet-topup.php", {
+    method:"POST",
+    headers:{"Content-Type":"application/x-www-form-urlencoded"},
+    body:`phone=${encodeURIComponent(phone)}&amount=${encodeURIComponent(amount)}`
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (!data.success) {
+      btn.disabled = false;
+      btn.innerHTML = \'<i class="fas fa-wallet me-2"></i>Top Up Wallet\';
+      Swal.fire({ icon:"error", title:"Failed", text:data.message });
+      return;
+    }
+    btn.innerHTML = \'<i class="fas fa-spinner fa-spin me-2"></i>Waiting for M-Pesa…\';
+    pollWallet(data.checkout_id, btn, 0);
+  })
+  .catch(() => {
+    btn.disabled = false;
+    btn.innerHTML = \'<i class="fas fa-wallet me-2"></i>Top Up Wallet\';
+    Swal.fire({ icon:"error", title:"Network Error" });
+  });
+}
+
+function pollWallet(checkoutId, btn, attempts) {
+  if (attempts >= 40) {
+    btn.disabled = false; btn.innerHTML = \'<i class="fas fa-wallet me-2"></i>Top Up Wallet\';
+    Swal.fire({ icon:"warning", title:"Timeout", text:"Payment not confirmed yet. Refresh this page to check your balance.", confirmButtonColor:"#1A8A4E" });
+    return;
+  }
+  setTimeout(() => {
+    fetch("' . APP_URL . '/api/check-payment.php?id=" + encodeURIComponent(checkoutId))
+      .then(r => r.json())
+      .then(res => {
+        if (res.status === "completed") {
+          Swal.fire({ icon:"success", title:"Wallet Topped Up!", html:"Your wallet has been credited.<br><strong>Receipt: "+(res.receipt||"")+"</strong>", confirmButtonColor:"#1A8A4E" })
+            .then(() => location.reload());
+        } else if (res.status === "failed") {
+          btn.disabled = false; btn.innerHTML = \'<i class="fas fa-wallet me-2"></i>Top Up Wallet\';
+          Swal.fire({ icon:"error", title:"Payment Failed", text:"M-Pesa payment was not completed." });
+        } else { pollWallet(checkoutId, btn, attempts+1); }
+      })
+      .catch(() => pollWallet(checkoutId, btn, attempts+1));
+  }, 3000);
+}
+
+function setTopupAmount(n) {
+  document.getElementById("topupAmount").value = n;
+  updateTopupBtn();
+}
+function updateTopupBtn() {
+  const v = parseFloat(document.getElementById("topupAmount").value)||0;
+  document.getElementById("topupBtn").disabled = v < 10;
+}
+
 function initiateMpesa(invoiceId, amount) {
   const phone = document.getElementById("mpesaPhone").value.trim();
   if (!phone) {

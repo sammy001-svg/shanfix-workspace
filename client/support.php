@@ -143,14 +143,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reply
     redirect(APP_URL . '/client/support.php?view=' . $ticketId);
 }
 
-// ── POST: Close ticket ───────────────────────────────────────────
+// ── POST: Close ticket (with optional rating) ────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'close_ticket') {
     verifyCsrf();
     $ticketId = (int)($_POST['ticket_id'] ?? 0);
-    $pdo->prepare("UPDATE support_tickets SET status='closed', closed_at=NOW() WHERE id=? AND org_id=?")
-        ->execute([$ticketId, $orgId]);
-    setFlash('info', 'Ticket closed. Thank you for using our support.');
+    $rating   = (int)($_POST['rating']    ?? 0);
+    $rating   = ($rating >= 1 && $rating <= 5) ? $rating : null;
+    $pdo->prepare("UPDATE support_tickets SET status='closed', closed_at=NOW(), rating=? WHERE id=? AND org_id=?")
+        ->execute([$rating, $ticketId, $orgId]);
+    $msg = 'Ticket closed. Thank you for using our support.';
+    if ($rating) $msg .= ' Your ' . $rating . '-star rating has been recorded.';
+    setFlash('info', $msg);
     redirect(APP_URL . '/client/support.php');
+}
+
+// ── POST: Reopen ticket ──────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reopen_ticket') {
+    verifyCsrf();
+    $ticketId = (int)($_POST['ticket_id'] ?? 0);
+    $pdo->prepare("UPDATE support_tickets SET status='open', closed_at=NULL WHERE id=? AND org_id=? AND status IN ('closed','resolved')")
+        ->execute([$ticketId, $orgId]);
+    setFlash('info', 'Ticket reopened. We\'ll follow up shortly.');
+    redirect(APP_URL . '/client/support.php?view=' . $ticketId);
 }
 
 // ── View single ticket ───────────────────────────────────────────
@@ -361,13 +375,48 @@ $categoryIcons  = ['billing'=>'fa-file-invoice-dollar','technical'=>'fa-wrench',
     <?php if (!in_array($ticket['status'], ['closed'])): ?>
     <div class="card border-warning">
       <div class="card-body">
-        <p class="small text-muted mb-2">Is your issue resolved? Close this ticket to let us know.</p>
-        <form method="POST">
+        <p class="small text-muted mb-2">Is your issue resolved? Rate your experience and close this ticket.</p>
+        <form method="POST" id="closeForm">
           <?= csrfField() ?>
           <input type="hidden" name="action" value="close_ticket">
           <input type="hidden" name="ticket_id" value="<?= $ticket['id'] ?>">
+          <input type="hidden" name="rating" id="ratingInput" value="">
+          <!-- Star rating -->
+          <div class="mb-3 text-center">
+            <div class="small text-muted mb-1">Rate support quality (optional)</div>
+            <div class="star-rating d-flex justify-content-center gap-1" id="starRating">
+              <?php for ($s = 1; $s <= 5; $s++): ?>
+              <i class="far fa-star fa-lg text-warning" style="cursor:pointer" data-val="<?= $s ?>"
+                 onmouseover="hoverStars(<?= $s ?>)" onmouseout="resetStars()"
+                 onclick="selectStar(<?= $s ?>)"></i>
+              <?php endfor; ?>
+            </div>
+            <div class="small text-muted mt-1" id="ratingLabel"></div>
+          </div>
           <button type="submit" class="btn btn-outline-secondary btn-sm w-100">
-            <i class="fas fa-check me-1"></i>Mark as Resolved & Close
+            <i class="fas fa-check me-1"></i>Mark as Resolved &amp; Close
+          </button>
+        </form>
+      </div>
+    </div>
+    <?php else: ?>
+    <div class="card border-info mt-3">
+      <div class="card-body">
+        <?php if ($ticket['rating']): ?>
+        <div class="text-center mb-2">
+          <div class="small text-muted mb-1">Your rating</div>
+          <?php for ($s = 1; $s <= 5; $s++): ?>
+          <i class="fa<?= $s <= $ticket['rating'] ? 's' : 'r' ?> fa-star text-warning"></i>
+          <?php endfor; ?>
+        </div>
+        <?php endif; ?>
+        <p class="small text-muted mb-2">Need more help? Reopen this ticket.</p>
+        <form method="POST">
+          <?= csrfField() ?>
+          <input type="hidden" name="action" value="reopen_ticket">
+          <input type="hidden" name="ticket_id" value="<?= $ticket['id'] ?>">
+          <button type="submit" class="btn btn-outline-primary btn-sm w-100">
+            <i class="fas fa-redo me-1"></i>Reopen Ticket
           </button>
         </form>
       </div>
@@ -538,4 +587,29 @@ $categoryIcons  = ['billing'=>'fa-file-invoice-dollar','technical'=>'fa-wrench',
   </div>
 </div>
 
-<?php require_once __DIR__ . '/../includes/footer.php'; ?>
+<?php
+$ratingLabels = ['','Poor','Fair','Good','Very Good','Excellent'];
+$extraJs = '<script>
+let selectedRating = 0;
+const labels = ' . json_encode($ratingLabels) . ';
+
+function hoverStars(n) {
+  document.querySelectorAll("#starRating i").forEach((el, i) => {
+    el.className = i < n ? "fas fa-star fa-lg text-warning" : "far fa-star fa-lg text-warning";
+    el.style.cursor = "pointer";
+  });
+  document.getElementById("ratingLabel").textContent = labels[n] || "";
+}
+function resetStars() {
+  document.querySelectorAll("#starRating i").forEach((el, i) => {
+    el.className = i < selectedRating ? "fas fa-star fa-lg text-warning" : "far fa-star fa-lg text-warning";
+  });
+  document.getElementById("ratingLabel").textContent = selectedRating ? labels[selectedRating] : "";
+}
+function selectStar(n) {
+  selectedRating = n;
+  document.getElementById("ratingInput").value = n;
+  resetStars();
+}
+</script>';
+require_once __DIR__ . '/../includes/footer.php'; ?>

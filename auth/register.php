@@ -86,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['org_name']   = $orgName;
 
             setFlash('success', "Welcome to {$orgName}'s workspace! Your 14-day trial has started.");
-            redirect(APP_URL . '/client/index.php');
+            redirect(APP_URL . '/client/onboarding.php');
 
         } catch (Exception $e) {
             $pdo->rollBack();

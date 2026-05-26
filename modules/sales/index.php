@@ -4,12 +4,15 @@ $moduleName  = 'Sales Management';
 $moduleIcon  = 'fas fa-chart-line';
 $moduleColor = '#1A8A4E';
 $moduleNav   = [
-    ['url' => 'index.php',     'icon' => 'fas fa-tachometer-alt', 'label' => 'Dashboard'],
-    ['url' => 'customers.php', 'icon' => 'fas fa-users',          'label' => 'Customers'],
-    ['url' => 'orders.php',    'icon' => 'fas fa-shopping-cart',  'label' => 'Orders'],
-    ['url' => 'quotes.php',    'icon' => 'fas fa-file-alt',       'label' => 'Quotes'],
-    ['url' => 'products.php',  'icon' => 'fas fa-box',            'label' => 'Products'],
-    ['url' => 'reports.php',   'icon' => 'fas fa-chart-bar',      'label' => 'Reports'],
+    ['url' => 'index.php',       'icon' => 'fas fa-tachometer-alt', 'label' => 'Dashboard'],
+    ['url' => 'customers.php',   'icon' => 'fas fa-users',          'label' => 'Customers'],
+    ['url' => 'orders.php',      'icon' => 'fas fa-shopping-cart',  'label' => 'Orders'],
+    ['url' => 'quotes.php',      'icon' => 'fas fa-file-alt',       'label' => 'Quotes'],
+    ['url' => 'products.php',    'icon' => 'fas fa-box',            'label' => 'Products'],
+    ['url' => 'invoices.php',    'icon' => 'fas fa-file-invoice',   'label' => 'Invoices'],
+    ['url' => 'fulfillment.php', 'icon' => 'fas fa-truck',          'label' => 'Fulfillment'],
+    ['url' => 'commissions.php', 'icon' => 'fas fa-percent',        'label' => 'Commissions'],
+    ['url' => 'reports.php',     'icon' => 'fas fa-chart-bar',      'label' => 'Reports'],
 ];
 require_once __DIR__ . '/../../includes/header-module.php';
 

@@ -10,6 +10,9 @@ $moduleNav   = [
     ['url' => 'products.php',  'icon' => 'fas fa-boxes',          'label' => 'Products'],
     ['url' => 'suppliers.php', 'icon' => 'fas fa-truck',          'label' => 'Suppliers'],
     ['url' => 'purchases.php', 'icon' => 'fas fa-file-invoice',   'label' => 'Purchase Orders'],
+    ['url' => 'sales.php',     'icon' => 'fas fa-cash-register',  'label' => 'Sales / POS'],
+    ['url' => 'stock.php',     'icon' => 'fas fa-warehouse',      'label' => 'Stock Adjustments'],
+    ['url' => 'pricing.php',   'icon' => 'fas fa-tags',           'label' => 'Pricing Rules'],
     ['url' => 'reports.php',   'icon' => 'fas fa-chart-bar',      'label' => 'Reports'],
 ];
 

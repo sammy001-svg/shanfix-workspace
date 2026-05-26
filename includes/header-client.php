@@ -4,6 +4,16 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/functions.php';
 requireClientAdmin();
 $user    = currentUser();
+
+// Onboarding guard — redirect first-time registrants to setup wizard
+if (!str_ends_with($_SERVER['PHP_SELF'], '/onboarding.php')) {
+    $_obStmt = $pdo->prepare("SELECT is_onboarded FROM users WHERE id=?");
+    $_obStmt->execute([(int)$user['id']]);
+    if (!(bool)$_obStmt->fetchColumn()) {
+        redirect(APP_URL . '/client/onboarding.php');
+    }
+}
+
 $modules = getOrgModules((int)$user['org_id']);
 $pageTitle = $pageTitle ?? APP_NAME;
 ?>

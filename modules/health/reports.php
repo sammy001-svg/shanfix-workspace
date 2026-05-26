@@ -4,12 +4,23 @@ $moduleName  = 'Health & Clinic';
 $moduleIcon  = 'fas fa-heartbeat';
 $moduleColor = '#e74c3c';
 $moduleNav   = [
-    ['url' => 'index.php',       'icon' => 'fas fa-tachometer-alt', 'label' => 'Dashboard'],
-    ['url' => 'patients.php',    'icon' => 'fas fa-procedures',     'label' => 'Patients'],
-    ['url' => 'appointments.php','icon' => 'fas fa-calendar-check', 'label' => 'Appointments'],
-    ['url' => 'doctors.php',     'icon' => 'fas fa-user-md',        'label' => 'Doctors'],
-    ['url' => 'records.php',     'icon' => 'fas fa-file-medical',   'label' => 'Medical Records'],
-    ['url' => 'reports.php',     'icon' => 'fas fa-chart-bar',      'label' => 'Reports'],
+    ['url'=>'index.php',         'icon'=>'fas fa-tachometer-alt',      'label'=>'Dashboard'],
+    ['url'=>'patients.php',      'icon'=>'fas fa-procedures',          'label'=>'Patients'],
+    ['url'=>'appointments.php',  'icon'=>'fas fa-calendar-check',      'label'=>'Appointments'],
+    ['url'=>'doctors.php',       'icon'=>'fas fa-user-md',             'label'=>'Doctors'],
+    ['url'=>'records.php',       'icon'=>'fas fa-file-medical',        'label'=>'Medical Records'],
+    ['url'=>'vitals.php',        'icon'=>'fas fa-heartbeat',           'label'=>'Vital Signs'],
+    ['url'=>'lab.php',           'icon'=>'fas fa-flask',               'label'=>'Laboratory'],
+    ['url'=>'pharmacy.php',      'icon'=>'fas fa-pills',               'label'=>'Pharmacy'],
+    ['url'=>'nursing.php',       'icon'=>'fas fa-user-nurse',          'label'=>'Nursing'],
+    ['url'=>'wards.php',         'icon'=>'fas fa-bed',                 'label'=>'Wards & Beds'],
+    ['url'=>'admissions.php',    'icon'=>'fas fa-hospital-user',       'label'=>'Admissions (IPD)'],
+    ['url'=>'emergency.php',     'icon'=>'fas fa-ambulance',           'label'=>'Emergency / Triage'],
+    ['url'=>'billing.php',       'icon'=>'fas fa-file-invoice-dollar', 'label'=>'Billing'],
+    ['url'=>'telemedicine.php',  'icon'=>'fas fa-video',               'label'=>'Telemedicine'],
+    ['url'=>'patient_crm.php',   'icon'=>'fas fa-users',               'label'=>'Patient CRM'],
+    ['url'=>'analytics.php',     'icon'=>'fas fa-brain',               'label'=>'AI Analytics'],
+    ['url'=>'reports.php',       'icon'=>'fas fa-chart-bar',           'label'=>'Reports'],
 ];
 
 require_once __DIR__ . '/../../includes/header-module.php';

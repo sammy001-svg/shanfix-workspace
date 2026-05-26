@@ -4,12 +4,15 @@ $moduleName  = 'Rental & Property';
 $moduleIcon  = 'fas fa-building';
 $moduleColor = '#2980b9';
 $moduleNav   = [
-    ['url' => 'index.php',     'icon' => 'fas fa-tachometer-alt', 'label' => 'Dashboard'],
-    ['url' => 'properties.php','icon' => 'fas fa-building',       'label' => 'Properties'],
-    ['url' => 'units.php',     'icon' => 'fas fa-door-open',      'label' => 'Units'],
-    ['url' => 'tenants.php',   'icon' => 'fas fa-users',          'label' => 'Tenants'],
-    ['url' => 'payments.php',  'icon' => 'fas fa-money-bill',     'label' => 'Payments'],
-    ['url' => 'reports.php',   'icon' => 'fas fa-chart-bar',      'label' => 'Reports'],
+    ['url' => 'index.php',       'icon' => 'fas fa-tachometer-alt', 'label' => 'Dashboard'],
+    ['url' => 'properties.php',  'icon' => 'fas fa-building',       'label' => 'Properties'],
+    ['url' => 'units.php',       'icon' => 'fas fa-door-open',      'label' => 'Units'],
+    ['url' => 'tenants.php',     'icon' => 'fas fa-users',          'label' => 'Tenants'],
+    ['url' => 'leases.php',      'icon' => 'fas fa-file-contract',  'label' => 'Leases'],
+    ['url' => 'payments.php',    'icon' => 'fas fa-money-bill',     'label' => 'Payments'],
+    ['url' => 'maintenance.php', 'icon' => 'fas fa-tools',          'label' => 'Maintenance'],
+    ['url' => 'invoices.php',    'icon' => 'fas fa-file-invoice',   'label' => 'Invoices'],
+    ['url' => 'reports.php',     'icon' => 'fas fa-chart-bar',      'label' => 'Reports'],
 ];
 
 require_once __DIR__ . '/../../includes/header-module.php';

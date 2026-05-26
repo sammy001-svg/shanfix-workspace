@@ -4,12 +4,15 @@ $moduleName  = 'Finance & Budgeting';
 $moduleIcon  = 'fas fa-wallet';
 $moduleColor = '#16a085';
 $moduleNav   = [
-    ['url' => 'index.php',        'icon' => 'fas fa-tachometer-alt', 'label' => 'Dashboard'],
-    ['url' => 'accounts.php',     'icon' => 'fas fa-university',     'label' => 'Accounts'],
-    ['url' => 'transactions.php', 'icon' => 'fas fa-exchange-alt',   'label' => 'Transactions'],
-    ['url' => 'categories.php',   'icon' => 'fas fa-tags',           'label' => 'Categories'],
-    ['url' => 'budgets.php',      'icon' => 'fas fa-bullseye',       'label' => 'Budgets'],
-    ['url' => 'reports.php',      'icon' => 'fas fa-chart-pie',      'label' => 'Reports'],
+    ['url' => 'index.php',          'icon' => 'fas fa-tachometer-alt', 'label' => 'Dashboard'],
+    ['url' => 'accounts.php',       'icon' => 'fas fa-university',     'label' => 'Accounts'],
+    ['url' => 'transactions.php',   'icon' => 'fas fa-exchange-alt',   'label' => 'Transactions'],
+    ['url' => 'categories.php',     'icon' => 'fas fa-tags',           'label' => 'Categories'],
+    ['url' => 'budgets.php',        'icon' => 'fas fa-bullseye',       'label' => 'Budgets'],
+    ['url' => 'journals.php',       'icon' => 'fas fa-book',           'label' => 'Journals'],
+    ['url' => 'reconciliation.php', 'icon' => 'fas fa-check-double',   'label' => 'Reconciliation'],
+    ['url' => 'statements.php',     'icon' => 'fas fa-file-alt',       'label' => 'Statements'],
+    ['url' => 'reports.php',        'icon' => 'fas fa-chart-pie',      'label' => 'Reports'],
 ];
 require_once __DIR__ . '/../../includes/header-module.php';
 

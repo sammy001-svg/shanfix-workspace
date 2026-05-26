@@ -103,6 +103,10 @@ function flashAlert(): string {
     return '';
 }
 
+function flash(): void {
+    echo flashAlert();
+}
+
 function setFlash(string $type, string $message): void {
     $_SESSION['flash'] = compact('type', 'message');
 }

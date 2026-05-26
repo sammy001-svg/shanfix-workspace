@@ -9,6 +9,9 @@ $moduleNav = [
     ['url' => 'clients.php',      'icon' => 'fas fa-users',          'label' => 'Clients'],
     ['url' => 'services.php',     'icon' => 'fas fa-concierge-bell', 'label' => 'Services'],
     ['url' => 'staff.php',        'icon' => 'fas fa-user-tie',       'label' => 'Staff'],
+    ['url' => 'packages.php',     'icon' => 'fas fa-gift',           'label' => 'Packages'],
+    ['url' => 'inventory.php',    'icon' => 'fas fa-boxes',          'label' => 'Inventory'],
+    ['url' => 'loyalty.php',      'icon' => 'fas fa-star',           'label' => 'Loyalty'],
     ['url' => 'reports.php',      'icon' => 'fas fa-chart-bar',      'label' => 'Reports'],
 ];
 

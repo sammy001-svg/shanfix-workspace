@@ -44,8 +44,10 @@ $phone      = $parsed['phone'];
 $meta       = $parsed['metadata'];
 $eventType  = $parsed['event_type'];
 
-$invoiceId  = (int)($meta['invoice_id'] ?? 0);
-$orgId      = (int)($meta['org_id']     ?? 0);
+$invoiceId    = (int)($meta['invoice_id']  ?? 0);
+$orgId        = (int)($meta['org_id']      ?? 0);
+$isWalletTopUp = ($meta['wallet_top_up'] ?? '') === '1';
+$walletTxId   = (int)($meta['wallet_tx_id'] ?? 0);
 
 // ── Log callback to audit table ───────────────────────────────────
 try {
@@ -94,6 +96,76 @@ try {
     // ── Mark mpesa_pending as completed ──────────────────────────
     $pdo->prepare("UPDATE mpesa_pending SET status='completed', mpesa_receipt=? WHERE id=?")
         ->execute([$receipt, $pending['id']]);
+
+    // ── Wallet top-up: credit balance ─────────────────────────────
+    if ($isWalletTopUp && $resolvedOrgId) {
+        $txId = $walletTxId ?: (int)($pdo->prepare("SELECT id FROM wallet_transactions WHERE checkout_id=? LIMIT 1")
+            ->execute([$paymentId]) ? $pdo->query("SELECT id FROM wallet_transactions WHERE checkout_id=" . $pdo->quote($paymentId) . " LIMIT 1")->fetchColumn() : 0);
+
+        $pdo->beginTransaction();
+        try {
+            // Lock org row and get current balance
+            $balRow = $pdo->prepare("SELECT wallet_balance FROM organizations WHERE id=? FOR UPDATE");
+            $balRow->execute([$resolvedOrgId]);
+            $currentBal = (float)($balRow->fetchColumn() ?: 0);
+            $newBal     = $currentBal + (float)$amount;
+
+            $pdo->prepare("UPDATE organizations SET wallet_balance=? WHERE id=?")
+                ->execute([$newBal, $resolvedOrgId]);
+
+            $pdo->prepare("UPDATE wallet_transactions SET status='completed', balance_after=?, mpesa_receipt=?, checkout_id=? WHERE id=?")
+                ->execute([$newBal, $receipt, $paymentId, $txId]);
+
+            $pdo->commit();
+
+            notifyOrg(
+                $resolvedOrgId,
+                'Wallet Topped Up — KES ' . number_format($amount, 2),
+                'Your wallet has been credited KES ' . number_format($amount, 2) . '. New balance: KES ' . number_format($newBal, 2) . '. Receipt: ' . $receipt,
+                'success',
+                APP_URL . '/client/billing.php?tab=wallet'
+            );
+
+            $adminStmt = $pdo->prepare("SELECT name, email FROM users WHERE org_id=? AND role='client_admin' LIMIT 1");
+            $adminStmt->execute([$resolvedOrgId]);
+            $admin = $adminStmt->fetch();
+            if ($admin) {
+                $body = "
+                <div style='font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;background:#f0f4f8;padding:24px'>
+                  <div style='background:#0B2D4E;padding:20px 28px;border-radius:12px 12px 0 0;text-align:center'>
+                    <span style='color:white;font-size:1.2rem;font-weight:800'>" . APP_NAME . "</span>
+                  </div>
+                  <div style='background:white;padding:32px;border-radius:0 0 12px 12px'>
+                    <div style='background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:16px;margin-bottom:20px;text-align:center'>
+                      <div style='font-size:1.5rem;font-weight:800;color:#065f46'>✅ Wallet Topped Up</div>
+                    </div>
+                    <p>Dear <strong>" . htmlspecialchars($admin['name']) . "</strong>,</p>
+                    <table style='width:100%;border-collapse:collapse;margin:16px 0'>
+                      <tr><td style='padding:8px;border:1px solid #eee;color:#666'>M-Pesa Receipt</td><td style='padding:8px;border:1px solid #eee;font-weight:700;color:#065f46'>" . htmlspecialchars($receipt) . "</td></tr>
+                      <tr><td style='padding:8px;border:1px solid #eee;color:#666'>Amount Loaded</td><td style='padding:8px;border:1px solid #eee;font-weight:700;color:#1A8A4E'>KES " . number_format($amount, 2) . "</td></tr>
+                      <tr><td style='padding:8px;border:1px solid #eee;color:#666'>Wallet Balance</td><td style='padding:8px;border:1px solid #eee;font-weight:700'>KES " . number_format($newBal, 2) . "</td></tr>
+                    </table>
+                    <div style='text-align:center;margin:24px 0'>
+                      <a href='" . APP_URL . "/client/billing.php?tab=wallet' style='background:#1A8A4E;color:white;padding:12px 28px;border-radius:50px;text-decoration:none;font-weight:700;display:inline-block'>
+                        View Wallet &rarr;
+                      </a>
+                    </div>
+                  </div>
+                </div>";
+                mailer()->send($admin['email'], 'Wallet Top-Up Confirmed — ' . APP_NAME, $body);
+            }
+
+            $pdo->prepare("INSERT INTO activity_log (action, module, description, ip) VALUES ('wallet_topup','billing',?,?)")
+                ->execute(["Wallet credited KES {$amount}. New balance: KES {$newBal}. Receipt: {$receipt}", $_SERVER['REMOTE_ADDR'] ?? 'webhook']);
+
+        } catch (Exception $ex) {
+            $pdo->rollBack();
+            error_log('[Wallet TopUp Callback] ' . $ex->getMessage());
+        }
+
+        echo json_encode(['received' => true]);
+        exit;
+    }
 
     // ── Mark invoice as paid ──────────────────────────────────────
     if ($resolvedInvoiceId) {
