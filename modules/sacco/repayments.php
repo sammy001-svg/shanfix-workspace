@@ -13,6 +13,9 @@ $moduleNav   = [
     ['url' => 'repayments.php',   'icon' => 'fas fa-undo',             'label' => 'Repayments'],
     ['url' => 'dividends.php',    'icon' => 'fas fa-percentage',       'label' => 'Dividends'],
     ['url' => 'statements.php',   'icon' => 'fas fa-file-invoice',     'label' => 'Statements'],
+    ['url' => 'guarantors.php',   'icon' => 'fas fa-user-shield',      'label' => 'Guarantors'],
+    ['url' => 'penalties.php',    'icon' => 'fas fa-exclamation-circle','label' => 'Penalties'],
+    ['url' => 'communications.php','icon'=> 'fas fa-envelope',          'label' => 'Communications'],
     ['url' => 'reports.php',      'icon' => 'fas fa-chart-bar',        'label' => 'Reports'],
 ];
 

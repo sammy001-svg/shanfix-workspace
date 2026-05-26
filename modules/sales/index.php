@@ -12,7 +12,10 @@ $moduleNav   = [
     ['url' => 'invoices.php',    'icon' => 'fas fa-file-invoice',   'label' => 'Invoices'],
     ['url' => 'fulfillment.php', 'icon' => 'fas fa-truck',          'label' => 'Fulfillment'],
     ['url' => 'commissions.php', 'icon' => 'fas fa-percent',        'label' => 'Commissions'],
-    ['url' => 'reports.php',     'icon' => 'fas fa-chart-bar',      'label' => 'Reports'],
+    ['url' => 'targets.php',     'icon' => 'fas fa-bullseye',        'label' => 'Targets'],
+    ['url' => 'returns.php',     'icon' => 'fas fa-undo-alt',        'label' => 'Returns'],
+    ['url' => 'payments.php',    'icon' => 'fas fa-money-check-alt', 'label' => 'Payments'],
+    ['url' => 'reports.php',     'icon' => 'fas fa-chart-bar',       'label' => 'Reports'],
 ];
 require_once __DIR__ . '/../../includes/header-module.php';
 
