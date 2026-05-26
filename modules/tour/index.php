@@ -10,6 +10,9 @@ $moduleNav   = [
     ['url' => 'bookings.php',     'icon' => 'fas fa-calendar-check', 'label' => 'Bookings'],
     ['url' => 'customers.php',    'icon' => 'fas fa-user-friends',   'label' => 'Customers'],
     ['url' => 'guides.php',       'icon' => 'fas fa-hiking',         'label' => 'Guides'],
+    ['url' => 'itineraries.php', 'icon' => 'fas fa-route',           'label' => 'Itineraries'],
+    ['url' => 'vehicles.php',    'icon' => 'fas fa-bus',             'label' => 'Vehicles'],
+    ['url' => 'payments.php',    'icon' => 'fas fa-money-bill-wave', 'label' => 'Payments'],
     ['url' => 'reports.php',      'icon' => 'fas fa-chart-bar',      'label' => 'Reports'],
 ];
 require_once __DIR__ . '/../../includes/header-module.php';

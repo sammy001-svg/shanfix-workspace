@@ -1,6 +1,5 @@
-<?php
-$moduleSlug='school';$moduleName='School Management';$moduleIcon='fas fa-school';$moduleColor='#1A8A4E';
-$moduleNav=[['url'=>'index.php','icon'=>'fas fa-tachometer-alt','label'=>'Dashboard'],['url'=>'students.php','icon'=>'fas fa-user-graduate','label'=>'Students'],['url'=>'parents.php','icon'=>'fas fa-users','label'=>'Parents'],['url'=>'staff.php','icon'=>'fas fa-chalkboard-teacher','label'=>'Staff'],['url'=>'classes.php','icon'=>'fas fa-chalkboard','label'=>'Classes'],['url'=>'subjects.php','icon'=>'fas fa-book','label'=>'Subjects'],['url'=>'timetable.php','icon'=>'fas fa-calendar-alt','label'=>'Timetable'],['url'=>'attendance.php','icon'=>'fas fa-clipboard-check','label'=>'Attendance'],['url'=>'exams.php','icon'=>'fas fa-file-alt','label'=>'Exams'],['url'=>'results.php','icon'=>'fas fa-chart-line','label'=>'Results'],['url'=>'fees.php','icon'=>'fas fa-money-bill','label'=>'Fees'],['url'=>'library.php','icon'=>'fas fa-book-reader','label'=>'Library'],['url'=>'transport.php','icon'=>'fas fa-bus','label'=>'Transport'],['url'=>'events.php','icon'=>'fas fa-calendar-day','label'=>'Events'],['url'=>'notices.php','icon'=>'fas fa-bullhorn','label'=>'Notices'],['url'=>'grades.php','icon'=>'fas fa-star','label'=>'Grades'],['url'=>'reports.php','icon'=>'fas fa-chart-bar','label'=>'Reports']];
+﻿<?php
+require_once __DIR__ . '/_nav.php';
 
 if($_SERVER['REQUEST_METHOD']==='POST'){
     require_once __DIR__.'/../../config/database.php';
@@ -102,7 +101,7 @@ $relColors=['father'=>'primary','mother'=>'danger','guardian'=>'success','other'
 <!-- Search -->
 <div class="card mb-3"><div class="card-body py-2">
   <form method="GET" class="row g-2 align-items-end">
-    <div class="col-sm-5"><label class="form-label small fw-semibold mb-1">Search</label><input type="text" name="q" class="form-control form-control-sm" value="<?=e($search)?>" placeholder="Name, phone or email…"></div>
+    <div class="col-sm-5"><label class="form-label small fw-semibold mb-1">Search</label><input type="text" name="q" class="form-control form-control-sm" value="<?=e($search)?>" placeholder="Name, phone or emailâ€¦"></div>
     <div class="col-auto"><button class="btn btn-sm btn-success">Search</button><a href="parents.php" class="btn btn-sm btn-outline-secondary ms-1">Clear</a></div>
   </form>
 </div></div>
@@ -118,8 +117,8 @@ $relColors=['father'=>'primary','mother'=>'danger','guardian'=>'success','other'
     <tr>
       <td class="fw-semibold"><a href="parents.php?view=<?=$p['id']?>" class="text-decoration-none" style="color:<?=$moduleColor?>"><?=e($p['first_name'].' '.$p['last_name'])?></a></td>
       <td><span class="badge bg-<?=$rc?>"><?=ucfirst($p['relationship'])?></span></td>
-      <td><?=e($p['phone']??'—')?></td>
-      <td class="small"><?=e($p['email']??'—')?></td>
+      <td><?=e($p['phone']??'â€”')?></td>
+      <td class="small"><?=e($p['email']??'â€”')?></td>
       <td class="text-center"><span class="badge bg-secondary"><?=$p['linked_count']?></span></td>
       <td><?=$p['status']==='active'?'<span class="badge bg-success">Active</span>':'<span class="badge bg-secondary">Inactive</span>'?></td>
       <td class="text-end">
@@ -179,7 +178,7 @@ $relColors=['father'=>'primary','mother'=>'danger','guardian'=>'success','other'
         <form method="POST">
           <?=csrfField()?><input type="hidden" name="action" value="link_student"><input type="hidden" name="parent_id" value="<?=$viewParent['id']?>">
           <div class="mb-2"><label class="form-label small fw-semibold">Student</label>
-            <select name="student_id" class="form-select form-select-sm"><option value="">— Select student —</option><?php foreach($allStudents as $st):?><option value="<?=$st['id']?>"><?=e($st['name'])?> (<?=e($st['admission_no']??'')?>)</option><?php endforeach;?></select>
+            <select name="student_id" class="form-select form-select-sm"><option value="">â€” Select student â€”</option><?php foreach($allStudents as $st):?><option value="<?=$st['id']?>"><?=e($st['name'])?> (<?=e($st['admission_no']??'')?>)</option><?php endforeach;?></select>
           </div>
           <div class="mb-2 form-check"><input type="checkbox" name="is_primary" value="1" class="form-check-input" id="isPrimary"><label class="form-check-label small" for="isPrimary">Primary guardian</label></div>
           <button type="submit" class="btn btn-sm text-white w-100" style="background:<?=$moduleColor?>"><i class="fas fa-link me-1"></i>Link</button>
@@ -199,8 +198,8 @@ $relColors=['father'=>'primary','mother'=>'danger','guardian'=>'success','other'
         <?php else:foreach($linkedStudents as $ls):?>
         <tr>
           <td class="fw-semibold"><a href="students.php?view=<?=$ls['id']?>" class="text-decoration-none" style="color:<?=$moduleColor?>"><?=e($ls['name']??'')?></a></td>
-          <td class="small text-muted"><?=e($ls['admission_no']??'—')?></td>
-          <td><?=e($ls['class_name']??'—')?></td>
+          <td class="small text-muted"><?=e($ls['admission_no']??'â€”')?></td>
+          <td><?=e($ls['class_name']??'â€”')?></td>
           <td class="text-center"><?=$ls['is_primary']?'<span class="badge bg-success">Yes</span>':'<span class="badge bg-secondary">No</span>'?></td>
           <td class="text-end">
             <form method="POST" class="d-inline"><?=csrfField()?><input type="hidden" name="action" value="unlink_student"><input type="hidden" name="parent_id" value="<?=$viewParent['id']?>"><input type="hidden" name="student_id" value="<?=$ls['id']?>">
@@ -262,3 +261,4 @@ document.querySelectorAll('.btn-confirm').forEach(btn=>{btn.addEventListener('cl
 </script>
 <?php $extraJs=ob_get_clean();
 require_once __DIR__.'/../../includes/footer.php';?>
+

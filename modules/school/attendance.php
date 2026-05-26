@@ -1,6 +1,5 @@
-<?php
-$moduleSlug='school';$moduleName='School Management';$moduleIcon='fas fa-school';$moduleColor='#1A8A4E';
-$moduleNav=[['url'=>'index.php','icon'=>'fas fa-tachometer-alt','label'=>'Dashboard'],['url'=>'students.php','icon'=>'fas fa-user-graduate','label'=>'Students'],['url'=>'parents.php','icon'=>'fas fa-users','label'=>'Parents'],['url'=>'staff.php','icon'=>'fas fa-chalkboard-teacher','label'=>'Staff'],['url'=>'classes.php','icon'=>'fas fa-chalkboard','label'=>'Classes'],['url'=>'subjects.php','icon'=>'fas fa-book','label'=>'Subjects'],['url'=>'timetable.php','icon'=>'fas fa-calendar-alt','label'=>'Timetable'],['url'=>'attendance.php','icon'=>'fas fa-clipboard-check','label'=>'Attendance'],['url'=>'exams.php','icon'=>'fas fa-file-alt','label'=>'Exams'],['url'=>'results.php','icon'=>'fas fa-chart-line','label'=>'Results'],['url'=>'fees.php','icon'=>'fas fa-money-bill','label'=>'Fees'],['url'=>'library.php','icon'=>'fas fa-book-reader','label'=>'Library'],['url'=>'transport.php','icon'=>'fas fa-bus','label'=>'Transport'],['url'=>'events.php','icon'=>'fas fa-calendar-day','label'=>'Events'],['url'=>'notices.php','icon'=>'fas fa-bullhorn','label'=>'Notices'],['url'=>'grades.php','icon'=>'fas fa-star','label'=>'Grades'],['url'=>'reports.php','icon'=>'fas fa-chart-bar','label'=>'Reports']];
+﻿<?php
+require_once __DIR__ . '/_nav.php';
 
 if($_SERVER['REQUEST_METHOD']==='POST'){
     require_once __DIR__.'/../../config/database.php';
@@ -56,7 +55,7 @@ $statusColors=['present'=>'success','absent'=>'danger','late'=>'warning','excuse
 <div class="card mb-3"><div class="card-body py-2">
   <form method="GET" class="row g-2 align-items-end">
     <div class="col-sm-3"><label class="form-label small fw-semibold mb-1">Class</label>
-      <select name="class_id" class="form-select form-select-sm" onchange="this.form.submit()"><option value="">— Select class —</option><?php foreach($classes as $c):?><option value="<?=$c['id']?>" <?=$fClass==$c['id']?'selected':''?>><?=e($c['name'])?></option><?php endforeach;?></select>
+      <select name="class_id" class="form-select form-select-sm" onchange="this.form.submit()"><option value="">â€” Select class â€”</option><?php foreach($classes as $c):?><option value="<?=$c['id']?>" <?=$fClass==$c['id']?'selected':''?>><?=e($c['name'])?></option><?php endforeach;?></select>
     </div>
     <div class="col-sm-2"><label class="form-label small fw-semibold mb-1">Mode</label>
       <select name="mode" class="form-select form-select-sm" onchange="this.form.submit()"><option value="mark" <?=$mode==='mark'?'selected':''?>>Mark Attendance</option><option value="view" <?=$mode==='view'?'selected':''?>>View Report</option></select>
@@ -83,7 +82,7 @@ $statusColors=['present'=>'success','absent'=>'danger','late'=>'warning','excuse
 </div>
 <div class="card">
   <div class="card-header d-flex align-items-center justify-content-between">
-    <h6 class="mb-0"><i class="fas fa-clipboard-check me-2" style="color:<?=$moduleColor?>"></i>Mark Attendance — <?=formatDate($fDate)?></h6>
+    <h6 class="mb-0"><i class="fas fa-clipboard-check me-2" style="color:<?=$moduleColor?>"></i>Mark Attendance â€” <?=formatDate($fDate)?></h6>
     <div class="d-flex gap-2">
       <button type="button" class="btn btn-sm btn-outline-success" onclick="markAll('present')">All Present</button>
       <button type="button" class="btn btn-sm btn-outline-danger" onclick="markAll('absent')">All Absent</button>
@@ -103,7 +102,7 @@ $statusColors=['present'=>'success','absent'=>'danger','late'=>'warning','excuse
         <tr>
           <td class="text-muted"><?=$i+1?></td>
           <td class="fw-semibold"><?=e($st['name'])?></td>
-          <td class="small text-muted"><?=e($st['admission_no']??'—')?></td>
+          <td class="small text-muted"><?=e($st['admission_no']??'â€”')?></td>
           <td>
             <div class="d-flex gap-1 att-radio-group" data-student="<?=$st['id']?>">
               <?php foreach(['present'=>'Present','absent'=>'Absent','late'=>'Late','excused'=>'Excused'] as $val=>$lbl):
@@ -129,7 +128,7 @@ $statusColors=['present'=>'success','absent'=>'danger','late'=>'warning','excuse
 <?php else: // VIEW mode ?>
 <div class="row g-3">
   <div class="col-lg-8">
-    <div class="card"><div class="card-header"><h6 class="mb-0"><i class="fas fa-chart-bar me-2" style="color:<?=$moduleColor?>"></i>Attendance Summary — <?=formatDate($fFrom)?> to <?=formatDate($fTo)?></h6></div>
+    <div class="card"><div class="card-header"><h6 class="mb-0"><i class="fas fa-chart-bar me-2" style="color:<?=$moduleColor?>"></i>Attendance Summary â€” <?=formatDate($fFrom)?> to <?=formatDate($fTo)?></h6></div>
     <div class="card-body p-0"><table class="table table-hover data-table mb-0">
       <thead class="table-light"><tr><th>Student</th><th class="text-center">Days</th><th class="text-center text-success">Present</th><th class="text-center text-danger">Absent</th><th class="text-center text-warning">Late</th><th class="text-center text-info">Excused</th><th class="text-center">Rate</th></tr></thead>
       <tbody>
@@ -175,3 +174,4 @@ function markAll(status){
 </script>
 JS;
 require_once __DIR__.'/../../includes/footer.php';?>
+

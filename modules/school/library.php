@@ -1,6 +1,5 @@
-<?php
-$moduleSlug='school';$moduleName='School Management';$moduleIcon='fas fa-school';$moduleColor='#1A8A4E';
-$moduleNav=[['url'=>'index.php','icon'=>'fas fa-tachometer-alt','label'=>'Dashboard'],['url'=>'students.php','icon'=>'fas fa-user-graduate','label'=>'Students'],['url'=>'parents.php','icon'=>'fas fa-users','label'=>'Parents'],['url'=>'staff.php','icon'=>'fas fa-chalkboard-teacher','label'=>'Staff'],['url'=>'classes.php','icon'=>'fas fa-chalkboard','label'=>'Classes'],['url'=>'subjects.php','icon'=>'fas fa-book','label'=>'Subjects'],['url'=>'timetable.php','icon'=>'fas fa-calendar-alt','label'=>'Timetable'],['url'=>'attendance.php','icon'=>'fas fa-clipboard-check','label'=>'Attendance'],['url'=>'exams.php','icon'=>'fas fa-file-alt','label'=>'Exams'],['url'=>'results.php','icon'=>'fas fa-chart-line','label'=>'Results'],['url'=>'fees.php','icon'=>'fas fa-money-bill','label'=>'Fees'],['url'=>'library.php','icon'=>'fas fa-book-reader','label'=>'Library'],['url'=>'transport.php','icon'=>'fas fa-bus','label'=>'Transport'],['url'=>'events.php','icon'=>'fas fa-calendar-day','label'=>'Events'],['url'=>'notices.php','icon'=>'fas fa-bullhorn','label'=>'Notices'],['url'=>'grades.php','icon'=>'fas fa-star','label'=>'Grades'],['url'=>'reports.php','icon'=>'fas fa-chart-bar','label'=>'Reports']];
+﻿<?php
+require_once __DIR__ . '/_nav.php';
 
 if($_SERVER['REQUEST_METHOD']==='POST'){
     require_once __DIR__.'/../../config/database.php';
@@ -44,7 +43,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         if($avail<1){setFlash('error','No copies available.');redirect('library.php?tab=loans');}
         $pdo->prepare("INSERT INTO sch_book_loans (org_id,book_id,borrower_type,borrower_id,borrower_name,issue_date,due_date,notes,created_by) VALUES (?,?,?,?,?,?,?,?,?)")
            ->execute([$orgId,$bookId,$borrowerType,$borrowerId,$borrowerName,$issueDate,$dueDate,$notes,$user['id']]);
-        $pdo->prepare("UPDATE sch_books SET available=available-1 WHERE id=? AND available>0")->execute([$bookId]);
+        $pdo->prepare("UPDATE sch_books SET available=available-1 WHERE id=? AND org_id=? AND available>0")->execute([$bookId,$orgId]);
         setFlash('success','Book issued successfully.');redirect('library.php?tab=loans');
     }
 
@@ -52,8 +51,8 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         $loanId=(int)($_POST['loan_id']??0);$returnDate=sanitize($_POST['return_date']??date('Y-m-d'));$fine=(float)($_POST['fine_amount']??0);$finePaid=(int)($_POST['fine_paid']??0);
         $s=$pdo->prepare("SELECT * FROM sch_book_loans WHERE id=? AND org_id=?");$s->execute([$loanId,$orgId]);$loan=$s->fetch();
         if(!$loan||$loan['status']==='returned'){setFlash('error','Invalid loan.');redirect('library.php?tab=loans');}
-        $pdo->prepare("UPDATE sch_book_loans SET return_date=?,fine_amount=?,fine_paid=?,status='returned' WHERE id=?")->execute([$returnDate,$fine,$finePaid,$loanId]);
-        $pdo->prepare("UPDATE sch_books SET available=available+1 WHERE id=?")->execute([$loan['book_id']]);
+        $pdo->prepare("UPDATE sch_book_loans SET return_date=?,fine_amount=?,fine_paid=?,status='returned' WHERE id=? AND org_id=?")->execute([$returnDate,$fine,$finePaid,$loanId,$orgId]);
+        $pdo->prepare("UPDATE sch_books SET available=available+1 WHERE id=? AND org_id=?")->execute([$loan['book_id'],$orgId]);
         setFlash('success','Book returned.');redirect('library.php?tab=loans');
     }
 }
@@ -108,7 +107,7 @@ $staff=[];try{$s=$pdo->prepare("SELECT id,CONCAT(first_name,' ',last_name) AS na
 <div class="card mb-3"><div class="card-body py-2">
   <form method="GET" class="row g-2 align-items-end">
     <input type="hidden" name="tab" value="catalog">
-    <div class="col-sm-5"><label class="form-label small fw-semibold mb-1">Search</label><input type="text" name="q" class="form-control form-control-sm" value="<?=e($search)?>" placeholder="Title, author, ISBN, category…"></div>
+    <div class="col-sm-5"><label class="form-label small fw-semibold mb-1">Search</label><input type="text" name="q" class="form-control form-control-sm" value="<?=e($search)?>" placeholder="Title, author, ISBN, categoryâ€¦"></div>
     <div class="col-auto"><button class="btn btn-sm btn-success">Search</button><a href="library.php" class="btn btn-sm btn-outline-secondary ms-1">Clear</a></div>
   </form>
 </div></div>
@@ -123,12 +122,12 @@ $staff=[];try{$s=$pdo->prepare("SELECT id,CONCAT(first_name,' ',last_name) AS na
     <?php else:foreach($books as $bk):$avC=$bk['available']>0?'success':'danger';?>
     <tr>
       <td class="fw-semibold"><?=e($bk['title'])?></td>
-      <td><?=e($bk['author']??'—')?></td>
-      <td><?=e($bk['category']??'—')?></td>
-      <td class="small text-muted"><?=e($bk['isbn']??'—')?></td>
+      <td><?=e($bk['author']??'â€”')?></td>
+      <td><?=e($bk['category']??'â€”')?></td>
+      <td class="small text-muted"><?=e($bk['isbn']??'â€”')?></td>
       <td class="text-center"><?=$bk['total_copies']?></td>
       <td class="text-center"><span class="badge bg-<?=$avC?>"><?=$bk['available']?></span></td>
-      <td class="small"><?=e($bk['shelf']??'—')?></td>
+      <td class="small"><?=e($bk['shelf']??'â€”')?></td>
       <td><?=$bk['status']==='active'?'<span class="badge bg-success">Active</span>':'<span class="badge bg-secondary">Retired</span>'?></td>
       <td class="text-end">
         <button class="btn btn-xs btn-outline-secondary me-1 btn-edit-book"
@@ -159,7 +158,7 @@ $staff=[];try{$s=$pdo->prepare("SELECT id,CONCAT(first_name,' ',last_name) AS na
     <?php if(empty($loans)):?><tr><td colspan="7" class="text-center text-muted py-4">No active loans.</td></tr>
     <?php else:foreach($loans as $ln):$overdue=$ln['due_date']<date('Y-m-d');$statusC=$overdue?'danger':'warning';$statusL=$overdue?'Overdue':'Issued';?>
     <tr class="<?=$overdue?'table-danger-subtle':''?>">
-      <td class="fw-semibold"><?=e($ln['book_title']??'—')?></td>
+      <td class="fw-semibold"><?=e($ln['book_title']??'â€”')?></td>
       <td><?=e($ln['borrower_name'])?></td>
       <td><span class="badge bg-<?=$ln['borrower_type']==='student'?'primary':'info'?>"><?=ucfirst($ln['borrower_type'])?></span></td>
       <td class="small"><?=formatDate($ln['issue_date'])?></td>
@@ -203,14 +202,14 @@ $staff=[];try{$s=$pdo->prepare("SELECT id,CONCAT(first_name,' ',last_name) AS na
     <?=csrfField()?><input type="hidden" name="action" value="issue_book">
     <div class="row g-3">
       <div class="col-12"><label class="form-label fw-semibold">Book <span class="text-danger">*</span></label>
-        <select name="book_id" class="form-select"><option value="">— Select Book —</option><?php foreach($books as $bk):if($bk['available']>0&&$bk['status']==='active'):?><option value="<?=$bk['id']?>"><?=e($bk['title'])?> (<?=$bk['available']?> avail.)</option><?php endif;endforeach;?></select>
+        <select name="book_id" class="form-select"><option value="">â€” Select Book â€”</option><?php foreach($books as $bk):if($bk['available']>0&&$bk['status']==='active'):?><option value="<?=$bk['id']?>"><?=e($bk['title'])?> (<?=$bk['available']?> avail.)</option><?php endif;endforeach;?></select>
       </div>
       <div class="col-md-6"><label class="form-label fw-semibold">Borrower Type</label>
         <select name="borrower_type" id="borrowerType" class="form-select" onchange="updateBorrower()"><option value="student">Student</option><option value="staff">Staff</option></select>
       </div>
       <div class="col-md-6"><label class="form-label fw-semibold">Borrower</label>
         <select name="borrower_id" id="borrowerSel" class="form-select" onchange="setBorrowerName(this)">
-          <option value="">— Select —</option>
+          <option value="">â€” Select â€”</option>
           <?php foreach($students as $st):?><option value="<?=$st['id']?>" class="opt-student" data-name="<?=e($st['name'])?>"><?=e($st['name'])?> (<?=e($st['admission_no']??'')?>)</option><?php endforeach;?>
           <?php foreach($staff as $sf):?><option value="<?=$sf['id']?>" class="opt-staff" data-name="<?=e($sf['name'])?>" style="display:none"><?=e($sf['name'])?></option><?php endforeach;?>
         </select>
@@ -275,3 +274,4 @@ document.querySelectorAll('.btn-confirm').forEach(btn=>{btn.addEventListener('cl
 </script>
 <?php $extraJs=ob_get_clean();
 require_once __DIR__.'/../../includes/footer.php';?>
+

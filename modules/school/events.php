@@ -1,6 +1,5 @@
-<?php
-$moduleSlug='school';$moduleName='School Management';$moduleIcon='fas fa-school';$moduleColor='#1A8A4E';
-$moduleNav=[['url'=>'index.php','icon'=>'fas fa-tachometer-alt','label'=>'Dashboard'],['url'=>'students.php','icon'=>'fas fa-user-graduate','label'=>'Students'],['url'=>'parents.php','icon'=>'fas fa-users','label'=>'Parents'],['url'=>'staff.php','icon'=>'fas fa-chalkboard-teacher','label'=>'Staff'],['url'=>'classes.php','icon'=>'fas fa-chalkboard','label'=>'Classes'],['url'=>'subjects.php','icon'=>'fas fa-book','label'=>'Subjects'],['url'=>'timetable.php','icon'=>'fas fa-calendar-alt','label'=>'Timetable'],['url'=>'attendance.php','icon'=>'fas fa-clipboard-check','label'=>'Attendance'],['url'=>'exams.php','icon'=>'fas fa-file-alt','label'=>'Exams'],['url'=>'results.php','icon'=>'fas fa-chart-line','label'=>'Results'],['url'=>'fees.php','icon'=>'fas fa-money-bill','label'=>'Fees'],['url'=>'library.php','icon'=>'fas fa-book-reader','label'=>'Library'],['url'=>'transport.php','icon'=>'fas fa-bus','label'=>'Transport'],['url'=>'events.php','icon'=>'fas fa-calendar-day','label'=>'Events'],['url'=>'notices.php','icon'=>'fas fa-bullhorn','label'=>'Notices'],['url'=>'grades.php','icon'=>'fas fa-star','label'=>'Grades'],['url'=>'reports.php','icon'=>'fas fa-chart-bar','label'=>'Reports']];
+﻿<?php
+require_once __DIR__ . '/_nav.php';
 
 if($_SERVER['REQUEST_METHOD']==='POST'){
     require_once __DIR__.'/../../config/database.php';
@@ -110,9 +109,9 @@ $statusColors=['upcoming'=>'primary','ongoing'=>'success','completed'=>'secondar
     <tr>
       <td class="fw-semibold"><i class="<?=$ti?> me-1 text-<?=$tc?>"></i><?=e($ev['title'])?><?php if($ev['description']):?><div class="small text-muted text-truncate" style="max-width:200px"><?=e($ev['description'])?></div><?php endif;?></td>
       <td><span class="badge bg-<?=$tc?>"><?=ucfirst($ev['event_type'])?></span></td>
-      <td class="small"><?=formatDate($ev['start_date'])?><?=$ev['end_date']&&$ev['end_date']!==$ev['start_date']?' – '.formatDate($ev['end_date']):''?></td>
-      <td class="small text-muted"><?=$ev['start_time']?date('H:i',strtotime($ev['start_time'])):''?><?=$ev['end_time']?' – '.date('H:i',strtotime($ev['end_time'])):''?></td>
-      <td class="small"><?=e($ev['venue']??'—')?></td>
+      <td class="small"><?=formatDate($ev['start_date'])?><?=$ev['end_date']&&$ev['end_date']!==$ev['start_date']?' â€“ '.formatDate($ev['end_date']):''?></td>
+      <td class="small text-muted"><?=$ev['start_time']?date('H:i',strtotime($ev['start_time'])):''?><?=$ev['end_time']?' â€“ '.date('H:i',strtotime($ev['end_time'])):''?></td>
+      <td class="small"><?=e($ev['venue']??'â€”')?></td>
       <td><span class="badge bg-light text-dark border"><?=ucfirst($ev['audience'])?></span></td>
       <td>
         <form method="POST" class="d-inline">
@@ -190,3 +189,4 @@ document.querySelectorAll('.btn-confirm').forEach(btn=>{btn.addEventListener('cl
 </script>
 <?php $extraJs=ob_get_clean();
 require_once __DIR__.'/../../includes/footer.php';?>
+

@@ -1,7 +1,7 @@
 <?php
 // ── Database & App Configuration ──────────────────────────────
 define('DB_HOST', 'localhost');
-define('DB_USER', 'root');          // Change for production
+define('DB_USER', 'root');          // Change for production: create a limited MySQL user
 define('DB_PASS', '');              // Change for production
 define('DB_NAME', 'shanfix_db');
 define('DB_CHARSET', 'utf8mb4');
@@ -14,6 +14,17 @@ define('APP_YEAR',    date('Y'));
 define('CURRENCY',    'KES');
 define('CURRENCY_SYMBOL', 'KES ');
 
+// ── Environment & Security ─────────────────────────────────────
+define('APP_ENV', getenv('APP_ENV') ?: 'development'); // Set to 'production' on cPanel
+
+/**
+ * Encryption key for AES-256-CBC field-level PII encryption.
+ * PRODUCTION: set the APP_ENCRYPT_KEY environment variable in cPanel or .env
+ * and NEVER commit the real key to version control.
+ * Generate with: php -r "echo bin2hex(random_bytes(32));" (64-char hex string)
+ */
+define('ENCRYPTION_KEY', getenv('APP_ENCRYPT_KEY') ?: 'CHANGE_ME_BEFORE_GO_LIVE_USE_64CHAR_HEX');
+
 // Session settings
 define('SESSION_LIFETIME', 3600 * 8); // 8 hours
 
@@ -24,6 +35,7 @@ try {
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES   => false,
+        PDO::ATTR_PERSISTENT         => true,   // Reuse connections across requests
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ];
     $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
@@ -39,7 +51,10 @@ try {
     </div></body></html>');
 }
 
-define('APP_ENV', 'development'); // Change to 'production' on cPanel
+
 
 // Load system settings from DB (defines SMTP_HOST, SMTP_PORT, etc.)
 require_once __DIR__ . '/../includes/settings.php';
+
+// Load encryption helpers (AES-256-CBC PII protection)
+require_once __DIR__ . '/../includes/encryption.php';

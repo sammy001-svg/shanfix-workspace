@@ -323,3 +323,98 @@ function countRows(string $table, string $where = '1=1', array $params = []): in
         return 0;
     }
 }
+
+// ── Tenant Isolation Guards ────────────────────────────────────
+
+/**
+ * Assert a row in $table with primary key $id belongs to $orgId.
+ * If not found or org mismatch, returns false (caller should abort/redirect).
+ * Optionally pass $orgColumn if the column isn't named 'org_id'.
+ *
+ * Usage:
+ *   if (!assertOrgOwnership('crm_contacts', $id, $orgId)) {
+ *       http_response_code(403); exit('Forbidden');
+ *   }
+ */
+function assertOrgOwnership(string $table, int $id, int $orgId, string $orgColumn = 'org_id'): bool {
+    global $pdo;
+    if ($id <= 0 || $orgId <= 0) return false;
+    try {
+        $stmt = $pdo->prepare("SELECT id FROM `{$table}` WHERE id=? AND `{$orgColumn}`=? LIMIT 1");
+        $stmt->execute([$id, $orgId]);
+        return (bool)$stmt->fetch();
+    } catch (Exception $e) {
+        error_log("[assertOrgOwnership] {$table}#{$id}: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Assert a record belongs to the current session org via a foreign key lookup.
+ * Used for sub-tables that don't have org_id directly (e.g. exam_schedule → exams).
+ *
+ * Example: assertParentOwnership('sch_exams', 'exam_id', $schedId, $orgId)
+ * → fetches sch_exam_schedule WHERE id=$schedId, gets its exam_id,
+ *   then checks sch_exams WHERE id=exam_id AND org_id=$orgId
+ */
+function assertParentOwnership(
+    string $parentTable,
+    string $foreignKey,
+    string $childTable,
+    int    $childId,
+    int    $orgId,
+    string $orgColumn = 'org_id'
+): bool {
+    global $pdo;
+    if ($childId <= 0 || $orgId <= 0) return false;
+    try {
+        $child = $pdo->prepare("SELECT `{$foreignKey}` FROM `{$childTable}` WHERE id=? LIMIT 1");
+        $child->execute([$childId]);
+        $row = $child->fetch();
+        if (!$row) return false;
+        $parentId = (int)$row[$foreignKey];
+        return assertOrgOwnership($parentTable, $parentId, $orgId, $orgColumn);
+    } catch (Exception $e) {
+        error_log("[assertParentOwnership] {$childTable}#{$childId}: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Abort with HTTP 403 if assertOrgOwnership fails.
+ * Convenience wrapper for POST handlers.
+ */
+function requireOrgOwnership(string $table, int $id, int $orgId, string $orgColumn = 'org_id'): void {
+    if (!assertOrgOwnership($table, $id, $orgId, $orgColumn)) {
+        http_response_code(403);
+        setFlash('danger', 'Access denied — you do not have permission to modify this record.');
+        // Try to redirect back; fall back to dashboard
+        $ref = $_SERVER['HTTP_REFERER'] ?? (APP_URL . '/client/index.php');
+        header("Location: $ref");
+        exit;
+    }
+}
+
+/**
+ * Returns the current session org_id as int. Dies if session not set.
+ */
+function safeOrgId(): int {
+    $id = (int)($_SESSION['org_id'] ?? 0);
+    if ($id <= 0) {
+        http_response_code(403);
+        die('Session error: org not set.');
+    }
+    return $id;
+}
+
+/**
+ * Returns the current session user_id as int. Dies if session not set.
+ */
+function safeUserId(): int {
+    $id = (int)($_SESSION['user_id'] ?? 0);
+    if ($id <= 0) {
+        http_response_code(403);
+        die('Session error: user not set.');
+    }
+    return $id;
+}

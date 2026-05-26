@@ -1,17 +1,16 @@
 <?php
-$moduleSlug  = 'school';
-$moduleName  = 'School Management';
-$moduleIcon  = 'fas fa-school';
-$moduleColor = '#1A8A4E';
-$moduleNav=[['url'=>'index.php','icon'=>'fas fa-tachometer-alt','label'=>'Dashboard'],['url'=>'students.php','icon'=>'fas fa-user-graduate','label'=>'Students'],['url'=>'parents.php','icon'=>'fas fa-users','label'=>'Parents'],['url'=>'staff.php','icon'=>'fas fa-chalkboard-teacher','label'=>'Staff'],['url'=>'classes.php','icon'=>'fas fa-chalkboard','label'=>'Classes'],['url'=>'subjects.php','icon'=>'fas fa-book','label'=>'Subjects'],['url'=>'timetable.php','icon'=>'fas fa-calendar-alt','label'=>'Timetable'],['url'=>'attendance.php','icon'=>'fas fa-clipboard-check','label'=>'Attendance'],['url'=>'exams.php','icon'=>'fas fa-file-alt','label'=>'Exams'],['url'=>'results.php','icon'=>'fas fa-chart-line','label'=>'Results'],['url'=>'fees.php','icon'=>'fas fa-money-bill','label'=>'Fees'],['url'=>'library.php','icon'=>'fas fa-book-reader','label'=>'Library'],['url'=>'transport.php','icon'=>'fas fa-bus','label'=>'Transport'],['url'=>'events.php','icon'=>'fas fa-calendar-day','label'=>'Events'],['url'=>'notices.php','icon'=>'fas fa-bullhorn','label'=>'Notices'],['url'=>'grades.php','icon'=>'fas fa-star','label'=>'Grades'],['url'=>'reports.php','icon'=>'fas fa-chart-bar','label'=>'Reports']];
+require_once __DIR__ . '/_nav.php';
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../includes/functions.php';
+if (session_status() === PHP_SESSION_NONE) session_start();
+requireLogin();
 
+$user = currentUser();
+$orgId = (int)$user['org_id'];
+
+// ── POST Handlers ─────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    require_once __DIR__ . '/../../config/database.php';
-    require_once __DIR__ . '/../../includes/functions.php';
-    if (session_status() === PHP_SESSION_NONE) session_start();
     verifyCsrf();
-    $user = currentUser();
-    $orgId = (int)$user['org_id'];
     $action = $_POST['action'] ?? '';
 
     if ($action === 'save') {
@@ -29,13 +28,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $status = in_array($_POST['status'] ?? '', ['active', 'inactive', 'graduated', 'transferred']) ? $_POST['status'] : 'active';
         $admittedOn = $_POST['admitted_on'] ?? date('Y-m-d');
 
+        // New International Fields
+        $nationality = sanitize($_POST['nationality'] ?? '');
+        $passportNo = sanitize($_POST['passport_no'] ?? '');
+        $visaExpiry = $_POST['visa_expiry'] ?: null;
+        $curriculum = in_array($_POST['curriculum'] ?? '', ['IB','IGCSE','Cambridge','CBC','AP','Other']) ? $_POST['curriculum'] : 'IB';
+        $motherTongue = sanitize($_POST['mother_tongue'] ?? '');
+        $prevSchool = sanitize($_POST['previous_school'] ?? '');
+        $medNotes = sanitize($_POST['medical_conditions'] ?? '');
+        $learningSupport = (int)($_POST['learning_support'] ?? 0);
+        $emergName = sanitize($_POST['emergency_contact'] ?? '');
+        $emergPhone = sanitize($_POST['emergency_phone'] ?? '');
+
+        // Photo Upload Handling
+        $photoPath = null;
+        if (!empty($_FILES['photo']['tmp_name'])) {
+            $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
+            if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+                if ($_FILES['photo']['size'] <= 2 * 1024 * 1024) {
+                    $filename = 'student_' . $orgId . '_' . time() . '.' . $ext;
+                    $dest = __DIR__ . '/../../assets/uploads/students/' . $filename;
+                    if (move_uploaded_file($_FILES['photo']['tmp_name'], $dest)) {
+                        $photoPath = 'assets/uploads/students/' . $filename;
+                    }
+                }
+            }
+        }
+
         if ($id > 0) {
-            $stmt = $pdo->prepare("UPDATE sch_students SET admission_no = ?, first_name = ?, last_name = ?, gender = ?, dob = ?, class_id = ?, parent_name = ?, parent_phone = ?, parent_email = ?, address = ?, status = ?, admitted_on = ? WHERE id = ? AND org_id = ?");
-            $stmt->execute([$admNo, $firstName, $lastName, $gender, $dob, $classId, $parentName, $parentPhone, $parentEmail, $address, $status, $admittedOn, $id, $orgId]);
+            requireOrgOwnership('sch_students', $id, $orgId);
+            $photoSet = $photoPath ? ", photo=?" : "";
+            $params = [
+                $admNo, $firstName, $lastName, $gender, $dob, $classId, 
+                $parentName, $parentPhone, $parentEmail, $address, $status, $admittedOn,
+                $nationality, $passportNo, $visaExpiry, $curriculum, $motherTongue, $prevSchool,
+                $medNotes, $learningSupport, $emergName, $emergPhone, $id, $orgId
+            ];
+            if ($photoPath) array_splice($params, 22, 0, [$photoPath]);
+
+            $sql = "UPDATE sch_students SET 
+                    admission_no = ?, first_name = ?, last_name = ?, gender = ?, dob = ?, class_id = ?, 
+                    parent_name = ?, parent_phone = ?, parent_email = ?, address = ?, status = ?, admitted_on = ?,
+                    nationality = ?, passport_no = ?, visa_expiry = ?, curriculum = ?, mother_tongue = ?, previous_school = ?,
+                    medical_conditions = ?, learning_support = ?, emergency_contact = ?, emergency_phone = ? {$photoSet} 
+                    WHERE id = ? AND org_id = ?";
+            
+            $pdo->prepare($sql)->execute($params);
             setFlash('success', 'Student details updated successfully.');
         } else {
-            $stmt = $pdo->prepare("INSERT INTO sch_students (org_id, admission_no, first_name, last_name, gender, dob, class_id, parent_name, parent_phone, parent_email, address, status, admitted_on) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$orgId, $admNo, $firstName, $lastName, $gender, $dob, $classId, $parentName, $parentPhone, $parentEmail, $address, $status, $admittedOn]);
+            $sql = "INSERT INTO sch_students (
+                        org_id, admission_no, first_name, last_name, gender, dob, class_id, 
+                        parent_name, parent_phone, parent_email, address, status, admitted_on,
+                        nationality, passport_no, visa_expiry, curriculum, mother_tongue, previous_school,
+                        medical_conditions, learning_support, emergency_contact, emergency_phone, photo
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            
+            $pdo->prepare($sql)->execute([
+                $orgId, $admNo, $firstName, $lastName, $gender, $dob, $classId, 
+                $parentName, $parentPhone, $parentEmail, $address, $status, $admittedOn,
+                $nationality, $passportNo, $visaExpiry, $curriculum, $motherTongue, $prevSchool,
+                $medNotes, $learningSupport, $emergName, $emergPhone, $photoPath
+            ]);
             setFlash('success', "Student '$firstName $lastName' enrolled successfully.");
         }
         logActivity($id > 0 ? 'update' : 'create', 'school', "Student: $firstName $lastName (Adm: $admNo)");
@@ -44,18 +97,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
+        requireOrgOwnership('sch_students', $id, $orgId);
         $pdo->prepare("DELETE FROM sch_students WHERE id = ? AND org_id = ?")->execute([$id, $orgId]);
         setFlash('success', 'Student record removed.');
         redirect('students.php');
     }
 }
 
-require_once __DIR__ . '/../../includes/header-module.php';
-$user = currentUser();
-$orgId = (int)$user['org_id'];
+// ── GET Handlers ──────────────────────────────────────────────────
+if (isset($_GET['fetch_details'])) {
+    $sid = (int)$_GET['fetch_details'];
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM sch_students WHERE id = ? AND org_id = ?");
+        $stmt->execute([$sid, $orgId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+            header('Content-Type: application/json');
+            echo json_encode($row);
+            exit;
+        }
+    } catch (Exception $e) {}
+}
 
+// Filters and loaders
 $fClass = $_GET['class_id'] ?? '';
 $fStatus = $_GET['status'] ?? '';
+$fCurr = $_GET['curriculum'] ?? '';
 $fQ = trim($_GET['q'] ?? '');
 
 $where = 's.org_id = ?';
@@ -68,6 +135,10 @@ if ($fClass !== '') {
 if ($fStatus !== '') {
     $where .= ' AND s.status = ?';
     $params[] = $fStatus;
+}
+if ($fCurr !== '') {
+    $where .= ' AND s.curriculum = ?';
+    $params[] = $fCurr;
 }
 if ($fQ !== '') {
     $where .= ' AND (s.admission_no LIKE ? OR s.first_name LIKE ? OR s.last_name LIKE ? OR s.parent_name LIKE ?)';
@@ -93,36 +164,25 @@ try {
     $classesList = $stmt->fetchAll();
 } catch (Exception $e) {}
 
-// Detail mapping for AJAX edit
-if (isset($_GET['fetch_details'])) {
-    $sid = (int)$_GET['fetch_details'];
-    try {
-        $stmt = $pdo->prepare("SELECT * FROM sch_students WHERE id = ? AND org_id = ?");
-        $stmt->execute([$sid, $orgId]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($row) {
-            header('Content-Type: application/json');
-            echo json_encode($row);
-            exit;
-        }
-    } catch (Exception $e) {}
-}
+require_once __DIR__ . '/../../includes/header-module.php';
 ?>
+<?= flashAlert() ?>
 
 <div class="page-header d-flex align-items-center justify-content-between mb-4">
   <div>
     <h4 class="mb-1"><i class="fas fa-user-graduate me-2" style="color:<?= $moduleColor ?>"></i>Student Directory</h4>
-    <p class="text-muted mb-0">Enroll new students, assign classes, and manage parent/guardian profiles</p>
+    <p class="text-muted mb-0">Enroll new students, assign curriculum plans, and manage parent profiles</p>
   </div>
   <button class="btn text-white" style="background:<?= $moduleColor ?>" data-bs-toggle="modal" data-bs-target="#stdModal" onclick="openAdd()"><i class="fas fa-plus me-2"></i>Enroll Student</button>
 </div>
 
+<!-- Filters -->
 <div class="card mb-3">
   <div class="card-body py-2">
     <form method="GET" class="row g-2 align-items-end">
-      <div class="col-sm-5">
+      <div class="col-sm-3">
         <label class="form-label small fw-semibold mb-1">Search Directory</label>
-        <input type="text" name="q" class="form-control form-control-sm" placeholder="Admission number, student or parent name…" value="<?= e($fQ) ?>">
+        <input type="text" name="q" class="form-control form-control-sm" placeholder="Admission number, name..." value="<?= e($fQ) ?>">
       </div>
       <div class="col-sm-3">
         <label class="form-label small fw-semibold mb-1">Academic Class</label>
@@ -131,6 +191,13 @@ if (isset($_GET['fetch_details'])) {
           <?php foreach ($classesList as $c): ?>
           <option value="<?= $c['id'] ?>" <?= $fClass == $c['id'] ? 'selected' : '' ?>><?= e($c['name']) ?></option>
           <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label small fw-semibold mb-1">Curriculum</label>
+        <select name="curriculum" class="form-select form-select-sm">
+          <option value="">All Curricula</option>
+          <?php foreach(['IB','IGCSE','Cambridge','CBC','AP','Other'] as $c): ?><option value="<?=$c?>" <?=$fCurr===$c?'selected':''?>><?=$c?></option><?php endforeach; ?>
         </select>
       </div>
       <div class="col-sm-2">
@@ -151,6 +218,7 @@ if (isset($_GET['fetch_details'])) {
   </div>
 </div>
 
+<!-- Grid / Table -->
 <div class="card">
   <div class="card-header d-flex align-items-center justify-content-between">
     <h6 class="mb-0 text-dark fw-bold"><i class="fas fa-user-graduate me-2 text-success"></i>Students List</h6>
@@ -161,33 +229,45 @@ if (isset($_GET['fetch_details'])) {
       <table class="table table-hover data-table mb-0">
         <thead class="table-light">
           <tr>
+            <th>Photo</th>
             <th>Adm No</th>
             <th>Student Name</th>
             <th>Class</th>
-            <th>Gender</th>
+            <th>Curriculum</th>
             <th>Parent / Guardian</th>
-            <th>Phone</th>
+            <th>Nationality</th>
             <th>Status</th>
             <th class="text-center">Actions</th>
           </tr>
         </thead>
         <tbody>
           <?php if (empty($studentsList)): ?>
-          <tr><td colspan="8" class="text-center text-muted py-5"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>No students found in directory.</td></tr>
+          <tr><td colspan="9" class="text-center text-muted py-5"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>No students found in directory.</td></tr>
           <?php else: foreach ($studentsList as $s): 
             $badges = ['active' => 'success', 'inactive' => 'secondary', 'graduated' => 'primary', 'transferred' => 'warning'];
             $bg = $badges[$s['status']] ?? 'info';
+            $photoUrl = $s['photo'] ? APP_URL . '/' . e($s['photo']) : null;
           ?>
           <tr>
+            <td>
+              <?php if ($photoUrl): ?>
+              <img src="<?=$photoUrl?>" class="rounded-circle" width="38" height="38" style="object-fit:cover" alt="">
+              <?php else: ?>
+              <div class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center fw-bold" style="width:38px;height:38px;font-size:.8rem"><?=strtoupper(substr($s['first_name'],0,1).substr($s['last_name'],0,1))?></div>
+              <?php endif; ?>
+            </td>
             <td class="fw-semibold text-dark"><?= e($s['admission_no'] ?: '—') ?></td>
             <td>
               <div class="fw-semibold text-dark"><?= e($s['first_name'] . ' ' . $s['last_name']) ?></div>
               <small class="text-muted"><i class="fas fa-baby me-1"></i>DOB: <?= formatDate($s['dob']) ?></small>
             </td>
             <td><span class="badge bg-light text-dark border"><?= e($s['class_name'] ?: 'Unassigned') ?></span></td>
-            <td><?= ucfirst($s['gender']) ?></td>
-            <td class="fw-semibold"><?= e($s['parent_name'] ?: '—') ?></td>
-            <td><?= e($s['parent_phone'] ?: '—') ?></td>
+            <td><span class="badge bg-primary"><?= e($s['curriculum'] ?: 'IB') ?></span></td>
+            <td>
+              <div class="fw-semibold"><?= e($s['parent_name'] ?: '—') ?></div>
+              <small class="text-muted"><?= e($s['parent_phone'] ?: '') ?></small>
+            </td>
+            <td><?= e(ucfirst($s['nationality'] ?: '—')) ?></td>
             <td><span class="badge bg-<?= $bg ?>"><?= ucfirst($s['status']) ?></span></td>
             <td class="text-center">
               <div class="btn-group btn-group-sm">
@@ -203,80 +283,155 @@ if (isset($_GET['fetch_details'])) {
   </div>
 </div>
 
-<!-- Modal -->
+<!-- tabbed Modal -->
 <div class="modal fade" id="stdModal" tabindex="-1" data-bs-backdrop="static"><div class="modal-dialog modal-lg"><div class="modal-content">
-  <form method="POST"><?= csrfField() ?><input type="hidden" name="action" value="save"><input type="hidden" name="id" id="stdId" value="0">
+  <form method="POST" enctype="multipart/form-data"><?= csrfField() ?><input type="hidden" name="action" value="save"><input type="hidden" name="id" id="stdId" value="0">
   <div class="modal-header text-white" style="background:<?= $moduleColor ?>">
     <h5 class="modal-title" id="stdTitle"><i class="fas fa-user-graduate me-2"></i>Enroll Student</h5>
     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
   </div>
   <div class="modal-body">
-    <h6 class="fw-bold mb-3 border-bottom pb-1 text-success"><i class="fas fa-baby me-2"></i>Student Demographics</h6>
-    <div class="row g-3 mb-4">
-      <div class="col-md-4">
-        <label class="form-label fw-semibold">Admission No <span class="text-danger">*</span></label>
-        <input type="text" name="admission_no" id="stdAdm" class="form-control" required placeholder="e.g. ADM-2026-004">
+    <!-- Tabs Header -->
+    <ul class="nav nav-tabs mb-3" id="studentTabs">
+      <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-basic" type="button">Basic Details</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-intl" type="button">International & Medical</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-family" type="button">Parent & Emergency</button></li>
+    </ul>
+
+    <!-- Tabs Content -->
+    <div class="tab-content">
+      <!-- Basic Details -->
+      <div class="tab-pane fade show active" id="tab-basic">
+        <div class="row g-3">
+          <div class="col-md-3 text-center">
+            <label class="form-label fw-semibold">Student Photo</label>
+            <div class="mb-2"><img id="stdPhotoPreview" src="" class="rounded-circle mx-auto" width="90" height="90" style="object-fit:cover;display:none;border:3px solid #1A8A4E"></div>
+            <div id="stdAvatarDefault" class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center mx-auto fw-bold" style="width:90px;height:90px;font-size:1.6rem">S</div>
+            <input type="file" name="photo" id="stdPhoto" class="form-control form-control-sm mt-2" accept="image/*" onchange="previewPhoto(this)">
+          </div>
+          <div class="col-md-9">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Admission No <span class="text-danger">*</span></label>
+                <input type="text" name="admission_no" id="stdAdm" class="form-control" required placeholder="e.g. ADM-2026-004">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Academic Class</label>
+                <select name="class_id" id="stdClass" class="form-select">
+                  <option value="">-- unassigned --</option>
+                  <?php foreach ($classesList as $c): ?>
+                  <option value="<?= $c['id'] ?>"><?= e($c['name']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">First Name <span class="text-danger">*</span></label>
+                <input type="text" name="first_name" id="stdFirst" class="form-control" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Last Name <span class="text-danger">*</span></label>
+                <input type="text" name="last_name" id="stdLast" class="form-control" required>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Gender <span class="text-danger">*</span></label>
+                <select name="gender" id="stdGender" class="form-select" required>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Date of Birth <span class="text-danger">*</span></label>
+                <input type="date" name="dob" id="stdDob" class="form-control" required>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Enrollment Date</label>
+                <input type="date" name="admitted_on" id="stdAdmitted" class="form-control">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Status</label>
+                <select name="status" id="stdStatus" class="form-select">
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="graduated">Graduated</option>
+                  <option value="transferred">Transferred</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="col-md-4">
-        <label class="form-label fw-semibold">First Name <span class="text-danger">*</span></label>
-        <input type="text" name="first_name" id="stdFirst" class="form-control" required placeholder="e.g. Jane">
+
+      <!-- International & Medical -->
+      <div class="tab-pane fade" id="tab-intl">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Nationality</label>
+            <input type="text" name="nationality" id="stdNat" class="form-control" placeholder="e.g. Liberian, Kenyan">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Passport Number</label>
+            <input type="text" name="passport_no" id="stdPass" class="form-control" placeholder="e.g. PP12345">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Visa Expiry Date</label>
+            <input type="date" name="visa_expiry" id="stdVisa" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Target Curriculum</label>
+            <select name="curriculum" id="stdCurr" class="form-select">
+              <?php foreach(['IB','IGCSE','Cambridge','CBC','AP','Other'] as $c): ?><option value="<?=$c?>"><?=$c?></option><?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Mother Tongue</label>
+            <input type="text" name="mother_tongue" id="stdTongue" class="form-control" placeholder="e.g. French, English">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Previous School</label>
+            <input type="text" name="previous_school" id="stdPrev" class="form-control" placeholder="e.g. Nairobi Intl Academy">
+          </div>
+          <div class="col-md-8">
+            <label class="form-label fw-semibold">Medical Conditions & Allergies</label>
+            <textarea name="medical_conditions" id="stdMed" class="form-control" rows="2" placeholder="e.g. Asthma, Peanuts allergy..."></textarea>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Learning Support Required</label>
+            <select name="learning_support" id="stdLearn" class="form-select">
+              <option value="0">No</option>
+              <option value="1">Yes</option>
+            </select>
+          </div>
+        </div>
       </div>
-      <div class="col-md-4">
-        <label class="form-label fw-semibold">Last Name <span class="text-danger">*</span></label>
-        <input type="text" name="last_name" id="stdLast" class="form-control" required placeholder="e.g. Doe">
-      </div>
-      <div class="col-md-3">
-        <label class="form-label fw-semibold">Gender <span class="text-danger">*</span></label>
-        <select name="gender" id="stdGender" class="form-select" required>
-          <option value="male">Male</option>
-          <option value="female">Female</option>
-        </select>
-      </div>
-      <div class="col-md-3">
-        <label class="form-label fw-semibold">Date of Birth <span class="text-danger">*</span></label>
-        <input type="date" name="dob" id="stdDob" class="form-control" required value="<?= date('Y-m-d', strtotime('-10 years')) ?>">
-      </div>
-      <div class="col-md-3">
-        <label class="form-label fw-semibold">Academic Class</label>
-        <select name="class_id" id="stdClass" class="form-select">
-          <option value="">-- unassigned --</option>
-          <?php foreach ($classesList as $c): ?>
-          <option value="<?= $c['id'] ?>"><?= e($c['name']) ?></option>
-          <?php endforeach; ?>
-        </select>
-      </div>
-      <div class="col-md-3">
-        <label class="form-label fw-semibold">Enrollment Date</label>
-        <input type="date" name="admitted_on" id="stdAdmitted" class="form-control" value="<?= date('Y-m-d') ?>">
-      </div>
-      <div class="col-md-4">
-        <label class="form-label fw-semibold">Status</label>
-        <select name="status" id="stdStatus" class="form-select">
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="graduated">Graduated</option>
-          <option value="transferred">Transferred</option>
-        </select>
-      </div>
-    </div>
-    
-    <h6 class="fw-bold mb-3 border-bottom pb-1 text-success"><i class="fas fa-users-cog me-2"></i>Parent / Guardian Contacts</h6>
-    <div class="row g-3">
-      <div class="col-md-4">
-        <label class="form-label fw-semibold">Parent Full Name <span class="text-danger">*</span></label>
-        <input type="text" name="parent_name" id="stdParentName" class="form-control" required placeholder="e.g. Richard Doe">
-      </div>
-      <div class="col-md-4">
-        <label class="form-label fw-semibold">Parent Phone <span class="text-danger">*</span></label>
-        <input type="tel" name="parent_phone" id="stdParentPhone" class="form-control" required placeholder="e.g. +254 700 000 000">
-      </div>
-      <div class="col-md-4">
-        <label class="form-label fw-semibold">Parent Email</label>
-        <input type="email" name="parent_email" id="stdParentEmail" class="form-control" placeholder="e.g. parent@example.com">
-      </div>
-      <div class="col-12">
-        <label class="form-label fw-semibold">Residential / Home Address</label>
-        <textarea name="address" id="stdAddress" class="form-control" rows="2" placeholder="Street, City details…"></textarea>
+
+      <!-- Parent & Emergency -->
+      <div class="tab-pane fade" id="tab-family">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Parent Full Name <span class="text-danger">*</span></label>
+            <input type="text" name="parent_name" id="stdParentName" class="form-control" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Parent Phone <span class="text-danger">*</span></label>
+            <input type="tel" name="parent_phone" id="stdParentPhone" class="form-control" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Parent Email</label>
+            <input type="email" name="parent_email" id="stdParentEmail" class="form-control">
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Residential / Home Address</label>
+            <textarea name="address" id="stdAddress" class="form-control" rows="2"></textarea>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Emergency Contact Name</label>
+            <input type="text" name="emergency_contact" id="stdEmergName" class="form-control" placeholder="Different from parent if possible">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Emergency Contact Phone</label>
+            <input type="tel" name="emergency_phone" id="stdEmergPhone" class="form-control">
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -293,9 +448,20 @@ if (isset($_GET['fetch_details'])) {
   <input type="hidden" name="id" id="delStdId">
 </form>
 
-<?php
-$extraJs = <<<'JS'
+<?php ob_start(); ?>
 <script>
+function previewPhoto(input) {
+  if (input.files && input.files[0]) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      document.getElementById('stdPhotoPreview').src = e.target.result;
+      document.getElementById('stdPhotoPreview').style.display = 'block';
+      document.getElementById('stdAvatarDefault').style.display = 'none';
+    }
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
 function openAdd() {
   document.getElementById('stdTitle').innerHTML = '<i class="fas fa-user-graduate me-2"></i>Enroll Student';
   document.getElementById('stdId').value = '0';
@@ -314,7 +480,28 @@ function openAdd() {
   document.getElementById('stdParentPhone').value = '';
   document.getElementById('stdParentEmail').value = '';
   document.getElementById('stdAddress').value = '';
+
+  // New fields reset
+  document.getElementById('stdNat').value = '';
+  document.getElementById('stdPass').value = '';
+  document.getElementById('stdVisa').value = '';
+  document.getElementById('stdCurr').value = 'IB';
+  document.getElementById('stdTongue').value = '';
+  document.getElementById('stdPrev').value = '';
+  document.getElementById('stdMed').value = '';
+  document.getElementById('stdLearn').value = '0';
+  document.getElementById('stdEmergName').value = '';
+  document.getElementById('stdEmergPhone').value = '';
+
+  document.getElementById('stdPhotoPreview').style.display = 'none';
+  document.getElementById('stdAvatarDefault').style.display = 'block';
+  
+  // Show first tab
+  var firstTabEl = document.querySelector('#studentTabs button[data-bs-target="#tab-basic"]');
+  var tab = new bootstrap.Tab(firstTabEl);
+  tab.show();
 }
+
 function openEdit(id) {
   fetch('students.php?fetch_details=' + id)
     .then(r => r.json())
@@ -334,26 +521,44 @@ function openEdit(id) {
       document.getElementById('stdParentPhone').value = data.parent_phone || '';
       document.getElementById('stdParentEmail').value = data.parent_email || '';
       document.getElementById('stdAddress').value = data.address || '';
+
+      // New international fields assignment
+      document.getElementById('stdNat').value = data.nationality || '';
+      document.getElementById('stdPass').value = data.passport_no || '';
+      document.getElementById('stdVisa').value = data.visa_expiry || '';
+      document.getElementById('stdCurr').value = data.curriculum || 'IB';
+      document.getElementById('stdTongue').value = data.mother_tongue || '';
+      document.getElementById('stdPrev').value = data.previous_school || '';
+      document.getElementById('stdMed').value = data.medical_conditions || '';
+      document.getElementById('stdLearn').value = data.learning_support || '0';
+      document.getElementById('stdEmergName').value = data.emergency_contact || '';
+      document.getElementById('stdEmergPhone').value = data.emergency_phone || '';
+
+      if (data.photo) {
+        document.getElementById('stdPhotoPreview').src = '<?= APP_URL ?>/' + data.photo;
+        document.getElementById('stdPhotoPreview').style.display = 'block';
+        document.getElementById('stdAvatarDefault').style.display = 'none';
+      } else {
+        document.getElementById('stdPhotoPreview').style.display = 'none';
+        document.getElementById('stdAvatarDefault').style.display = 'block';
+      }
       
+      var firstTabEl = document.querySelector('#studentTabs button[data-bs-target="#tab-basic"]');
+      var tab = new bootstrap.Tab(firstTabEl);
+      tab.show();
+
       new bootstrap.Modal(document.getElementById('stdModal')).show();
     });
 }
+
 function delStudent(id, name) {
-  Swal.fire({
-    title: 'Remove Student?',
-    text: 'Permanently delete "' + name + '" and cancel their fee profiles and grades roster?',
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#e74c3c',
-    confirmButtonText: 'Yes, remove'
-  }).then(r => {
-    if (r.isConfirmed) {
-      document.getElementById('delStdId').value = id;
-      document.getElementById('delStdForm').submit();
-    }
-  });
+  if (confirm('Permanently delete "' + name + '"? This will also clear all grading rosters and fee history.')) {
+    document.getElementById('delStdId').value = id;
+    document.getElementById('delStdForm').submit();
+  }
 }
 </script>
-JS;
+<?php 
+$extraJs = ob_get_clean();
 require_once __DIR__ . '/../../includes/footer.php';
 ?>

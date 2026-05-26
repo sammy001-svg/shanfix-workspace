@@ -1,6 +1,5 @@
-<?php
-$moduleSlug='school';$moduleName='School Management';$moduleIcon='fas fa-school';$moduleColor='#1A8A4E';
-$moduleNav=[['url'=>'index.php','icon'=>'fas fa-tachometer-alt','label'=>'Dashboard'],['url'=>'students.php','icon'=>'fas fa-user-graduate','label'=>'Students'],['url'=>'parents.php','icon'=>'fas fa-users','label'=>'Parents'],['url'=>'staff.php','icon'=>'fas fa-chalkboard-teacher','label'=>'Staff'],['url'=>'classes.php','icon'=>'fas fa-chalkboard','label'=>'Classes'],['url'=>'subjects.php','icon'=>'fas fa-book','label'=>'Subjects'],['url'=>'timetable.php','icon'=>'fas fa-calendar-alt','label'=>'Timetable'],['url'=>'attendance.php','icon'=>'fas fa-clipboard-check','label'=>'Attendance'],['url'=>'exams.php','icon'=>'fas fa-file-alt','label'=>'Exams'],['url'=>'results.php','icon'=>'fas fa-chart-line','label'=>'Results'],['url'=>'fees.php','icon'=>'fas fa-money-bill','label'=>'Fees'],['url'=>'library.php','icon'=>'fas fa-book-reader','label'=>'Library'],['url'=>'transport.php','icon'=>'fas fa-bus','label'=>'Transport'],['url'=>'events.php','icon'=>'fas fa-calendar-day','label'=>'Events'],['url'=>'notices.php','icon'=>'fas fa-bullhorn','label'=>'Notices'],['url'=>'grades.php','icon'=>'fas fa-star','label'=>'Grades'],['url'=>'reports.php','icon'=>'fas fa-chart-bar','label'=>'Reports']];
+﻿<?php
+require_once __DIR__ . '/_nav.php';
 
 if($_SERVER['REQUEST_METHOD']==='POST'){
     require_once __DIR__.'/../../config/database.php';
@@ -42,6 +41,10 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         $schedId=(int)($_POST['sched_id']??0);
         if(!$examId||!$classId||!$subjectId){setFlash('error','Exam, class and subject are required.');redirect("exams.php?view=$examId");}
         if($schedId){
+            // Verify schedule entry belongs to an exam owned by this org
+            if(!assertParentOwnership('sch_exams','exam_id','sch_exam_schedule',$schedId,$orgId)){
+                setFlash('danger','Access denied.');redirect("exams.php?view=$examId");
+            }
             $pdo->prepare("UPDATE sch_exam_schedule SET class_id=?,subject_id=?,exam_date=?,start_time=?,end_time=?,room=?,max_marks=? WHERE id=?")->execute([$classId,$subjectId,$examDate?:null,$startTime?:null,$endTime?:null,$room,$maxMarks,$schedId]);
         } else {
             $pdo->prepare("INSERT INTO sch_exam_schedule (exam_id,class_id,subject_id,exam_date,start_time,end_time,room,max_marks) VALUES (?,?,?,?,?,?,?,?)")->execute([$examId,$classId,$subjectId,$examDate?:null,$startTime?:null,$endTime?:null,$room,$maxMarks]);
@@ -51,6 +54,10 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 
     if($action==='delete_schedule'){
         $sid=(int)($_POST['sched_id']??0);$eid=(int)($_POST['exam_id']??0);
+        // Verify the parent exam belongs to this org before deleting schedule entry
+        if(!assertParentOwnership('sch_exams','exam_id','sch_exam_schedule',$sid,$orgId)){
+            setFlash('danger','Access denied.');redirect("exams.php?view=$eid");
+        }
         $pdo->prepare("DELETE FROM sch_exam_schedule WHERE id=?")->execute([$sid]);
         setFlash('success','Schedule entry removed.');redirect("exams.php?view=$eid");
     }
@@ -113,10 +120,10 @@ $countByStatus=[];foreach(['upcoming','ongoing','completed','cancelled'] as $st)
     <?php else:foreach($exams as $ex):$sc=$statusColors[$ex['status']]??'secondary';?>
     <tr>
       <td class="fw-semibold"><?=e($ex['name'])?></td>
-      <td><?=e($ex['term']??'—')?></td>
-      <td><?=e($ex['academic_year']??'—')?></td>
+      <td><?=e($ex['term']??'â€”')?></td>
+      <td><?=e($ex['academic_year']??'â€”')?></td>
       <td class="small text-muted">
-        <?php if($ex['start_date']):?><?=formatDate($ex['start_date'])?><?php if($ex['end_date']):?> – <?=formatDate($ex['end_date'])?><?php endif;?><?php else:?>—<?php endif;?>
+        <?php if($ex['start_date']):?><?=formatDate($ex['start_date'])?><?php if($ex['end_date']):?> â€“ <?=formatDate($ex['end_date'])?><?php endif;?><?php else:?>â€”<?php endif;?>
       </td>
       <td><span class="badge bg-<?=$sc?>"><?=ucfirst($ex['status'])?></span></td>
       <td class="text-end">
@@ -148,7 +155,7 @@ $countByStatus=[];foreach(['upcoming','ongoing','completed','cancelled'] as $st)
         <div class="text-muted small">
           <?php if($viewExam['term']):?><span class="me-3"><i class="fas fa-calendar-check me-1"></i><?=e($viewExam['term'])?></span><?php endif;?>
           <?php if($viewExam['academic_year']):?><span class="me-3"><i class="fas fa-graduation-cap me-1"></i><?=e($viewExam['academic_year'])?></span><?php endif;?>
-          <?php if($viewExam['start_date']):?><span><i class="fas fa-clock me-1"></i><?=formatDate($viewExam['start_date'])?><?php if($viewExam['end_date']):?> – <?=formatDate($viewExam['end_date'])?><?php endif;?></span><?php endif;?>
+          <?php if($viewExam['start_date']):?><span><i class="fas fa-clock me-1"></i><?=formatDate($viewExam['start_date'])?><?php if($viewExam['end_date']):?> â€“ <?=formatDate($viewExam['end_date'])?><?php endif;?></span><?php endif;?>
         </div>
         <?php if($viewExam['description']):?><p class="text-muted small mt-1 mb-0"><?=e($viewExam['description'])?></p><?php endif;?>
       </div>
@@ -167,7 +174,7 @@ $countByStatus=[];foreach(['upcoming','ongoing','completed','cancelled'] as $st)
 </div>
 
 <div class="card">
-  <div class="card-header"><h6 class="mb-0"><i class="fas fa-calendar-alt me-2" style="color:<?=$moduleColor?>"></i>Exam Schedule — <?=count($schedule)?> entries</h6></div>
+  <div class="card-header"><h6 class="mb-0"><i class="fas fa-calendar-alt me-2" style="color:<?=$moduleColor?>"></i>Exam Schedule â€” <?=count($schedule)?> entries</h6></div>
   <div class="card-body p-0">
   <table class="table table-hover mb-0">
     <thead class="table-light"><tr><th>Class</th><th>Subject</th><th>Date</th><th>Time</th><th>Room</th><th>Max Marks</th><th class="text-end">Actions</th></tr></thead>
@@ -175,11 +182,11 @@ $countByStatus=[];foreach(['upcoming','ongoing','completed','cancelled'] as $st)
     <?php if(empty($schedule)):?><tr><td colspan="7" class="text-center text-muted py-4">No schedule entries. Add subjects and classes for this exam.</td></tr>
     <?php else:foreach($schedule as $sl):?>
     <tr>
-      <td class="fw-semibold"><?=e($sl['class_name']??'—')?></td>
-      <td><?=e($sl['subject_name']??'—')?></td>
-      <td><?=$sl['exam_date']?formatDate($sl['exam_date']):'—'?></td>
-      <td class="small text-muted"><?=$sl['start_time']?date('H:i',strtotime($sl['start_time'])):'—'?><?=$sl['end_time']?' – '.date('H:i',strtotime($sl['end_time'])):''?></td>
-      <td><?=e($sl['room']??'—')?></td>
+      <td class="fw-semibold"><?=e($sl['class_name']??'â€”')?></td>
+      <td><?=e($sl['subject_name']??'â€”')?></td>
+      <td><?=$sl['exam_date']?formatDate($sl['exam_date']):'â€”'?></td>
+      <td class="small text-muted"><?=$sl['start_time']?date('H:i',strtotime($sl['start_time'])):'â€”'?><?=$sl['end_time']?' â€“ '.date('H:i',strtotime($sl['end_time'])):''?></td>
+      <td><?=e($sl['room']??'â€”')?></td>
       <td class="fw-semibold"><?=number_format($sl['max_marks'],0)?></td>
       <td class="text-end">
         <button class="btn btn-xs btn-outline-secondary me-1 btn-edit-sched"
@@ -204,10 +211,10 @@ $countByStatus=[];foreach(['upcoming','ongoing','completed','cancelled'] as $st)
     <?=csrfField()?><input type="hidden" name="action" value="save_schedule"><input type="hidden" name="exam_id" value="<?=$viewId?>"><input type="hidden" name="sched_id" id="schedId" value="0">
     <div class="row g-3">
       <div class="col-md-6"><label class="form-label fw-semibold">Class <span class="text-danger">*</span></label>
-        <select name="class_id" id="schedClass" class="form-select"><option value="">— Select —</option><?php foreach($classes as $c):?><option value="<?=$c['id']?>"><?=e($c['name'])?></option><?php endforeach;?></select>
+        <select name="class_id" id="schedClass" class="form-select"><option value="">â€” Select â€”</option><?php foreach($classes as $c):?><option value="<?=$c['id']?>"><?=e($c['name'])?></option><?php endforeach;?></select>
       </div>
       <div class="col-md-6"><label class="form-label fw-semibold">Subject <span class="text-danger">*</span></label>
-        <select name="subject_id" id="schedSubject" class="form-select"><option value="">— Select —</option><?php foreach($subjects as $s):?><option value="<?=$s['id']?>"><?=e($s['name'])?></option><?php endforeach;?></select>
+        <select name="subject_id" id="schedSubject" class="form-select"><option value="">â€” Select â€”</option><?php foreach($subjects as $s):?><option value="<?=$s['id']?>"><?=e($s['name'])?></option><?php endforeach;?></select>
       </div>
       <div class="col-md-4"><label class="form-label fw-semibold">Date</label><input type="date" name="exam_date" id="schedDate" class="form-control"></div>
       <div class="col-md-4"><label class="form-label fw-semibold">Start Time</label><input type="time" name="start_time" id="schedStart" class="form-control"></div>
@@ -272,3 +279,4 @@ document.querySelectorAll('.btn-confirm').forEach(btn=>{btn.addEventListener('cl
 </script>
 <?php $extraJs=ob_get_clean();
 require_once __DIR__.'/../../includes/footer.php';?>
+

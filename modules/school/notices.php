@@ -1,6 +1,5 @@
-<?php
-$moduleSlug='school';$moduleName='School Management';$moduleIcon='fas fa-school';$moduleColor='#1A8A4E';
-$moduleNav=[['url'=>'index.php','icon'=>'fas fa-tachometer-alt','label'=>'Dashboard'],['url'=>'students.php','icon'=>'fas fa-user-graduate','label'=>'Students'],['url'=>'parents.php','icon'=>'fas fa-users','label'=>'Parents'],['url'=>'staff.php','icon'=>'fas fa-chalkboard-teacher','label'=>'Staff'],['url'=>'classes.php','icon'=>'fas fa-chalkboard','label'=>'Classes'],['url'=>'subjects.php','icon'=>'fas fa-book','label'=>'Subjects'],['url'=>'timetable.php','icon'=>'fas fa-calendar-alt','label'=>'Timetable'],['url'=>'attendance.php','icon'=>'fas fa-clipboard-check','label'=>'Attendance'],['url'=>'exams.php','icon'=>'fas fa-file-alt','label'=>'Exams'],['url'=>'results.php','icon'=>'fas fa-chart-line','label'=>'Results'],['url'=>'fees.php','icon'=>'fas fa-money-bill','label'=>'Fees'],['url'=>'library.php','icon'=>'fas fa-book-reader','label'=>'Library'],['url'=>'transport.php','icon'=>'fas fa-bus','label'=>'Transport'],['url'=>'events.php','icon'=>'fas fa-calendar-day','label'=>'Events'],['url'=>'notices.php','icon'=>'fas fa-bullhorn','label'=>'Notices'],['url'=>'grades.php','icon'=>'fas fa-star','label'=>'Grades'],['url'=>'reports.php','icon'=>'fas fa-chart-bar','label'=>'Reports']];
+﻿<?php
+require_once __DIR__ . '/_nav.php';
 
 if($_SERVER['REQUEST_METHOD']==='POST'){
     require_once __DIR__.'/../../config/database.php';
@@ -156,7 +155,7 @@ $audienceColors=['all'=>'primary','students'=>'info','staff'=>'success','parents
         <select name="audience" id="noticeAudience" class="form-select" onchange="toggleClassPicker()"><option value="all">All</option><option value="students">Students</option><option value="staff">Staff</option><option value="parents">Parents</option><option value="class">Specific Class</option></select>
       </div>
       <div class="col-md-4" id="classPickerWrap" style="display:none"><label class="form-label fw-semibold">Class</label>
-        <select name="class_id" id="noticeClass" class="form-select"><option value="">— Select —</option><?php foreach($classes as $c):?><option value="<?=$c['id']?>"><?=e($c['name'])?></option><?php endforeach;?></select>
+        <select name="class_id" id="noticeClass" class="form-select"><option value="">â€” Select â€”</option><?php foreach($classes as $c):?><option value="<?=$c['id']?>"><?=e($c['name'])?></option><?php endforeach;?></select>
       </div>
       <div class="col-md-4"><label class="form-label fw-semibold">Publish Date</label><input type="date" name="publish_date" id="noticePublish" class="form-control" value="<?=date('Y-m-d')?>"></div>
       <div class="col-md-4"><label class="form-label fw-semibold">Expiry Date</label><input type="date" name="expiry_date" id="noticeExpiry" class="form-control"></div>
@@ -191,3 +190,4 @@ document.querySelectorAll('.btn-confirm').forEach(btn=>{btn.addEventListener('cl
 </script>
 <?php $extraJs=ob_get_clean();
 require_once __DIR__.'/../../includes/footer.php';?>
+

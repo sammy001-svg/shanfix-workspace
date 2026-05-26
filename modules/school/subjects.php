@@ -1,6 +1,5 @@
-<?php
-$moduleSlug='school';$moduleName='School Management';$moduleIcon='fas fa-school';$moduleColor='#1A8A4E';
-$moduleNav=[['url'=>'index.php','icon'=>'fas fa-tachometer-alt','label'=>'Dashboard'],['url'=>'students.php','icon'=>'fas fa-user-graduate','label'=>'Students'],['url'=>'parents.php','icon'=>'fas fa-users','label'=>'Parents'],['url'=>'staff.php','icon'=>'fas fa-chalkboard-teacher','label'=>'Staff'],['url'=>'classes.php','icon'=>'fas fa-chalkboard','label'=>'Classes'],['url'=>'subjects.php','icon'=>'fas fa-book','label'=>'Subjects'],['url'=>'timetable.php','icon'=>'fas fa-calendar-alt','label'=>'Timetable'],['url'=>'attendance.php','icon'=>'fas fa-clipboard-check','label'=>'Attendance'],['url'=>'exams.php','icon'=>'fas fa-file-alt','label'=>'Exams'],['url'=>'results.php','icon'=>'fas fa-chart-line','label'=>'Results'],['url'=>'fees.php','icon'=>'fas fa-money-bill','label'=>'Fees'],['url'=>'library.php','icon'=>'fas fa-book-reader','label'=>'Library'],['url'=>'transport.php','icon'=>'fas fa-bus','label'=>'Transport'],['url'=>'events.php','icon'=>'fas fa-calendar-day','label'=>'Events'],['url'=>'notices.php','icon'=>'fas fa-bullhorn','label'=>'Notices'],['url'=>'grades.php','icon'=>'fas fa-star','label'=>'Grades'],['url'=>'reports.php','icon'=>'fas fa-chart-bar','label'=>'Reports']];
+﻿<?php
+require_once __DIR__ . '/_nav.php';
 
 if($_SERVER['REQUEST_METHOD']==='POST'){
     require_once __DIR__.'/../../config/database.php';
@@ -71,9 +70,9 @@ try{$s=$pdo->prepare("SELECT cs.*,sub.name AS subject_name,cl.name AS class_name
         <?php if(empty($subjects)):?><tr><td colspan="7" class="text-center text-muted py-4">No subjects found.</td></tr>
         <?php else:foreach($subjects as $sub):?>
         <tr>
-          <td><code><?=e($sub['code']??'—')?></code></td>
+          <td><code><?=e($sub['code']??'â€”')?></code></td>
           <td class="fw-semibold"><?=e($sub['name'])?></td>
-          <td class="small"><?=e($sub['department']??'—')?></td>
+          <td class="small"><?=e($sub['department']??'â€”')?></td>
           <td><?=$sub['pass_mark']?>%</td>
           <td><?=$sub['is_elective']?'<span class="badge bg-info">Elective</span>':'<span class="badge bg-secondary">Core</span>'?></td>
           <td><?=statusBadge($sub['status'])?></td>
@@ -99,10 +98,10 @@ try{$s=$pdo->prepare("SELECT cs.*,sub.name AS subject_name,cl.name AS class_name
       <div class="card-body">
         <form method="POST">
           <?=csrfField()?><input type="hidden" name="action" value="assign">
-          <div class="mb-3"><label class="form-label fw-semibold">Class</label><select name="class_id" class="form-select" required><option value="">— Select class —</option><?php foreach($classes as $c):?><option value="<?=$c['id']?>"><?=e($c['name'])?></option><?php endforeach;?></select></div>
-          <div class="mb-3"><label class="form-label fw-semibold">Subject</label><select name="subject_id" class="form-select" required><option value="">— Select subject —</option><?php foreach($subjects as $s):if($s['status']==='active'):?><option value="<?=$s['id']?>"><?=e($s['name'])?></option><?php endif;endforeach;?></select></div>
+          <div class="mb-3"><label class="form-label fw-semibold">Class</label><select name="class_id" class="form-select" required><option value="">â€” Select class â€”</option><?php foreach($classes as $c):?><option value="<?=$c['id']?>"><?=e($c['name'])?></option><?php endforeach;?></select></div>
+          <div class="mb-3"><label class="form-label fw-semibold">Subject</label><select name="subject_id" class="form-select" required><option value="">â€” Select subject â€”</option><?php foreach($subjects as $s):if($s['status']==='active'):?><option value="<?=$s['id']?>"><?=e($s['name'])?></option><?php endif;endforeach;?></select></div>
           <div class="row g-2 mb-3">
-            <div class="col-7"><label class="form-label fw-semibold">Teacher</label><select name="staff_id" class="form-select"><option value="">— Unassigned —</option><?php foreach($staff as $st):?><option value="<?=$st['id']?>"><?=e($st['name'])?></option><?php endforeach;?></select></div>
+            <div class="col-7"><label class="form-label fw-semibold">Teacher</label><select name="staff_id" class="form-select"><option value="">â€” Unassigned â€”</option><?php foreach($staff as $st):?><option value="<?=$st['id']?>"><?=e($st['name'])?></option><?php endforeach;?></select></div>
             <div class="col-5"><label class="form-label fw-semibold">Periods/Week</label><input type="number" name="periods_week" class="form-control" min="1" max="20" value="4"></div>
           </div>
           <button type="submit" class="btn btn-sm text-white" style="background:<?=$moduleColor?>"><i class="fas fa-link me-1"></i>Assign</button>
@@ -119,7 +118,7 @@ try{$s=$pdo->prepare("SELECT cs.*,sub.name AS subject_name,cl.name AS class_name
         <tr>
           <td><?=e($a['class_name'])?></td>
           <td class="fw-semibold"><?=e($a['subject_name'])?></td>
-          <td><?=$a['first_name']?e($a['first_name'].' '.$a['last_name']):'—'?></td>
+          <td><?=$a['first_name']?e($a['first_name'].' '.$a['last_name']):'â€”'?></td>
           <td><?=$a['periods_week']?>/wk</td>
           <td><form method="POST" class="d-inline"><?=csrfField()?><input type="hidden" name="action" value="unassign"><input type="hidden" name="id" value="<?=$a['id']?>"><button type="submit" class="btn btn-xs btn-outline-danger btn-confirm" data-msg="Remove this assignment?"><i class="fas fa-times"></i></button></form></td>
         </tr>
@@ -166,3 +165,4 @@ document.querySelectorAll('.btn-confirm').forEach(btn=>{btn.addEventListener('cl
 </script>
 JS;
 require_once __DIR__.'/../../includes/footer.php';?>
+

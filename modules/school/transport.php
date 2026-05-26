@@ -1,6 +1,5 @@
-<?php
-$moduleSlug='school';$moduleName='School Management';$moduleIcon='fas fa-school';$moduleColor='#1A8A4E';
-$moduleNav=[['url'=>'index.php','icon'=>'fas fa-tachometer-alt','label'=>'Dashboard'],['url'=>'students.php','icon'=>'fas fa-user-graduate','label'=>'Students'],['url'=>'parents.php','icon'=>'fas fa-users','label'=>'Parents'],['url'=>'staff.php','icon'=>'fas fa-chalkboard-teacher','label'=>'Staff'],['url'=>'classes.php','icon'=>'fas fa-chalkboard','label'=>'Classes'],['url'=>'subjects.php','icon'=>'fas fa-book','label'=>'Subjects'],['url'=>'timetable.php','icon'=>'fas fa-calendar-alt','label'=>'Timetable'],['url'=>'attendance.php','icon'=>'fas fa-clipboard-check','label'=>'Attendance'],['url'=>'exams.php','icon'=>'fas fa-file-alt','label'=>'Exams'],['url'=>'results.php','icon'=>'fas fa-chart-line','label'=>'Results'],['url'=>'fees.php','icon'=>'fas fa-money-bill','label'=>'Fees'],['url'=>'library.php','icon'=>'fas fa-book-reader','label'=>'Library'],['url'=>'transport.php','icon'=>'fas fa-bus','label'=>'Transport'],['url'=>'events.php','icon'=>'fas fa-calendar-day','label'=>'Events'],['url'=>'notices.php','icon'=>'fas fa-bullhorn','label'=>'Notices'],['url'=>'grades.php','icon'=>'fas fa-star','label'=>'Grades'],['url'=>'reports.php','icon'=>'fas fa-chart-bar','label'=>'Reports']];
+﻿<?php
+require_once __DIR__ . '/_nav.php';
 
 if($_SERVER['REQUEST_METHOD']==='POST'){
     require_once __DIR__.'/../../config/database.php';
@@ -93,9 +92,9 @@ if($viewId){
     <?php else:foreach($routes as $rt):$fill=min(100,$rt['capacity']>0?round(100*$rt['assigned_count']/$rt['capacity']):0);$fillC=$fill>=90?'danger':($fill>=70?'warning':'success');?>
     <tr>
       <td class="fw-semibold"><a href="transport.php?view=<?=$rt['id']?>" class="text-decoration-none" style="color:<?=$moduleColor?>"><?=e($rt['route_name'])?></a></td>
-      <td class="small"><?=e($rt['vehicle_no']??'—')?></td>
-      <td><?=e($rt['driver_name']??'—')?><?php if($rt['driver_phone']):?><div class="text-muted" style="font-size:.75rem"><?=e($rt['driver_phone'])?></div><?php endif;?></td>
-      <td class="small text-muted"><?=$rt['stops']?e(implode(', ',array_slice(explode(',',$rt['stops']),0,3))).(str_word_count($rt['stops'])>3?'…':''):'—'?></td>
+      <td class="small"><?=e($rt['vehicle_no']??'â€”')?></td>
+      <td><?=e($rt['driver_name']??'â€”')?><?php if($rt['driver_phone']):?><div class="text-muted" style="font-size:.75rem"><?=e($rt['driver_phone'])?></div><?php endif;?></td>
+      <td class="small text-muted"><?=$rt['stops']?e(implode(', ',array_slice(explode(',',$rt['stops']),0,3))).(str_word_count($rt['stops'])>3?'â€¦':''):'â€”'?></td>
       <td class="text-center"><?=$rt['capacity']?></td>
       <td class="text-center">
         <div class="d-flex align-items-center gap-1">
@@ -103,7 +102,7 @@ if($viewId){
           <div class="progress flex-grow-1" style="height:5px"><div class="progress-bar bg-<?=$fillC?>" style="width:<?=$fill?>%"></div></div>
         </div>
       </td>
-      <td><?=isset($rt['term_fee'])?'KES '.number_format($rt['term_fee'],2):'—'?></td>
+      <td><?=isset($rt['term_fee'])?'KES '.number_format($rt['term_fee'],2):'â€”'?></td>
       <td><?=$rt['status']==='active'?'<span class="badge bg-success">Active</span>':'<span class="badge bg-secondary">Inactive</span>'?></td>
       <td class="text-end">
         <a href="transport.php?view=<?=$rt['id']?>" class="btn btn-xs btn-outline-primary me-1"><i class="fas fa-users"></i></a>
@@ -135,12 +134,12 @@ if($viewId){
       </div>
       <div class="card-body">
         <table class="table table-sm table-borderless mb-2 small">
-          <tr><td class="text-muted" style="width:45%">Vehicle</td><td class="fw-semibold"><?=e($viewRoute['vehicle_no']??'—')?></td></tr>
-          <tr><td class="text-muted">Driver</td><td class="fw-semibold"><?=e($viewRoute['driver_name']??'—')?></td></tr>
+          <tr><td class="text-muted" style="width:45%">Vehicle</td><td class="fw-semibold"><?=e($viewRoute['vehicle_no']??'â€”')?></td></tr>
+          <tr><td class="text-muted">Driver</td><td class="fw-semibold"><?=e($viewRoute['driver_name']??'â€”')?></td></tr>
           <?php if($viewRoute['driver_phone']):?><tr><td class="text-muted">Phone</td><td><?=e($viewRoute['driver_phone'])?></td></tr><?php endif;?>
           <?php if($viewRoute['conductor']):?><tr><td class="text-muted">Conductor</td><td><?=e($viewRoute['conductor'])?></td></tr><?php endif;?>
-          <tr><td class="text-muted">Morning</td><td><?=$viewRoute['morning_time']?date('H:i',strtotime($viewRoute['morning_time'])):'—'?></td></tr>
-          <tr><td class="text-muted">Evening</td><td><?=$viewRoute['evening_time']?date('H:i',strtotime($viewRoute['evening_time'])):'—'?></td></tr>
+          <tr><td class="text-muted">Morning</td><td><?=$viewRoute['morning_time']?date('H:i',strtotime($viewRoute['morning_time'])):'â€”'?></td></tr>
+          <tr><td class="text-muted">Evening</td><td><?=$viewRoute['evening_time']?date('H:i',strtotime($viewRoute['evening_time'])):'â€”'?></td></tr>
           <tr><td class="text-muted">Term Fee</td><td class="fw-semibold">KES <?=number_format($viewRoute['term_fee'],2)?></td></tr>
         </table>
         <div class="mb-1 d-flex justify-content-between small"><span>Capacity</span><span class="fw-bold"><?=count($routeStudents)?>/<?=$viewRoute['capacity']?></span></div>
@@ -166,7 +165,7 @@ if($viewId){
         <form method="POST">
           <?=csrfField()?><input type="hidden" name="action" value="assign_student"><input type="hidden" name="route_id" value="<?=$viewRoute['id']?>">
           <div class="mb-2"><label class="form-label small fw-semibold">Student</label>
-            <select name="student_id" class="form-select form-select-sm"><option value="">— Select student —</option><?php foreach($allStudents as $st):?><option value="<?=$st['id']?>"><?=e($st['name'])?> (<?=e($st['admission_no']??'')?>)</option><?php endforeach;?></select>
+            <select name="student_id" class="form-select form-select-sm"><option value="">â€” Select student â€”</option><?php foreach($allStudents as $st):?><option value="<?=$st['id']?>"><?=e($st['name'])?> (<?=e($st['admission_no']??'')?>)</option><?php endforeach;?></select>
           </div>
           <div class="mb-2"><label class="form-label small fw-semibold">Pickup Stop</label>
             <input type="text" name="pickup_stop" class="form-control form-control-sm" list="stopList" placeholder="Stop name">
@@ -190,9 +189,9 @@ if($viewId){
         <tr>
           <td class="text-muted"><?=$i+1?></td>
           <td class="fw-semibold"><?=e($rs['name']??'')?></td>
-          <td class="small text-muted"><?=e($rs['admission_no']??'—')?></td>
-          <td><?=e($rs['class_name']??'—')?></td>
-          <td><?=e($rs['pickup_stop']??'—')?></td>
+          <td class="small text-muted"><?=e($rs['admission_no']??'â€”')?></td>
+          <td><?=e($rs['class_name']??'â€”')?></td>
+          <td><?=e($rs['pickup_stop']??'â€”')?></td>
           <td class="text-end">
             <form method="POST" class="d-inline"><?=csrfField()?><input type="hidden" name="action" value="remove_student"><input type="hidden" name="id" value="<?=$rs['id']?>"><input type="hidden" name="route_id" value="<?=$viewRoute['id']?>">
               <button type="submit" class="btn btn-xs btn-outline-danger btn-confirm" data-msg="Remove this student from route?"><i class="fas fa-times"></i></button>
@@ -253,3 +252,4 @@ document.querySelectorAll('.btn-confirm').forEach(btn=>{btn.addEventListener('cl
 </script>
 <?php $extraJs=ob_get_clean();
 require_once __DIR__.'/../../includes/footer.php';?>
+

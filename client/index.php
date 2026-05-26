@@ -737,4 +737,44 @@ $actIcons = [
   </div><!-- /col right -->
 </div><!-- /row -->
 
-<?php require_once __DIR__ . '/../includes/footer.php'; ?>
+<?php
+// Inject live-refresh IDs on the KPI stat cards
+$extraJs = '<script>
+/* ── Live dashboard KPI refresh every 60 seconds ──────────────── */
+(function() {
+  function refreshKpis() {
+    fetch("' . APP_URL . '/api/dashboard-kpis.php")
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success) return;
+        // Update each KPI if element exists
+        Object.keys(data.kpis).forEach(key => {
+          const el = document.getElementById("kpi-" + key);
+          if (el) {
+            const old = el.textContent;
+            if (old !== String(data.kpis[key])) {
+              el.textContent = data.kpis[key];
+              el.classList.add("kpi-flash");
+              setTimeout(() => el.classList.remove("kpi-flash"), 600);
+            }
+          }
+        });
+        // Unread notifications badge
+        if (data.unread_notifs !== undefined) {
+          const badge = document.getElementById("kpi-notif-badge");
+          if (badge) badge.textContent = data.unread_notifs;
+        }
+      })
+      .catch(() => {});
+  }
+  // Kick off after 60 seconds, then every 60 seconds
+  setInterval(refreshKpis, 60000);
+  // Soft refresh after 15 seconds on first load
+  setTimeout(refreshKpis, 15000);
+})();
+</script>
+<style>
+@keyframes kpi-flash-anim { 0%{background:rgba(26,138,78,.15)} 100%{background:transparent} }
+.kpi-flash { animation: kpi-flash-anim .6s ease-out; border-radius:6px; }
+</style>';
+require_once __DIR__ . '/../includes/footer.php'; ?>

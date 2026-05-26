@@ -1,17 +1,16 @@
 <?php
-$moduleSlug  = 'school';
-$moduleName  = 'School Management';
-$moduleIcon  = 'fas fa-school';
-$moduleColor = '#1A8A4E';
-$moduleNav=[['url'=>'index.php','icon'=>'fas fa-tachometer-alt','label'=>'Dashboard'],['url'=>'students.php','icon'=>'fas fa-user-graduate','label'=>'Students'],['url'=>'parents.php','icon'=>'fas fa-users','label'=>'Parents'],['url'=>'staff.php','icon'=>'fas fa-chalkboard-teacher','label'=>'Staff'],['url'=>'classes.php','icon'=>'fas fa-chalkboard','label'=>'Classes'],['url'=>'subjects.php','icon'=>'fas fa-book','label'=>'Subjects'],['url'=>'timetable.php','icon'=>'fas fa-calendar-alt','label'=>'Timetable'],['url'=>'attendance.php','icon'=>'fas fa-clipboard-check','label'=>'Attendance'],['url'=>'exams.php','icon'=>'fas fa-file-alt','label'=>'Exams'],['url'=>'results.php','icon'=>'fas fa-chart-line','label'=>'Results'],['url'=>'fees.php','icon'=>'fas fa-money-bill','label'=>'Fees'],['url'=>'library.php','icon'=>'fas fa-book-reader','label'=>'Library'],['url'=>'transport.php','icon'=>'fas fa-bus','label'=>'Transport'],['url'=>'events.php','icon'=>'fas fa-calendar-day','label'=>'Events'],['url'=>'notices.php','icon'=>'fas fa-bullhorn','label'=>'Notices'],['url'=>'grades.php','icon'=>'fas fa-star','label'=>'Grades'],['url'=>'reports.php','icon'=>'fas fa-chart-bar','label'=>'Reports']];
+require_once __DIR__ . '/_nav.php';
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../includes/functions.php';
+if (session_status() === PHP_SESSION_NONE) session_start();
+requireLogin();
 
+$user = currentUser();
+$orgId = (int)$user['org_id'];
+
+// ── POST Handlers ─────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    require_once __DIR__ . '/../../config/database.php';
-    require_once __DIR__ . '/../../includes/functions.php';
-    if (session_status() === PHP_SESSION_NONE) session_start();
     verifyCsrf();
-    $user = currentUser();
-    $orgId = (int)$user['org_id'];
     $action = $_POST['action'] ?? '';
 
     if ($action === 'save') {
@@ -19,17 +18,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $name = sanitize($_POST['name'] ?? '');
         $level = sanitize($_POST['level'] ?? '');
         $capacity = (int)($_POST['capacity'] ?? 40);
-        $classTeacher = (int)($_POST['class_teacher'] ?? 0) ?: null;
+        $classTeacherId = (int)($_POST['class_teacher_id'] ?? 0) ?: null;
+        $room = sanitize($_POST['room'] ?? '');
+        $curriculum = in_array($_POST['curriculum'] ?? '', ['IB', 'IGCSE', 'Cambridge', 'CBC', 'AP', 'Mixed']) ? $_POST['curriculum'] : 'IB';
         $academicYearId = (int)($_POST['academic_year_id'] ?? 0) ?: null;
         $status = in_array($_POST['status'] ?? '', ['active', 'inactive']) ? $_POST['status'] : 'active';
 
         if ($id > 0) {
-            $stmt = $pdo->prepare("UPDATE sch_classes SET name = ?, level = ?, capacity = ?, class_teacher = ?, academic_year_id = ?, status = ? WHERE id = ? AND org_id = ?");
-            $stmt->execute([$name, $level, $capacity, $classTeacher, $academicYearId, $status, $id, $orgId]);
+            requireOrgOwnership('sch_classes', $id, $orgId);
+            $stmt = $pdo->prepare("UPDATE sch_classes SET name = ?, level = ?, capacity = ?, class_teacher_id = ?, room = ?, curriculum = ?, academic_year_id = ?, status = ? WHERE id = ? AND org_id = ?");
+            $stmt->execute([$name, $level, $capacity, $classTeacherId, $room, $curriculum, $academicYearId, $status, $id, $orgId]);
             setFlash('success', 'Class details updated successfully.');
         } else {
-            $stmt = $pdo->prepare("INSERT INTO sch_classes (org_id, name, level, capacity, class_teacher, academic_year_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$orgId, $name, $level, $capacity, $classTeacher, $academicYearId, $status]);
+            $stmt = $pdo->prepare("INSERT INTO sch_classes (org_id, name, level, capacity, class_teacher_id, room, curriculum, academic_year_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$orgId, $name, $level, $capacity, $classTeacherId, $room, $curriculum, $academicYearId, $status]);
             setFlash('success', "Academic class '$name' created successfully.");
         }
         logActivity($id > 0 ? 'update' : 'create', 'school', "Class: $name");
@@ -38,33 +40,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
+        requireOrgOwnership('sch_classes', $id, $orgId);
         $pdo->prepare("DELETE FROM sch_classes WHERE id = ? AND org_id = ?")->execute([$id, $orgId]);
         setFlash('success', 'Class removed successfully.');
         redirect('classes.php');
     }
 }
 
-require_once __DIR__ . '/../../includes/header-module.php';
-$user = currentUser();
-$orgId = (int)$user['org_id'];
-
+// ── Load data ─────────────────────────────────────────────────────
 $classesList = [];
 try {
-    $stmt = $pdo->prepare("SELECT c.*, u.name AS teacher_name, 
+    $stmt = $pdo->prepare("SELECT c.*, CONCAT(t.first_name, ' ', t.last_name) AS teacher_name, 
                            (SELECT COUNT(*) FROM sch_students WHERE class_id = c.id AND org_id = ?) AS student_count
                            FROM sch_classes c
-                           LEFT JOIN users u ON c.class_teacher = u.id
+                           LEFT JOIN sch_teachers t ON c.class_teacher_id = t.id
                            WHERE c.org_id = ?
                            ORDER BY c.name ASC");
     $stmt->execute([$orgId, $orgId]);
     $classesList = $stmt->fetchAll();
 } catch (Exception $e) {}
 
-$usersList = [];
+$teachersList = [];
 try {
-    $stmt = $pdo->prepare("SELECT id, name FROM users WHERE org_id = ? ORDER BY name ASC");
+    $stmt = $pdo->prepare("SELECT id, first_name, last_name FROM sch_teachers WHERE org_id = ? AND status = 'active' ORDER BY first_name ASC");
     $stmt->execute([$orgId]);
-    $usersList = $stmt->fetchAll();
+    $teachersList = $stmt->fetchAll();
 } catch (Exception $e) {}
 
 $yearsList = [];
@@ -88,12 +88,15 @@ if (isset($_GET['fetch_details'])) {
         }
     } catch (Exception $e) {}
 }
+
+require_once __DIR__ . '/../../includes/header-module.php';
 ?>
+<?= flashAlert() ?>
 
 <div class="page-header d-flex align-items-center justify-content-between mb-4">
   <div>
     <h4 class="mb-1"><i class="fas fa-chalkboard me-2" style="color:<?= $moduleColor ?>"></i>Academic Classes</h4>
-    <p class="text-muted mb-0">Set up standard classes, configure enrollment caps, and assign classroom teachers</p>
+    <p class="text-muted mb-0">Set up standard classes, configure curriculum alignments, and assign class rooms & teachers</p>
   </div>
   <button class="btn text-white" style="background:<?= $moduleColor ?>" data-bs-toggle="modal" data-bs-target="#clsModal" onclick="openAdd()"><i class="fas fa-plus me-2"></i>Create Class</button>
 </div>
@@ -109,7 +112,9 @@ if (isset($_GET['fetch_details'])) {
         <thead class="table-light">
           <tr>
             <th>Class Name</th>
+            <th>Curriculum</th>
             <th>Education Level</th>
+            <th>Class Room</th>
             <th>Class Teacher</th>
             <th>Student Enrollment</th>
             <th>Remaining Capacity</th>
@@ -119,7 +124,7 @@ if (isset($_GET['fetch_details'])) {
         </thead>
         <tbody>
           <?php if (empty($classesList)): ?>
-          <tr><td colspan="7" class="text-center text-muted py-5"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>No academic classes created yet.</td></tr>
+          <tr><td colspan="9" class="text-center text-muted py-5"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>No academic classes created yet.</td></tr>
           <?php else: foreach ($classesList as $c): 
             $pct = $c['capacity'] > 0 ? ($c['student_count'] / $c['capacity']) * 100 : 0;
             $progressColor = 'success';
@@ -128,7 +133,9 @@ if (isset($_GET['fetch_details'])) {
           ?>
           <tr>
             <td class="fw-semibold text-dark"><?= e($c['name']) ?></td>
+            <td><span class="badge bg-primary"><?= e($c['curriculum'] ?: 'IB') ?></span></td>
             <td><span class="badge bg-light text-dark border"><?= e($c['level'] ?: '—') ?></span></td>
+            <td><span class="fw-semibold text-muted"><?= e($c['room'] ?: '—') ?></span></td>
             <td class="fw-semibold"><?= e($c['teacher_name'] ?: 'Not Assigned') ?></td>
             <td>
               <div class="d-flex align-items-center gap-2">
@@ -170,13 +177,25 @@ if (isset($_GET['fetch_details'])) {
   </div>
   <div class="modal-body">
     <div class="row g-3">
-      <div class="col-12">
+      <div class="col-md-8">
         <label class="form-label fw-semibold">Class Name <span class="text-danger">*</span></label>
-        <input type="text" name="name" id="clsName" class="form-control" required placeholder="e.g. Grade 4 West">
+        <input type="text" name="name" id="clsName" class="form-control" required placeholder="e.g. DP Year 2 Science">
       </div>
-      <div class="col-12">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold">Curriculum <span class="text-danger">*</span></label>
+        <select name="curriculum" id="clsCurriculum" class="form-select" required>
+          <?php foreach(['IB','IGCSE','Cambridge','CBC','AP','Mixed'] as $curr): ?>
+          <option value="<?=$curr?>"><?=$curr?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="col-md-6">
         <label class="form-label fw-semibold">Education Level / Category</label>
-        <input type="text" name="level" id="clsLevel" class="form-control" placeholder="e.g. Primary, Secondary, Form 1">
+        <input type="text" name="level" id="clsLevel" class="form-control" placeholder="e.g. PYP, MYP, DP, IGCSE">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label fw-semibold">Room / Location</label>
+        <input type="text" name="room" id="clsRoom" class="form-control" placeholder="e.g. Room 204, Lab B">
       </div>
       <div class="col-6">
         <label class="form-label fw-semibold">Student Capacity <span class="text-danger">*</span></label>
@@ -190,11 +209,11 @@ if (isset($_GET['fetch_details'])) {
         </select>
       </div>
       <div class="col-12">
-        <label class="form-label fw-semibold">Class Teacher / Tutor</label>
-        <select name="class_teacher" id="clsTeacher" class="form-select">
+        <label class="form-label fw-semibold">Class Teacher (Dedicated Teacher Profile)</label>
+        <select name="class_teacher_id" id="clsTeacher" class="form-select">
           <option value="">-- select teacher --</option>
-          <?php foreach ($usersList as $ul): ?>
-          <option value="<?= $ul['id'] ?>"><?= e($ul['name']) ?></option>
+          <?php foreach ($teachersList as $t): ?>
+          <option value="<?= $t['id'] ?>"><?= e($t['first_name'] . ' ' . $t['last_name']) ?></option>
           <?php endforeach; ?>
         </select>
       </div>
@@ -222,14 +241,15 @@ if (isset($_GET['fetch_details'])) {
   <input type="hidden" name="id" id="delClsId">
 </form>
 
-<?php
-$extraJs = <<<'JS'
+<?php ob_start(); ?>
 <script>
 function openAdd() {
   document.getElementById('clsTitle').innerHTML = '<i class="fas fa-chalkboard me-2"></i>Create Academic Class';
   document.getElementById('clsId').value = '0';
   document.getElementById('clsName').value = '';
   document.getElementById('clsLevel').value = '';
+  document.getElementById('clsRoom').value = '';
+  document.getElementById('clsCurriculum').value = 'IB';
   document.getElementById('clsCapacity').value = '40';
   document.getElementById('clsStatus').value = 'active';
   document.getElementById('clsTeacher').value = '';
@@ -243,30 +263,24 @@ function openEdit(id) {
       document.getElementById('clsId').value = data.id;
       document.getElementById('clsName').value = data.name;
       document.getElementById('clsLevel').value = data.level || '';
+      document.getElementById('clsRoom').value = data.room || '';
+      document.getElementById('clsCurriculum').value = data.curriculum || 'IB';
       document.getElementById('clsCapacity').value = data.capacity;
       document.getElementById('clsStatus').value = data.status;
-      document.getElementById('clsTeacher').value = data.class_teacher || '';
+      document.getElementById('clsTeacher').value = data.class_teacher_id || '';
       document.getElementById('clsYear').value = data.academic_year_id || '';
       
       new bootstrap.Modal(document.getElementById('clsModal')).show();
     });
 }
 function delClass(id, name) {
-  Swal.fire({
-    title: 'Delete Class?',
-    text: 'Remove "' + name + '"? Enrolled students will be marked as unassigned.',
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#e74c3c',
-    confirmButtonText: 'Yes, delete'
-  }).then(r => {
-    if (r.isConfirmed) {
-      document.getElementById('delClsId').value = id;
-      document.getElementById('delClsForm').submit();
-    }
-  });
+  if (confirm('Remove class "' + name + '"? Enrolled students will be marked as unassigned.')) {
+    document.getElementById('delClsId').value = id;
+    document.getElementById('delClsForm').submit();
+  }
 }
 </script>
-JS;
+<?php 
+$extraJs = ob_get_clean();
 require_once __DIR__ . '/../../includes/footer.php';
 ?>

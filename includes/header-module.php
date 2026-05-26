@@ -1,7 +1,7 @@
 <?php
 // Shared header for all module pages
 // Requires: $moduleSlug, $moduleName, $moduleIcon, $moduleColor set before including
-if (session_start() === PHP_SESSION_NONE || session_status() === PHP_SESSION_NONE) session_start();
+if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/functions.php';
 requireModuleAccess($moduleSlug ?? '');
@@ -19,6 +19,109 @@ $pageTitle = ($moduleName ?? 'Module') . ' — ' . APP_NAME;
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
 <link href="<?= APP_URL ?>/assets/css/style.css" rel="stylesheet">
+<style>
+/* ── Header search bar ───────────────────────────────────────── */
+.header-search { position:relative; display:flex; align-items:center; }
+.header-search-form { display:flex; align-items:center; background:#f1f5f9; border:1.5px solid transparent; border-radius:24px; padding:5px 12px; gap:6px; transition:width .25s cubic-bezier(.4,0,.2,1), border-color .2s, background .2s; width:38px; overflow:hidden; }
+.header-search-form:focus-within { width:240px; background:#fff; border-color:var(--green, #1A8A4E); box-shadow:0 0 0 3px rgba(26,138,78,.1); }
+.header-search-form .search-icon { color:#94a3b8; font-size:.85rem; flex-shrink:0; cursor:pointer; transition:color .15s; }
+.header-search-form:focus-within .search-icon { color:var(--green, #1A8A4E); }
+.header-search-input { border:none; background:transparent; outline:none; font-size:.82rem; color:#0B2D4E; width:100%; min-width:0; padding:0; }
+.header-search-input::placeholder { color:#94a3b8; }
+.header-search-dropdown { position:absolute; top:calc(100% + 8px); left:0; right:0; background:#fff; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.12); z-index:1050; max-height:320px; overflow-y:auto; display:none; min-width:280px; }
+.header-search-dropdown.show { display:block; animation:fadeInDown .15s ease; }
+@keyframes fadeInDown { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:none} }
+.hsd-item { display:flex; align-items:center; gap:10px; padding:9px 14px; cursor:pointer; transition:background .1s; border-bottom:1px solid #f8fafc; text-decoration:none; color:inherit; }
+.hsd-item:hover { background:#f0fdf4; }
+.hsd-item:last-child { border-bottom:none; }
+.hsd-icon { width:28px; height:28px; border-radius:8px; background:#f1f5f9; display:flex; align-items:center; justify-content:center; font-size:.72rem; color:#64748b; flex-shrink:0; }
+.hsd-label { font-size:.8rem; font-weight:600; color:#0B2D4E; }
+.hsd-meta { font-size:.7rem; color:#94a3b8; }
+.hsd-section { padding:6px 14px 4px; font-size:.65rem; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.06em; background:#fafafa; }
+.hsd-empty { padding:18px 14px; text-align:center; color:#94a3b8; font-size:.8rem; }
+@media(max-width:640px) { .header-search-form:focus-within { width:160px; } .header-title { display:none; } }
+</style>
+<script>
+/* ── Header live-search ──────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', function() {
+  const input    = document.getElementById('headerSearchInput');
+  const dropdown = document.getElementById('headerSearchDropdown');
+  const form     = document.getElementById('headerSearchForm');
+  if (!input || !dropdown) return;
+
+  let timer = null;
+
+  const iconMap = {
+    customer:'fa-user', contact:'fa-address-book', invoice:'fa-file-invoice',
+    product:'fa-box', sale:'fa-shopping-cart', ticket:'fa-headset',
+    user:'fa-user-circle', order:'fa-receipt', default:'fa-search'
+  };
+
+  function getIcon(type) {
+    const k = Object.keys(iconMap).find(k => type && type.toLowerCase().includes(k));
+    return iconMap[k || 'default'];
+  }
+
+  function showResults(results, query) {
+    if (!results || !results.length) {
+      dropdown.innerHTML = `<div class="hsd-empty"><i class="fas fa-search-minus me-1"></i>No results for "<strong>${escQ(query)}</strong>"</div>`;
+    } else {
+      let lastType = null;
+      dropdown.innerHTML = results.slice(0, 12).map(r => {
+        let sec = '';
+        if (r.type !== lastType) {
+          lastType = r.type;
+          sec = `<div class="hsd-section">${escQ(r.type || 'Results')}</div>`;
+        }
+        return `${sec}<a class="hsd-item" href="${escQ(r.url || '#')}">
+          <div class="hsd-icon"><i class="fas ${getIcon(r.type)}"></i></div>
+          <div><div class="hsd-label">${escQ(r.title)}</div><div class="hsd-meta">${escQ(r.subtitle || '')}</div></div>
+        </a>`;
+      }).join('') +
+      `<a class="hsd-item" href="<?= APP_URL ?>/client/search.php?q=${encodeURIComponent(query)}" style="justify-content:center;color:var(--green);font-size:.78rem;font-weight:600">
+        <i class="fas fa-search me-2"></i>See all results for "${escQ(query)}"
+      </a>`;
+    }
+    dropdown.classList.add('show');
+  }
+
+  function escQ(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function hideDropdown() {
+    dropdown.classList.remove('show');
+  }
+
+  input.addEventListener('input', function() {
+    clearTimeout(timer);
+    const q = this.value.trim();
+    if (q.length < 2) { hideDropdown(); return; }
+    dropdown.innerHTML = `<div class="hsd-empty"><i class="fas fa-spinner fa-spin me-1"></i>Searching…</div>`;
+    dropdown.classList.add('show');
+    timer = setTimeout(() => {
+      fetch('<?= APP_URL ?>/client/search.php?q=' + encodeURIComponent(q) + '&json=1')
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(data => showResults(data.results || [], q))
+        .catch(() => { dropdown.innerHTML = `<div class="hsd-empty">Could not reach search.</div>`; });
+    }, 280);
+  });
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { hideDropdown(); this.blur(); }
+  });
+
+  document.addEventListener('mousedown', function(e) {
+    if (!document.getElementById('headerSearch').contains(e.target)) hideDropdown();
+  });
+
+  // Prevent form submit on empty
+  form.addEventListener('submit', function(e) {
+    if (!input.value.trim()) e.preventDefault();
+    hideDropdown();
+  });
+});
+</script>
 </head>
 <body class="client-layout">
 
@@ -59,6 +162,22 @@ $pageTitle = ($moduleName ?? 'Module') . ' — ' . APP_NAME;
       </div>
       <?= e($moduleName ?? 'Module') ?>
     </div>
+
+    <!-- ── Global Search ─────────────────────────────────────── -->
+    <div class="header-search ms-auto me-3" id="headerSearch">
+      <form class="header-search-form" id="headerSearchForm"
+            action="<?= APP_URL ?>/client/search.php" method="GET"
+            autocomplete="off" role="search">
+        <i class="fas fa-search search-icon" onclick="document.getElementById('headerSearchInput').focus()"></i>
+        <input type="text" name="q" id="headerSearchInput"
+               class="header-search-input"
+               placeholder="Search anything…"
+               aria-label="Global search"
+               maxlength="120">
+      </form>
+      <div class="header-search-dropdown" id="headerSearchDropdown" role="listbox"></div>
+    </div>
+
     <div class="header-actions">
       <a href="<?= APP_URL ?>/client/index.php" class="btn btn-sm btn-outline-secondary">
         <i class="fas fa-home me-1"></i> Dashboard

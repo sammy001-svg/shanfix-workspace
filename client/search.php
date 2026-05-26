@@ -339,6 +339,28 @@ if (strlen($q) >= 2) {
 }
 ?>
 
+<?php
+// ── JSON mode for live header search dropdown ────────────────────
+if (!empty($_GET['json'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-cache');
+    $flat = [];
+    foreach ($results as $slug => $group) {
+        foreach ($group['items'] as $item) {
+            $flat[] = [
+                'title'    => $item['label'],
+                'subtitle' => $item['sub'] ?? '',
+                'type'     => $item['section'],
+                'url'      => $item['link'],
+                'icon'     => $item['icon'],
+            ];
+        }
+    }
+    echo json_encode(['success' => true, 'results' => $flat, 'total' => count($flat)]);
+    exit;
+}
+?>
+
 <div class="page-header">
   <div>
     <h4><i class="fas fa-search me-2 text-primary"></i>Global Search</h4>

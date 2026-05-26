@@ -9,6 +9,9 @@ $moduleNav=[
     ['url'=>'lessons.php',     'icon'=>'fas fa-road',               'label'=>'Lessons'],
     ['url'=>'tests.php',       'icon'=>'fas fa-clipboard-check',    'label'=>'Tests'],
     ['url'=>'licenses.php',    'icon'=>'fas fa-id-card',            'label'=>'Licenses'],
+    ['url'=>'schedule.php',    'icon'=>'fas fa-calendar-week',      'label'=>'Schedule'],
+    ['url'=>'payments.php',    'icon'=>'fas fa-money-bill',         'label'=>'Payments'],
+    ['url'=>'certificates.php','icon'=>'fas fa-certificate',        'label'=>'Certificates'],
     ['url'=>'reports.php',     'icon'=>'fas fa-chart-bar',          'label'=>'Reports'],
 ];
 

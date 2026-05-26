@@ -44,8 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($loyalty) {
                 $newBalance = (int)$loyalty['points_balance'] + $points;
-                $pdo->prepare("UPDATE salon_loyalty SET points_balance=?, total_earned=total_earned+?, updated_at=NOW() WHERE id=?")
-                    ->execute([$newBalance, max(0, $points), $loyalty['id']]);
+                $pdo->prepare("UPDATE salon_loyalty SET points_balance=?, total_earned=total_earned+?, updated_at=NOW() WHERE id=? AND org_id=?")
+                    ->execute([$newBalance, max(0, $points), $loyalty['id'], $orgId]);
                 $lid = $loyalty['id'];
             } else {
                 $newBalance = max(0, $points);

@@ -60,6 +60,8 @@ function markNotifsRead() {
       <i class="fas fa-credit-card"></i><span>Subscriptions</span></a>
     <a href="<?= APP_URL ?>/admin/invoices.php"      class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'invoices.php'      ? 'active' : '' ?>">
       <i class="fas fa-file-invoice"></i><span>Invoices</span></a>
+    <a href="<?= APP_URL ?>/admin/wallet.php"       class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'wallet.php'       ? 'active' : '' ?>">
+      <i class="fas fa-wallet"></i><span>Wallet</span></a>
 
     <div class="nav-label">SYSTEM</div>
     <a href="<?= APP_URL ?>/admin/modules.php"       class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'modules.php'       ? 'active' : '' ?>">
