@@ -122,8 +122,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete_user') {
         $uid = (int)($_POST['user_id'] ?? 0);
         if ($uid !== $myId) {
-            $adminCount  = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE org_id=$orgId AND role='client_admin' AND status='active'")->fetchColumn();
-            $targetRole  = $pdo->query("SELECT role FROM users WHERE id=$uid AND org_id=$orgId")->fetchColumn();
+            $stmtCount  = $pdo->prepare("SELECT COUNT(*) FROM users WHERE org_id=? AND role='client_admin' AND status='active'");
+            $stmtCount->execute([$orgId]);
+            $adminCount = (int)$stmtCount->fetchColumn();
+
+            $stmtRole  = $pdo->prepare("SELECT role FROM users WHERE id=? AND org_id=?");
+            $stmtRole->execute([$uid, $orgId]);
+            $targetRole = $stmtRole->fetchColumn();
+
             if ($targetRole === 'client_admin' && $adminCount <= 1) {
                 setFlash('danger', 'Cannot delete the last admin account.');
             } else {

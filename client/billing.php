@@ -97,8 +97,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'pay_f
                 $pdo->prepare("INSERT INTO subscription_modules (subscription_id,module_id,status) VALUES (?,?,'active') ON DUPLICATE KEY UPDATE status='active'")
                     ->execute([$subId, $inv['module_id']]);
             }
-            $modName = $pdo->prepare("SELECT name FROM modules WHERE id=?")->execute([$inv['module_id']]) ?
-                $pdo->prepare("SELECT name FROM modules WHERE id=?")->execute([$inv['module_id']]) : '';
             $mn = $pdo->prepare("SELECT name FROM modules WHERE id=?");
             $mn->execute([$inv['module_id']]);
             $modName = $mn->fetchColumn() ?: 'Module';
@@ -159,8 +157,6 @@ $highlightInv = (int)($_GET['inv'] ?? 0);
 $walletBalance = 0.00;
 $walletTxns    = [];
 try {
-    $walletBalance = (float)($pdo->prepare("SELECT wallet_balance FROM organizations WHERE id=?")
-        ->execute([$orgId]) ? $pdo->prepare("SELECT wallet_balance FROM organizations WHERE id=?")->execute([$orgId]) : 0);
     $wb = $pdo->prepare("SELECT wallet_balance FROM organizations WHERE id=?");
     $wb->execute([$orgId]);
     $walletBalance = (float)($wb->fetchColumn() ?: 0);
@@ -316,8 +312,8 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
           <?= statusBadge($sub['status']) ?>
         </div>
         <table class="table table-sm table-borderless mb-3">
-          <tr><td class="text-muted small">Billing</td><td class="fw-bold text-capitalize small"><?= $sub['billing_cycle'] ?></td></tr>
-          <tr><td class="text-muted small">Amount</td><td class="fw-bold text-green small"><?= formatCurrency((float)$sub['amount']) ?>/mo</td></tr>
+          <tr><td class="text-muted small">Billing</td><td class="fw-bold text-capitalize small"><?= e($sub['billing_cycle']) ?></td></tr>
+          <tr><td class="text-muted small">Amount</td><td class="fw-bold text-green small"><?= formatCurrency((float)$sub['amount']) ?>/<?= $sub['billing_cycle'] === 'annual' ? 'yr' : 'mo' ?></td></tr>
           <?php if ($sub['trial_ends_at']): ?>
           <tr><td class="text-muted small">Trial Ends</td><td class="fw-bold text-warning small"><?= formatDate($sub['trial_ends_at']) ?></td></tr>
           <?php endif; ?>
