@@ -290,6 +290,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   <main class="main-content">
     <?= flashAlert() ?>
+    <?php require_once __DIR__ . '/_org-login-banner.php'; ?>
     <?php
     $__subWarn = getSubscriptionWarning((int)$user['org_id']);
     if ($__subWarn):

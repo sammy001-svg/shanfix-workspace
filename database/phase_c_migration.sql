@@ -615,6 +615,92 @@ CREATE TABLE IF NOT EXISTS caryard_deliveries (
     INDEX idx_org (org_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ──────────────────────────────────────────────────────────────
+-- PLATFORM — Phase D & E tables
+-- ──────────────────────────────────────────────────────────────
+
+-- Staff module access control (Phase D)
+CREATE TABLE IF NOT EXISTS user_module_access (
+    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT UNSIGNED NOT NULL,
+    org_id          INT UNSIGNED NOT NULL,
+    module_slug     VARCHAR(100) NOT NULL,
+    can_view        TINYINT(1) DEFAULT 1,
+    can_create      TINYINT(1) DEFAULT 1,
+    can_edit        TINYINT(1) DEFAULT 1,
+    can_delete      TINYINT(1) DEFAULT 0,
+    can_export      TINYINT(1) DEFAULT 0,
+    granted_by      INT UNSIGNED,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_user_module (user_id, module_slug),
+    INDEX idx_org (org_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Notification email templates (Phase D)
+CREATE TABLE IF NOT EXISTS notification_templates (
+    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    org_id          INT UNSIGNED COMMENT 'NULL = global default',
+    event_key       VARCHAR(150) NOT NULL COMMENT 'e.g. loan_approved, invoice_sent',
+    name            VARCHAR(200) NOT NULL,
+    subject         VARCHAR(300) NOT NULL,
+    body_html       TEXT NOT NULL,
+    variables       VARCHAR(500) COMMENT 'CSV list of available {{vars}}',
+    is_active       TINYINT(1) DEFAULT 1,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_org (org_id),
+    INDEX idx_event (event_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Bulk CSV import logs (Phase D)
+CREATE TABLE IF NOT EXISTS import_logs (
+    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    org_id          INT UNSIGNED NOT NULL,
+    module_slug     VARCHAR(100) NOT NULL,
+    record_type     VARCHAR(100) NOT NULL,
+    filename        VARCHAR(300),
+    rows_total      INT DEFAULT 0,
+    rows_imported   INT DEFAULT 0,
+    rows_failed     INT DEFAULT 0,
+    errors          TEXT,
+    status          ENUM('processing','completed','failed') DEFAULT 'processing',
+    imported_by     INT UNSIGNED,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_org (org_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- REST API tokens (Phase E)
+CREATE TABLE IF NOT EXISTS api_tokens (
+    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    org_id          INT UNSIGNED NOT NULL,
+    user_id         INT UNSIGNED NOT NULL,
+    token_name      VARCHAR(150) NOT NULL,
+    token_hash      VARCHAR(255) NOT NULL,
+    permissions     TEXT COMMENT 'JSON array of allowed scopes',
+    last_used_at    TIMESTAMP NULL,
+    expires_at      TIMESTAMP NULL,
+    is_active       TINYINT(1) DEFAULT 1,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_hash (token_hash),
+    INDEX idx_org (org_id),
+    INDEX idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Org branding (Phase E — adds columns to organizations if not present)
+ALTER TABLE organizations
+    ADD COLUMN IF NOT EXISTS primary_color  VARCHAR(7)   DEFAULT NULL COMMENT 'Hex color override for org portal',
+    ADD COLUMN IF NOT EXISTS brand_logo     VARCHAR(500) DEFAULT NULL COMMENT 'Uploaded logo file path',
+    ADD COLUMN IF NOT EXISTS brand_tagline  VARCHAR(200) DEFAULT NULL COMMENT 'Custom tagline shown on org login page',
+    ADD COLUMN IF NOT EXISTS require_2fa    TINYINT(1)   DEFAULT 0   COMMENT 'Force 2FA for all org users';
+
+-- 2FA enforcement — add column to users if not present (Phase E)
+ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS totp_enabled   TINYINT(1)   DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS totp_secret    VARCHAR(255) DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS locked_until   DATETIME     DEFAULT NULL;
+
 SET FOREIGN_KEY_CHECKS = 1;
 
--- End of Phase C Migration
+-- End of Phase C + D + E Migration
+SELECT 'OrbitDesk Phase C/D/E migration complete.' AS status;

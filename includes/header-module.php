@@ -200,3 +200,4 @@ document.addEventListener('DOMContentLoaded', function() {
   </header>
   <main class="main-content">
     <?= flashAlert() ?>
+    <?php require_once __DIR__ . '/_org-login-banner.php'; ?>

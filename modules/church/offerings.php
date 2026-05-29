@@ -14,6 +14,9 @@ $moduleNav   = [
     ['url' => 'pastoral.php',  'icon' => 'fas fa-hands-helping',      'label' => 'Pastoral Care'],
     ['url' => 'events.php',    'icon' => 'fas fa-calendar-alt',       'label' => 'Events'],
     ['url' => 'cells.php',     'icon' => 'fas fa-home',               'label' => 'Cells / Groups'],
+    ['url' => 'pledges.php',   'icon' => 'fas fa-handshake',          'label' => 'Pledges'],
+    ['url' => 'projects.php',  'icon' => 'fas fa-project-diagram',    'label' => 'Projects'],
+    ['url' => 'notices.php',   'icon' => 'fas fa-bell',               'label' => 'Notices'],
     ['url' => 'reports.php',   'icon' => 'fas fa-chart-bar',          'label' => 'Reports'],
 ];
 

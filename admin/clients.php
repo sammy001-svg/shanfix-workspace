@@ -131,6 +131,45 @@ if ($viewId) {
           </div>
         </div>
 
+        <!-- Login Portal card -->
+        <?php
+        $__orgSlug   = $org['slug'] ?? null;
+        $__portalUrl = $__orgSlug ? APP_URL . '/auth/org-login.php?org=' . rawurlencode($__orgSlug) : null;
+        ?>
+        <div class="card mb-4" style="border-left:4px solid #1A8A4E">
+          <div class="card-header d-flex align-items-center gap-2">
+            <div style="width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#1A8A4E,#22a860);display:flex;align-items:center;justify-content:center;color:#fff;font-size:.75rem;flex-shrink:0">
+              <i class="fas fa-link"></i>
+            </div>
+            <span class="fw-semibold small">Client Login Portal</span>
+          </div>
+          <div class="card-body">
+            <p class="text-muted small mb-3">Share this direct login link with the client's team members so they can access their workspace without needing the main login page.</p>
+            <?php if ($__portalUrl): ?>
+            <div class="d-flex align-items-center gap-2 mb-3 p-2 rounded" style="background:#f0fdf4;border:1px solid #bbf7d0;">
+              <i class="fas fa-link text-green flex-shrink-0 small"></i>
+              <code class="small flex-1 text-navy" id="adminPortalUrl" style="word-break:break-all;background:none;font-size:.72rem"><?= htmlspecialchars($__portalUrl, ENT_QUOTES) ?></code>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+              <button class="btn btn-sm text-white fw-semibold" style="background:#1A8A4E" onclick="copyAdminPortalUrl()" id="adminPortalCopyBtn">
+                <i class="fas fa-copy me-1" id="adminPortalCopyIcon"></i><span id="adminPortalCopyText">Copy Link</span>
+              </button>
+              <a href="<?= htmlspecialchars($__portalUrl, ENT_QUOTES) ?>" target="_blank" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-external-link-alt me-1"></i>Open Portal
+              </a>
+              <a href="?edit=<?= $viewId ?>" class="btn btn-sm btn-link text-muted p-0 ms-auto align-self-center small">
+                <i class="fas fa-info-circle me-1"></i>Slug: <?= htmlspecialchars($__orgSlug, ENT_QUOTES) ?>
+              </a>
+            </div>
+            <?php else: ?>
+            <div class="text-muted small text-center py-2">
+              <i class="fas fa-exclamation-triangle text-warning me-1"></i>
+              No portal URL — organization slug not set. <a href="?edit=<?= $viewId ?>">Edit client</a> to assign one.
+            </div>
+            <?php endif; ?>
+          </div>
+        </div>
+
         <!-- Subscription card -->
         <div class="card mb-4">
           <div class="card-header"><i class="fas fa-credit-card text-green me-2"></i>Subscription</div>
@@ -320,6 +359,32 @@ if ($viewId) {
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify({action:"toggle_org_status", id, status:"active"})
       }).then(() => location.reload());
+    }
+
+    function copyAdminPortalUrl() {
+      var url  = document.getElementById("adminPortalUrl").textContent.trim();
+      var btn  = document.getElementById("adminPortalCopyBtn");
+      var ico  = document.getElementById("adminPortalCopyIcon");
+      var txt  = document.getElementById("adminPortalCopyText");
+      navigator.clipboard.writeText(url).then(function() {
+        var origBg = btn.style.background;
+        btn.style.background = "#0B2D4E";
+        ico.className = "fas fa-check me-1";
+        txt.textContent = "Copied!";
+        setTimeout(function() {
+          btn.style.background = "#1A8A4E";
+          ico.className = "fas fa-copy me-1";
+          txt.textContent = "Copy Link";
+        }, 2200);
+      }).catch(function() {
+        var ta = document.createElement("textarea");
+        ta.value = url; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); } catch(e) {}
+        document.body.removeChild(ta);
+        txt.textContent = "Copied!";
+        setTimeout(function(){ txt.textContent = "Copy Link"; }, 2000);
+      });
     }
     </script>';
     require_once __DIR__ . '/../includes/footer.php';
@@ -529,6 +594,12 @@ require_once __DIR__ . '/../includes/header-admin.php';
               <div class="d-flex gap-1 flex-wrap">
                 <a href="?view=<?= $c['id'] ?>" class="btn btn-xs btn-outline-primary" title="View details"><i class="fas fa-eye"></i></a>
                 <a href="?edit=<?= $c['id'] ?>" class="btn btn-xs btn-outline-secondary" title="Edit"><i class="fas fa-edit"></i></a>
+                <?php if (!empty($c['slug'])): ?>
+                <button class="btn btn-xs btn-outline-success" title="Copy login portal URL"
+                        onclick="copyClientPortalUrl('<?= htmlspecialchars(APP_URL . '/auth/org-login.php?org=' . rawurlencode($c['slug']), ENT_QUOTES) ?>', this)">
+                  <i class="fas fa-link"></i>
+                </button>
+                <?php endif; ?>
                 <a href="subscriptions.php?org=<?= $c['id'] ?>" class="btn btn-xs btn-outline-info" title="Manage subscription"><i class="fas fa-credit-card"></i></a>
                 <?php if($c['status'] === 'active'): ?>
                 <a href="?delete=<?= $c['id'] ?>" class="btn btn-xs btn-outline-danger" data-confirm="Deactivate <?= e($c['name']) ?>?" title="Deactivate"><i class="fas fa-ban"></i></a>
@@ -621,4 +692,31 @@ require_once __DIR__ . '/../includes/header-admin.php';
   </div>
 </div>
 
-<?php require_once __DIR__ . '/../includes/footer.php'; ?>
+<?php
+$extraJs = <<<'JS'
+<script>
+function copyClientPortalUrl(url, btn) {
+  navigator.clipboard.writeText(url).then(function() {
+    var ico = btn.querySelector('i');
+    var orig = ico.className;
+    ico.className = 'fas fa-check';
+    btn.classList.remove('btn-outline-success');
+    btn.classList.add('btn-success');
+    btn.title = 'Copied!';
+    setTimeout(function() {
+      ico.className = orig;
+      btn.classList.remove('btn-success');
+      btn.classList.add('btn-outline-success');
+      btn.title = 'Copy login portal URL';
+    }, 2000);
+  }).catch(function() {
+    var ta = document.createElement('textarea');
+    ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(e) {}
+    document.body.removeChild(ta);
+  });
+}
+</script>
+JS;
+require_once __DIR__ . '/../includes/footer.php'; ?>

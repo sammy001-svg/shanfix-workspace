@@ -14,7 +14,10 @@ $moduleNav   = [
     ['url' => 'bills.php',        'icon' => 'fas fa-file-import',     'label' => 'Vendor Bills'],
     ['url' => 'budgets.php',      'icon' => 'fas fa-bullseye',        'label' => 'Budgets'],
     ['url' => 'taxes.php',        'icon' => 'fas fa-percentage',      'label' => 'Tax Rates'],
-    ['url' => 'reports.php',      'icon' => 'fas fa-chart-bar',       'label' => 'Reports'],
+    ['url' => 'assets.php',        'icon' => 'fas fa-building',        'label' => 'Fixed Assets'],
+    ['url' => 'payroll-journal.php','icon'=> 'fas fa-file-alt',        'label' => 'Payroll Journal'],
+    ['url' => 'audit.php',         'icon' => 'fas fa-history',         'label' => 'Audit Trail'],
+    ['url' => 'reports.php',       'icon' => 'fas fa-chart-bar',       'label' => 'Reports'],
 ];
 
 require_once __DIR__ . '/../../includes/header-module.php';
