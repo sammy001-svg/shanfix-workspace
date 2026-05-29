@@ -78,9 +78,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
         try {
             require_once __DIR__ . '/../includes/notifications.php';
             require_once __DIR__ . '/../includes/mailer.php';
-            $orgRow = $pdo->query("SELECT name FROM organizations WHERE id={$orgId} LIMIT 1")->fetch();
+            $orgStmt = $pdo->prepare("SELECT name FROM organizations WHERE id=? LIMIT 1");
+            $orgStmt->execute([$orgId]);
+            $orgRow  = $orgStmt->fetch();
             $orgName = $orgRow['org_name'] ?? $orgRow['name'] ?? 'Unknown Org';
-            $saStmt = $pdo->query("SELECT name, email FROM users WHERE role='super_admin' LIMIT 5");
+            $saStmt  = $pdo->query("SELECT name, email FROM users WHERE role='super_admin' LIMIT 5");
             foreach ($saStmt->fetchAll() as $sa) {
                 _sendNotifEmail(
                     $sa['email'],

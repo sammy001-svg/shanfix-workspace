@@ -412,26 +412,26 @@ $actIcons = [
   <div class="col-6 col-md-3">
     <div class="stat-card navy">
       <div class="stat-icon navy-bg"><i class="fas fa-puzzle-piece"></i></div>
-      <div><div class="stat-value"><?= count($activeModules) ?></div><div class="stat-label">Active Modules</div></div>
+      <div><div class="stat-value" id="kpi-modules"><?= count($activeModules) ?></div><div class="stat-label">Active Modules</div></div>
     </div>
   </div>
   <div class="col-6 col-md-3">
     <div class="stat-card green">
       <div class="stat-icon green-bg"><i class="fas fa-users"></i></div>
-      <div><div class="stat-value"><?= $userCount ?></div><div class="stat-label">Team Members</div></div>
+      <div><div class="stat-value" id="kpi-users"><?= $userCount ?></div><div class="stat-label">Team Members</div></div>
     </div>
   </div>
   <div class="col-6 col-md-3">
     <div class="stat-card <?= $openTickets > 0 ? 'warning' : 'navy' ?>">
       <div class="stat-icon <?= $openTickets > 0 ? 'warning' : 'navy' ?>-bg"><i class="fas fa-headset"></i></div>
-      <div><div class="stat-value"><?= $openTickets ?></div><div class="stat-label">Open Tickets</div></div>
+      <div><div class="stat-value" id="kpi-tickets"><?= $openTickets ?></div><div class="stat-label">Open Tickets</div></div>
     </div>
   </div>
   <div class="col-6 col-md-3">
     <a href="<?= APP_URL ?>/client/notifications.php" class="text-decoration-none">
       <div class="stat-card <?= $unreadNotifs > 0 ? 'warning' : 'green' ?>">
         <div class="stat-icon <?= $unreadNotifs > 0 ? 'warning' : 'green' ?>-bg"><i class="fas fa-bell<?= $unreadNotifs > 0 ? '' : '-slash' ?>"></i></div>
-        <div><div class="stat-value"><?= $unreadNotifs ?></div><div class="stat-label">Unread Alerts</div></div>
+        <div><div class="stat-value" id="kpi-notif-badge"><?= $unreadNotifs ?></div><div class="stat-label">Unread Alerts</div></div>
       </div>
     </a>
   </div>
@@ -663,7 +663,7 @@ $actIcons = [
         </div>
         <div class="d-flex justify-content-between mb-2 small">
           <span class="text-muted">Amount</span>
-          <strong class="text-green"><?= formatCurrency((float)$sub['amount']) ?>/mo</strong>
+          <strong class="text-green"><?= formatCurrency((float)$sub['amount']) ?>/<?= $sub['billing_cycle'] === 'annual' ? 'yr' : 'mo' ?></strong>
         </div>
         <?php if ($sub['ends_at']): ?>
         <div class="d-flex justify-content-between mb-2 small">
