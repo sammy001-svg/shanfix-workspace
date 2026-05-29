@@ -2,6 +2,7 @@
 session_start();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
+sendSecurityHeaders();
 
 if (isLoggedIn()) redirect(APP_URL . '/client/index.php');
 
@@ -10,8 +11,12 @@ $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = strtolower(trim($_POST['email'] ?? ''));
+    $ip    = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    // Rate limit: max 5 reset requests per IP per 15 minutes
+    if (!rateLimit('password_reset', $ip, 5, 900)) {
+        $error = 'Too many requests. Please wait 15 minutes before trying again.';
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
     } else {
         // Always show success message — don't leak whether email exists

@@ -418,3 +418,371 @@ function safeUserId(): int {
     }
     return $id;
 }
+
+// ── Input Validation ───────────────────────────────────────────
+
+/**
+ * Validate an associative array against rules.
+ *
+ * Rule syntax (pipe-separated):  'required|email|min:5|max:200'
+ * Supported rules:
+ *   required, email, url, numeric, integer, alpha, alphanumeric
+ *   min:N (string length or numeric), max:N
+ *   in:a,b,c  (allowed values)
+ *   regex:/pattern/
+ *   confirmed:other_field_name (equality check)
+ *   date (strtotime-parseable)
+ *   phone (digits, optional leading +)
+ *
+ * Returns ['field' => 'Error message', ...]. Empty = valid.
+ *
+ * @param array  $data  Flat key=>value array (typically from $_POST)
+ * @param array  $rules ['fieldName' => 'rule1|rule2', ...]
+ * @param array  $labels Optional human-readable labels for fields
+ */
+function validate(array $data, array $rules, array $labels = []): array {
+    $errors = [];
+
+    foreach ($rules as $field => $ruleString) {
+        $value    = $data[$field] ?? '';
+        $label    = $labels[$field] ?? ucwords(str_replace('_', ' ', $field));
+        $ruleList = array_map('trim', explode('|', $ruleString));
+        $required = in_array('required', $ruleList);
+
+        foreach ($ruleList as $rule) {
+            // Stop checking this field after first error
+            if (isset($errors[$field])) break;
+
+            if ($rule === 'required') {
+                if ($value === '' || $value === null) {
+                    $errors[$field] = "{$label} is required.";
+                }
+                continue;
+            }
+
+            // Skip further checks on empty optional fields
+            if ($value === '' || $value === null) continue;
+
+            if ($rule === 'email') {
+                if (!filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                    $errors[$field] = "{$label} must be a valid email address.";
+                }
+            } elseif ($rule === 'url') {
+                if (!filter_var($value, FILTER_VALIDATE_URL)) {
+                    $errors[$field] = "{$label} must be a valid URL.";
+                }
+            } elseif ($rule === 'numeric') {
+                if (!is_numeric($value)) {
+                    $errors[$field] = "{$label} must be a number.";
+                }
+            } elseif ($rule === 'integer') {
+                if (!ctype_digit((string)(int)$value) || (string)(int)$value !== (string)$value) {
+                    $errors[$field] = "{$label} must be a whole number.";
+                }
+            } elseif ($rule === 'alpha') {
+                if (!ctype_alpha(str_replace(' ', '', (string)$value))) {
+                    $errors[$field] = "{$label} may only contain letters.";
+                }
+            } elseif ($rule === 'alphanumeric') {
+                if (!ctype_alnum(str_replace([' ', '-', '_'], '', (string)$value))) {
+                    $errors[$field] = "{$label} may only contain letters and numbers.";
+                }
+            } elseif ($rule === 'date') {
+                if (!strtotime((string)$value)) {
+                    $errors[$field] = "{$label} must be a valid date.";
+                }
+            } elseif ($rule === 'phone') {
+                if (!preg_match('/^\+?[\d\s\-\(\)]{7,20}$/', (string)$value)) {
+                    $errors[$field] = "{$label} must be a valid phone number.";
+                }
+            } elseif (str_starts_with($rule, 'min:')) {
+                $min = (int)substr($rule, 4);
+                $check = is_numeric($value) ? (float)$value : mb_strlen((string)$value);
+                $unit  = is_numeric($value) ? '' : ' characters';
+                if ($check < $min) {
+                    $errors[$field] = "{$label} must be at least {$min}{$unit}.";
+                }
+            } elseif (str_starts_with($rule, 'max:')) {
+                $max = (int)substr($rule, 4);
+                $check = is_numeric($value) ? (float)$value : mb_strlen((string)$value);
+                $unit  = is_numeric($value) ? '' : ' characters';
+                if ($check > $max) {
+                    $errors[$field] = "{$label} must not exceed {$max}{$unit}.";
+                }
+            } elseif (str_starts_with($rule, 'in:')) {
+                $allowed = explode(',', substr($rule, 3));
+                if (!in_array($value, $allowed, true)) {
+                    $errors[$field] = "{$label} must be one of: " . implode(', ', $allowed) . ".";
+                }
+            } elseif (str_starts_with($rule, 'regex:')) {
+                $pattern = substr($rule, 6);
+                if (!preg_match($pattern, (string)$value)) {
+                    $errors[$field] = "{$label} format is invalid.";
+                }
+            } elseif (str_starts_with($rule, 'confirmed:')) {
+                $otherField = substr($rule, 10);
+                if ($value !== ($data[$otherField] ?? '')) {
+                    $errors[$field] = "{$label} does not match.";
+                }
+            }
+        }
+    }
+
+    return $errors;
+}
+
+/**
+ * Render validation errors as a Bootstrap alert block.
+ */
+function validationAlert(array $errors): string {
+    if (empty($errors)) return '';
+    $items = implode('', array_map(fn($e) => "<li>{$e}</li>", $errors));
+    return "<div class='alert alert-danger alert-dismissible fade show' role='alert'>
+        <strong><i class='fas fa-exclamation-triangle me-2'></i>Please fix the following:</strong>
+        <ul class='mb-0 mt-2'>{$items}</ul>
+        <button type='button' class='btn-close' data-bs-dismiss='alert'></button>
+    </div>";
+}
+
+// ── Secure File Upload ─────────────────────────────────────────
+
+/**
+ * Securely upload a file.
+ *
+ * @param array  $file        $_FILES['fieldname']
+ * @param string $destDir     Absolute path to destination directory (created if missing)
+ * @param array  $allowedMime Allowed MIME types, e.g. ['image/jpeg','image/png']
+ * @param int    $maxBytes    Max file size in bytes (default 5MB)
+ * @param string $prefix      Optional filename prefix
+ * @return string  Relative path from project root (e.g. 'assets/uploads/logos/abc123.png')
+ * @throws RuntimeException on failure
+ */
+function uploadFile(
+    array  $file,
+    string $destDir,
+    array  $allowedMime = ['image/jpeg','image/png','image/webp','image/gif'],
+    int    $maxBytes    = 5_242_880,
+    string $prefix      = ''
+): string {
+    if (!isset($file['tmp_name']) || $file['error'] !== UPLOAD_ERR_OK) {
+        $codes = [
+            UPLOAD_ERR_INI_SIZE   => 'File exceeds server upload limit.',
+            UPLOAD_ERR_FORM_SIZE  => 'File exceeds form upload limit.',
+            UPLOAD_ERR_PARTIAL    => 'File was only partially uploaded.',
+            UPLOAD_ERR_NO_FILE    => 'No file was uploaded.',
+            UPLOAD_ERR_NO_TMP_DIR => 'Missing temporary folder.',
+            UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk.',
+            UPLOAD_ERR_EXTENSION  => 'File upload stopped by extension.',
+        ];
+        throw new RuntimeException($codes[$file['error'] ?? 0] ?? 'Upload error.');
+    }
+
+    if ($file['size'] > $maxBytes) {
+        throw new RuntimeException('File size exceeds limit of ' . round($maxBytes/1048576, 1) . ' MB.');
+    }
+
+    // Verify MIME type using finfo (not trusting $_FILES['type'])
+    $finfo    = new finfo(FILEINFO_MIME_TYPE);
+    $mimeType = $finfo->file($file['tmp_name']);
+    if (!in_array($mimeType, $allowedMime, true)) {
+        throw new RuntimeException('File type not allowed: ' . $mimeType . '. Allowed: ' . implode(', ', $allowedMime));
+    }
+
+    // Extension from MIME
+    $extMap = [
+        'image/jpeg'      => 'jpg',
+        'image/png'       => 'png',
+        'image/gif'       => 'gif',
+        'image/webp'      => 'webp',
+        'application/pdf' => 'pdf',
+        'text/csv'        => 'csv',
+        'text/plain'      => 'txt',
+        'application/vnd.ms-excel'                                          => 'xls',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+    ];
+    $ext = $extMap[$mimeType] ?? pathinfo($file['name'], PATHINFO_EXTENSION);
+    $ext = preg_replace('/[^a-z0-9]/', '', strtolower($ext));
+
+    // Create destination directory
+    if (!is_dir($destDir) && !mkdir($destDir, 0755, true)) {
+        throw new RuntimeException('Could not create upload directory.');
+    }
+
+    // Generate unique filename: hash of content + timestamp
+    $hash     = substr(hash_file('sha256', $file['tmp_name']), 0, 20);
+    $filename = $prefix . $hash . '_' . time() . '.' . $ext;
+    $destPath = rtrim($destDir, '/') . '/' . $filename;
+
+    if (!move_uploaded_file($file['tmp_name'], $destPath)) {
+        throw new RuntimeException('Failed to move uploaded file.');
+    }
+
+    // Write a .htaccess to prevent script execution in upload directories
+    $htaFile = rtrim($destDir, '/') . '/.htaccess';
+    if (!file_exists($htaFile)) {
+        file_put_contents($htaFile,
+            "Options -Indexes\n<FilesMatch '\\.(php|php3|php4|php5|phtml|pl|py|jsp|asp|sh|cgi)$'>\n  deny from all\n</FilesMatch>\n");
+    }
+
+    // Return path relative to project root
+    $projectRoot = realpath(__DIR__ . '/..');
+    $realDest    = realpath($destPath);
+    if ($realDest && $projectRoot) {
+        $rel = str_replace(DIRECTORY_SEPARATOR, '/', ltrim(substr($realDest, strlen($projectRoot)), '/\\'));
+        return ltrim($rel, '/');
+    }
+    return $filename;
+}
+
+// ── Rate Limiting ──────────────────────────────────────────────
+
+/**
+ * Generic rate limiter using the DB `rate_limit_log` table.
+ * Creates the table silently if missing.
+ *
+ * @param string $action    Identifies the action (e.g. 'login', 'api', 'stk_push')
+ * @param string $key       Unique key: IP, email, token, etc.
+ * @param int    $maxHits   Max allowed hits in the window
+ * @param int    $windowSec Window size in seconds
+ * @return bool  TRUE if under limit; FALSE if limit exceeded
+ */
+function rateLimit(string $action, string $key, int $maxHits = 10, int $windowSec = 900): bool {
+    global $pdo;
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS rate_limit_log (
+            id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            action     VARCHAR(100) NOT NULL,
+            `key`      VARCHAR(255) NOT NULL,
+            hit_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_action_key (action, `key`),
+            INDEX idx_hit_at (hit_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // Purge old rows > window (keep table lean)
+        $pdo->prepare("DELETE FROM rate_limit_log WHERE hit_at < DATE_SUB(NOW(), INTERVAL ? SECOND)")
+            ->execute([$windowSec * 2]);
+
+        // Count recent hits
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM rate_limit_log WHERE action=? AND `key`=? AND hit_at > DATE_SUB(NOW(), INTERVAL ? SECOND)");
+        $stmt->execute([$action, $key, $windowSec]);
+        $hits = (int)$stmt->fetchColumn();
+
+        if ($hits >= $maxHits) return false;
+
+        // Record this hit
+        $pdo->prepare("INSERT INTO rate_limit_log (action, `key`) VALUES (?, ?)")->execute([$action, $key]);
+        return true;
+    } catch (Exception $e) {
+        // If DB fails, fail open (don't block legitimate users)
+        return true;
+    }
+}
+
+// ── Security Headers ──────────────────────────────────────────
+
+/**
+ * Send recommended security headers. Call early in the request before any output.
+ * Safe to call multiple times (idempotent via static guard).
+ */
+function sendSecurityHeaders(): void {
+    static $sent = false;
+    if ($sent || headers_sent()) return;
+    $sent = true;
+
+    header('X-Frame-Options: SAMEORIGIN');
+    header('X-Content-Type-Options: nosniff');
+    header('X-XSS-Protection: 1; mode=block');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+
+    // Only set HSTS if HTTPS (avoids breaking local HTTP dev)
+    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+        header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    }
+
+    // Loose CSP — allows Bootstrap CDN, Chart.js, DataTables, SweetAlert2
+    // Tighten in production by replacing 'unsafe-inline' with nonces
+    header("Content-Security-Policy: "
+        . "default-src 'self'; "
+        . "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.datatables.net; "
+        . "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.datatables.net https://fonts.googleapis.com; "
+        . "font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com; "
+        . "img-src 'self' data: https:; "
+        . "connect-src 'self'; "
+        . "frame-ancestors 'self';"
+    );
+}
+
+// ── String Helpers ────────────────────────────────────────────
+
+/**
+ * Truncate a string to $length with an ellipsis suffix.
+ */
+function truncate(string $str, int $length = 80, string $suffix = '…'): string {
+    if (mb_strlen($str) <= $length) return $str;
+    return mb_substr($str, 0, $length - mb_strlen($suffix)) . $suffix;
+}
+
+/**
+ * Format bytes into human-readable string.
+ */
+function formatBytes(int $bytes, int $decimals = 1): string {
+    $units = ['B','KB','MB','GB','TB'];
+    $i     = 0;
+    while ($bytes >= 1024 && $i < 4) { $bytes /= 1024; $i++; }
+    return round($bytes, $decimals) . ' ' . $units[$i];
+}
+
+/**
+ * Generate a cryptographically random alphanumeric token.
+ */
+function randomString(int $length = 32): string {
+    $chars  = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    $result = '';
+    $max    = strlen($chars) - 1;
+    for ($i = 0; $i < $length; $i++) {
+        $result .= $chars[random_int(0, $max)];
+    }
+    return $result;
+}
+
+/**
+ * Safely get a value from a nested array using dot notation.
+ * e.g. arrayGet($data, 'user.address.city', 'Unknown')
+ */
+function arrayGet(array $arr, string $key, mixed $default = null): mixed {
+    foreach (explode('.', $key) as $segment) {
+        if (!is_array($arr) || !array_key_exists($segment, $arr)) return $default;
+        $arr = $arr[$segment];
+    }
+    return $arr;
+}
+
+/**
+ * Convert a number to its ordinal form: 1 → "1st", 2 → "2nd", etc.
+ */
+function ordinal(int $n): string {
+    $suf = ['th','st','nd','rd'];
+    $v   = $n % 100;
+    return $n . ($suf[($v - 20) % 10] ?? $suf[$v] ?? $suf[0]);
+}
+
+/**
+ * Check if a string is a valid JSON object or array.
+ */
+function isJson(string $str): bool {
+    json_decode($str);
+    return json_last_error() === JSON_ERROR_NONE;
+}
+
+/**
+ * Mask sensitive strings (e.g. phone, card numbers).
+ * maskString('0712345678', 4, 3) → '071****678'
+ */
+function maskString(string $str, int $showStart = 4, int $showEnd = 3): string {
+    $len = strlen($str);
+    if ($len <= $showStart + $showEnd) return str_repeat('*', $len);
+    return substr($str, 0, $showStart)
+         . str_repeat('*', max(1, $len - $showStart - $showEnd))
+         . substr($str, -$showEnd);
+}

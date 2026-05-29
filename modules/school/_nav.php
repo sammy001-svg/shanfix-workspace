@@ -30,6 +30,7 @@ $moduleNav = [
     ['url' => 'events.php',      'icon' => 'fas fa-calendar-day',      'label' => 'Events'],
     ['url' => 'notices.php',     'icon' => 'fas fa-bullhorn',          'label' => 'Notices'],
     ['url' => 'grades.php',      'icon' => 'fas fa-star',              'label' => 'Grading'],
+    ['url' => 'fee-statement.php','icon' => 'fas fa-file-invoice',     'label' => 'Fee Statements'],
     ['url' => 'reports.php',     'icon' => 'fas fa-chart-bar',         'label' => 'Reports'],
     ['url' => 'staff.php',       'icon' => 'fas fa-user-tie',          'label' => 'Curriculum'],
 ];

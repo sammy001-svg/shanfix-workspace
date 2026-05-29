@@ -87,6 +87,29 @@ Options -MultiViews
     AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
 </IfModule>
 
+# ── Block common attack patterns ──────────────────────────────────
+<IfModule mod_rewrite.c>
+    # Block SQL injection probes in query strings
+    RewriteCond %{QUERY_STRING} (union.*select|select.*from|drop.*table|insert.*into|delete.*from) [NC]
+    RewriteRule .* - [F,L]
+
+    # Block XSS probes
+    RewriteCond %{QUERY_STRING} (<script|%3Cscript|javascript:|vbscript:) [NC]
+    RewriteRule .* - [F,L]
+
+    # Block directory traversal
+    RewriteCond %{QUERY_STRING} (\.\./|%2e%2e%2f|%2e%2e/) [NC]
+    RewriteRule .* - [F,L]
+
+    # Block common web shell filenames
+    RewriteRule ^(shell|backdoor|c99|r57|webadmin|cmd|eval|base64)\.php$ - [F,L]
+</IfModule>
+
+# ── Protect uploads directory — no PHP execution ───────────────────
+<IfModule mod_rewrite.c>
+    RewriteRule ^assets/uploads/.*\.(php|php3|php5|phtml|pl|py|jsp|cgi|sh)$ - [F,L]
+</IfModule>
+
 # ── Browser caching for assets ─────────────────────────────────────
 <IfModule mod_expires.c>
     ExpiresActive On
