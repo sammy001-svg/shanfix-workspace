@@ -1,0 +1,147 @@
+/**
+ * OrbitDesk — Mobile & Responsive CSS
+ * Fixes and enhancements for small-screen devices.
+ * Loaded after style.css in header-client.php and header-module.php.
+ */
+
+/* ── Touch targets ────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .btn { min-height: 38px; }
+  .btn-xs { min-height: 30px; font-size: .75rem; }
+  .nav-item { min-height: 44px; }
+  .form-control, .form-select { font-size: 16px; } /* prevents iOS zoom */
+}
+
+/* ── DataTables responsive ───────────────────────────────────────── */
+@media (max-width: 768px) {
+  .table-responsive { -webkit-overflow-scrolling: touch; }
+  .dataTables_wrapper .dataTables_length,
+  .dataTables_wrapper .dataTables_filter { float: none !important; text-align: left !important; }
+  .dataTables_wrapper .dataTables_info,
+  .dataTables_wrapper .dataTables_paginate { float: none !important; text-align: left !important; margin-top: 6px; }
+  .dataTables_wrapper .dataTables_paginate .paginate_button { padding: .25em .5em; }
+}
+
+/* ── Hide non-essential table columns on mobile ──────────────────── */
+@media (max-width: 576px) {
+  .d-none-xs { display: none !important; }
+  th.hide-mobile, td.hide-mobile { display: none !important; }
+}
+
+/* ── Stat cards: 2-col on mobile ─────────────────────────────────── */
+@media (max-width: 576px) {
+  .row.g-3 > .col-sm-3,
+  .row.g-3 > .col-sm-4,
+  .row.g-3 > .col-sm-6 {
+    flex: 0 0 50%;
+    max-width: 50%;
+  }
+}
+
+/* ── Modals: near full-screen on mobile ──────────────────────────── */
+@media (max-width: 576px) {
+  .modal-dialog {
+    margin: 8px;
+    max-width: calc(100vw - 16px);
+  }
+  .modal-content { border-radius: 12px; }
+  .modal-xl { max-width: calc(100vw - 16px); }
+}
+
+/* ── Header search: full-width on mobile when focused ───────────── */
+@media (max-width: 640px) {
+  .header-search-form:focus-within { width: 180px !important; }
+}
+@media (max-width: 480px) {
+  .header-search-form:focus-within { width: 140px !important; }
+}
+
+/* ── Page header: stack on mobile ────────────────────────────────── */
+@media (max-width: 576px) {
+  .page-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px;
+  }
+  .page-header > div:last-child,
+  .page-header > a:last-child,
+  .page-header > button:last-child {
+    width: 100%;
+  }
+}
+
+/* ── Action button groups in tables ─────────────────────────────── */
+@media (max-width: 576px) {
+  .table td .d-flex.gap-1 { flex-wrap: wrap; }
+  .btn-xs { padding: .2rem .4rem; }
+}
+
+/* ── Sidebar overlay on small screens ───────────────────────────── */
+@media (max-width: 991px) {
+  .sidebar { transform: translateX(-100%); transition: transform .25s ease; position: fixed; z-index: 1040; height: 100vh; }
+  .sidebar.active { transform: translateX(0); }
+  .main-wrapper { margin-left: 0 !important; }
+  body.sidebar-open .sidebar-overlay { display: block; }
+  .sidebar-overlay {
+    display: none;
+    position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1035;
+  }
+}
+
+/* ── Card body padding reduce on mobile ─────────────────────────── */
+@media (max-width: 576px) {
+  .card-body { padding: 12px; }
+  .card-header { padding: 10px 12px; }
+}
+
+/* ── Timeline: reduce left padding on mobile ─────────────────────── */
+@media (max-width: 576px) {
+  .timeline-container { padding-left: 12px; }
+}
+
+/* ── ═══ PRINT STYLES ═══ ─────────────────────────────────────────── */
+@media print {
+  /* Hide navigation and interactive elements */
+  .sidebar,
+  .top-header,
+  .header-actions,
+  .no-print,
+  .btn,
+  .dropdown,
+  .alert-dismissible .btn-close,
+  .dataTables_wrapper .dataTables_length,
+  .dataTables_wrapper .dataTables_filter,
+  .dataTables_wrapper .dataTables_paginate,
+  .dataTables_wrapper .dataTables_info,
+  .org-portal-banner,
+  .modal {
+    display: none !important;
+  }
+
+  /* Full-width content */
+  .main-wrapper { margin-left: 0 !important; }
+  .main-content { padding: 0 !important; }
+  body { background: #fff !important; }
+
+  /* Tables: full width, show all columns */
+  .table-responsive { overflow: visible !important; }
+  .table { width: 100% !important; font-size: 11px; }
+  .table th, .table td { padding: 4px 6px !important; }
+
+  /* Stat cards in print */
+  .stat-card { break-inside: avoid; border: 1px solid #ccc !important; box-shadow: none !important; }
+
+  /* Cards */
+  .card { box-shadow: none !important; border: 1px solid #ddd !important; break-inside: avoid; }
+
+  /* Page breaks */
+  .page-break-before { page-break-before: always; }
+  .page-break-after  { page-break-after: always; }
+  .no-break { break-inside: avoid; }
+
+  /* Color backgrounds visible in print */
+  .badge, .alert { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* Page margins */
+  @page { margin: 15mm; }
+}

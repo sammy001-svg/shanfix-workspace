@@ -786,3 +786,340 @@ function maskString(string $str, int $showStart = 4, int $showEnd = 3): string {
          . str_repeat('*', max(1, $len - $showStart - $showEnd))
          . substr($str, -$showEnd);
 }
+
+/**
+ * Check if an org is within its plan's usage limits.
+ * Returns an array with current usage and limit info.
+ */
+function checkUsageLimits(int $orgId): array {
+    global $pdo;
+    $result = [
+        'users_used'    => 0,
+        'users_max'     => 0, // 0 = unlimited
+        'modules_used'  => 0,
+        'modules_max'   => 0,
+        'users_ok'      => true,
+        'modules_ok'    => true,
+        'plan_name'     => '',
+    ];
+    try {
+        // Get plan limits
+        $stmt = $pdo->prepare("
+            SELECT p.max_users, p.max_modules, p.name AS plan_name
+            FROM subscriptions s
+            LEFT JOIN subscription_plans p ON s.plan_id = p.id
+            WHERE s.org_id = ? AND s.status IN ('active','trial')
+            ORDER BY s.id DESC LIMIT 1
+        ");
+        $stmt->execute([$orgId]);
+        $plan = $stmt->fetch();
+        if ($plan) {
+            $result['users_max']  = (int)$plan['max_users'];
+            $result['modules_max']= (int)$plan['max_modules'];
+            $result['plan_name']  = $plan['plan_name'] ?? '';
+        }
+
+        // Count active users
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE org_id=? AND status='active' AND role != 'super_admin'");
+        $stmt->execute([$orgId]);
+        $result['users_used'] = (int)$stmt->fetchColumn();
+
+        // Count active modules
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM subscription_modules sm
+            JOIN subscriptions s ON sm.subscription_id = s.id
+            WHERE s.org_id = ? AND s.status IN ('active','trial') AND sm.status = 'active'
+        ");
+        $stmt->execute([$orgId]);
+        $result['modules_used'] = (int)$stmt->fetchColumn();
+
+        // Check limits (0 = unlimited)
+        if ($result['users_max'] > 0 && $result['users_used'] >= $result['users_max']) {
+            $result['users_ok'] = false;
+        }
+        if ($result['modules_max'] > 0 && $result['modules_used'] >= $result['modules_max']) {
+            $result['modules_ok'] = false;
+        }
+    } catch (Exception $e) {}
+    return $result;
+}
+
+/**
+ * Apply a promo code to a price. Returns ['valid'=>bool, 'discount'=>float, 'final_price'=>float, 'message'=>string].
+ */
+function applyPromoCode(string $code, float $amount): array {
+    global $pdo;
+    $result = ['valid'=>false, 'discount'=>0, 'final_price'=>$amount, 'message'=>''];
+    if (!$code) return $result;
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM promo_codes WHERE code=? AND is_active=1 LIMIT 1");
+        $stmt->execute([strtoupper(trim($code))]);
+        $promo = $stmt->fetch();
+        if (!$promo) { $result['message'] = 'Invalid or expired promo code.'; return $result; }
+        if ($promo['valid_from'] && $promo['valid_from'] > date('Y-m-d')) { $result['message'] = 'Promo code not yet active.'; return $result; }
+        if ($promo['valid_to']   && $promo['valid_to']   < date('Y-m-d')) { $result['message'] = 'Promo code has expired.'; return $result; }
+        if ($promo['max_uses']   > 0 && $promo['uses_count'] >= $promo['max_uses']) { $result['message'] = 'Promo code usage limit reached.'; return $result; }
+        if ($promo['min_amount'] > 0 && $amount < $promo['min_amount']) { $result['message'] = 'Minimum order amount for this code is ' . formatCurrency($promo['min_amount']); return $result; }
+        $discount = $promo['discount_type'] === 'percentage'
+            ? round($amount * $promo['discount_value'] / 100, 2)
+            : min($amount, $promo['discount_value']);
+        $result = ['valid'=>true, 'discount'=>$discount, 'final_price'=>max(0, $amount-$discount), 'message'=>'Code applied: ' . ($promo['discount_type']==='percentage' ? $promo['discount_value'].'% off' : formatCurrency($discount).' off'), 'promo_id'=>$promo['id']];
+    } catch (Exception $e) {}
+    return $result;
+}
+
+// ── Module-Level RBAC ─────────────────────────────────────────
+
+/**
+ * Returns the full role definition map for all modules.
+ * Each entry: role_key => ['name', 'desc', 'color', 'icon', 'pages' (array|'*'), 'readonly' (bool)]
+ * 'pages' = '*' means full access; array = specific page slugs allowed.
+ * This is the single source of truth — no DB migration needed for definitions.
+ */
+function getModuleRoleDefinitions(): array {
+    return [
+        'school' => [
+            'admin'     => ['name'=>'Administrator',    'desc'=>'Full access to all school data',           'color'=>'#0B2D4E', 'icon'=>'fa-shield-alt',           'pages'=>'*'],
+            'teacher'   => ['name'=>'Teacher',           'desc'=>'Classes, attendance, exams & results',     'color'=>'#3498db', 'icon'=>'fa-chalkboard-teacher',    'pages'=>['classes','subjects','timetable','attendance','exams','results','grades']],
+            'finance'   => ['name'=>'Finance Officer',   'desc'=>'Fee billing and payment records',           'color'=>'#27ae60', 'icon'=>'fa-money-bill-wave',       'pages'=>['fees','fee-statement']],
+            'librarian' => ['name'=>'Librarian',          'desc'=>'Library books and borrowing records',      'color'=>'#9b59b6', 'icon'=>'fa-book-reader',           'pages'=>['library']],
+            'registrar' => ['name'=>'Registrar',          'desc'=>'Student enrollment and parent records',    'color'=>'#e67e22', 'icon'=>'fa-user-graduate',         'pages'=>['students','parents','classes','academic']],
+            'parent'    => ['name'=>'Parent/Guardian',    'desc'=>'Read-only view of student info',           'color'=>'#95a5a6', 'icon'=>'fa-users',                 'pages'=>['students','results','fees'], 'readonly'=>true],
+        ],
+        'hrm' => [
+            'admin'           => ['name'=>'HR Manager',        'desc'=>'Full HRM access',                          'color'=>'#2c3e50', 'icon'=>'fa-shield-alt',         'pages'=>'*'],
+            'payroll_officer' => ['name'=>'Payroll Officer',   'desc'=>'Payroll processing and reports',           'color'=>'#27ae60', 'icon'=>'fa-money-check',        'pages'=>['payroll','payroll-run']],
+            'recruiter'       => ['name'=>'Recruiter',          'desc'=>'Job postings and recruitment pipeline',   'color'=>'#3498db', 'icon'=>'fa-user-plus',          'pages'=>['recruitment']],
+            'employee'        => ['name'=>'Employee',           'desc'=>'Own profile, leave requests, attendance', 'color'=>'#95a5a6', 'icon'=>'fa-id-badge',           'pages'=>['leave','attendance'], 'readonly'=>true],
+            'department_head' => ['name'=>'Department Head',   'desc'=>'Manage your department',                  'color'=>'#e67e22', 'icon'=>'fa-sitemap',            'pages'=>['employees','attendance','leave','departments']],
+        ],
+        'accounting' => [
+            'admin'            => ['name'=>'Accountant',        'desc'=>'Full accounting access',                  'color'=>'#1A8A4E', 'icon'=>'fa-shield-alt',         'pages'=>'*'],
+            'cashier'          => ['name'=>'Cashier',           'desc'=>'Process payments and receipts only',      'color'=>'#27ae60', 'icon'=>'fa-cash-register',      'pages'=>['payments','invoices']],
+            'auditor'          => ['name'=>'Auditor',           'desc'=>'Read-only access to all records',         'color'=>'#3498db', 'icon'=>'fa-search-dollar',      'pages'=>'*', 'readonly'=>true],
+            'accounts_payable' => ['name'=>'Accounts Payable',  'desc'=>'Vendor bills and outgoing payments',      'color'=>'#e74c3c', 'icon'=>'fa-file-import',        'pages'=>['bills','payments']],
+            'accounts_receivable'=>['name'=>'Accounts Receivable','desc'=>'Client invoices and incoming payments', 'color'=>'#9b59b6', 'icon'=>'fa-file-invoice',       'pages'=>['invoices','payments']],
+        ],
+        'crm' => [
+            'admin'        => ['name'=>'CRM Manager',    'desc'=>'Full CRM access',                              'color'=>'#0B2D4E', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'sales_rep'    => ['name'=>'Sales Rep',      'desc'=>'Contacts, leads, deals and activities',        'color'=>'#3498db', 'icon'=>'fa-handshake',           'pages'=>['contacts','leads','deals','pipeline','activities','tasks','quotes']],
+            'support_agent'=> ['name'=>'Support Agent',  'desc'=>'Customer tickets and contact management',      'color'=>'#27ae60', 'icon'=>'fa-headset',             'pages'=>['contacts','tickets','companies']],
+            'marketing'    => ['name'=>'Marketing',      'desc'=>'Campaigns, contacts and email tracking',       'color'=>'#9b59b6', 'icon'=>'fa-bullhorn',            'pages'=>['campaigns','contacts','email-log']],
+        ],
+        'sacco' => [
+            'admin'       => ['name'=>'Treasurer',      'desc'=>'Full SACCO access',                             'color'=>'#8e44ad', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'loan_officer'=> ['name'=>'Loan Officer',   'desc'=>'Loan applications, disbursements, guarantors',  'color'=>'#3498db', 'icon'=>'fa-hand-holding-usd',   'pages'=>['loans','guarantors','penalties','repayments']],
+            'teller'      => ['name'=>'Teller',          'desc'=>'Savings deposits, withdrawals, statements',    'color'=>'#27ae60', 'icon'=>'fa-piggy-bank',          'pages'=>['savings','repayments','statements','members']],
+            'auditor'     => ['name'=>'Auditor',         'desc'=>'Read-only access to all records',              'color'=>'#95a5a6', 'icon'=>'fa-search',              'pages'=>'*', 'readonly'=>true],
+        ],
+        'hotel' => [
+            'admin'         => ['name'=>'Hotel Manager', 'desc'=>'Full hotel management access',                 'color'=>'#d35400', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'receptionist'  => ['name'=>'Receptionist',  'desc'=>'Guest check-in/out, bookings, calendar',       'color'=>'#3498db', 'icon'=>'fa-concierge-bell',      'pages'=>['guests','bookings','checkin','calendar']],
+            'housekeeping'  => ['name'=>'Housekeeping',  'desc'=>'Room cleaning and maintenance tasks',          'color'=>'#27ae60', 'icon'=>'fa-broom',               'pages'=>['housekeeping','rooms']],
+            'cashier'       => ['name'=>'Cashier',        'desc'=>'Billing, invoicing, restaurant payments',     'color'=>'#9b59b6', 'icon'=>'fa-cash-register',       'pages'=>['invoices','restaurant']],
+        ],
+        'health' => [
+            'admin'          => ['name'=>'Administrator','desc'=>'Full clinic access',                            'color'=>'#e74c3c', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'doctor'         => ['name'=>'Doctor',        'desc'=>'Patient records, prescriptions, diagnosis',   'color'=>'#3498db', 'icon'=>'fa-user-md',             'pages'=>['patients','records','vitals','prescription','appointments','admissions','timeline','reports']],
+            'nurse'          => ['name'=>'Nurse',         'desc'=>'Vital signs, nursing notes, admissions',      'color'=>'#27ae60', 'icon'=>'fa-user-nurse',          'pages'=>['vitals','nursing','admissions','patients','appointments']],
+            'pharmacist'     => ['name'=>'Pharmacist',    'desc'=>'Medication dispensing and pharmacy stock',    'color'=>'#9b59b6', 'icon'=>'fa-pills',               'pages'=>['pharmacy','prescription']],
+            'lab_technician' => ['name'=>'Lab Technician','desc'=>'Laboratory tests and results',                'color'=>'#f39c12', 'icon'=>'fa-flask',               'pages'=>['lab']],
+            'receptionist'   => ['name'=>'Receptionist', 'desc'=>'Patient registration and appointments',        'color'=>'#1abc9c', 'icon'=>'fa-calendar-check',      'pages'=>['appointments','patients']],
+            'cashier'        => ['name'=>'Cashier',       'desc'=>'Billing and payment collection',              'color'=>'#e67e22', 'icon'=>'fa-file-invoice-dollar', 'pages'=>['billing']],
+        ],
+        'rental' => [
+            'admin'            => ['name'=>'Property Manager','desc'=>'Full rental management access',           'color'=>'#16a085', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'agent'            => ['name'=>'Agent',           'desc'=>'Properties, tenants and inquiries',       'color'=>'#3498db', 'icon'=>'fa-home',                'pages'=>['properties','tenants','agreements']],
+            'finance'          => ['name'=>'Finance Officer', 'desc'=>'Rent payments and utilities',             'color'=>'#27ae60', 'icon'=>'fa-money-bill-wave',     'pages'=>['payments','utilities','expenses']],
+            'maintenance'      => ['name'=>'Maintenance',    'desc'=>'Inspections and maintenance records',      'color'=>'#e67e22', 'icon'=>'fa-tools',               'pages'=>['inspections']],
+        ],
+        'church' => [
+            'admin'     => ['name'=>'Pastor/Admin',  'desc'=>'Full church management access',                   'color'=>'#8e44ad', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'treasurer' => ['name'=>'Treasurer',     'desc'=>'Offerings, expenses, pledges, projects',          'color'=>'#27ae60', 'icon'=>'fa-money-bill-wave',     'pages'=>['offerings','expenses','pledges','projects']],
+            'secretary' => ['name'=>'Secretary',     'desc'=>'Members, attendance, notices, events',            'color'=>'#3498db', 'icon'=>'fa-clipboard',           'pages'=>['members','attendance','notices','events','cells']],
+            'volunteer' => ['name'=>'Volunteer',     'desc'=>'Limited view — events and pastoral visits',       'color'=>'#95a5a6', 'icon'=>'fa-hands-helping',       'pages'=>['events','pastoral'], 'readonly'=>true],
+        ],
+        'retail' => [
+            'admin'             => ['name'=>'Store Manager',      'desc'=>'Full retail management access',      'color'=>'#8e44ad', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'cashier'           => ['name'=>'Cashier',             'desc'=>'Sales transactions and receipts',   'color'=>'#27ae60', 'icon'=>'fa-cash-register',       'pages'=>['sales','customers']],
+            'inventory_manager' => ['name'=>'Inventory Manager',  'desc'=>'Products, stock and transfers',     'color'=>'#3498db', 'icon'=>'fa-boxes',               'pages'=>['products','transfers','categories']],
+            'accountant'        => ['name'=>'Accountant',          'desc'=>'Reports and expense management',   'color'=>'#e67e22', 'icon'=>'fa-calculator',          'pages'=>['reports','expenses']],
+        ],
+        'sales' => [
+            'admin'      => ['name'=>'Sales Manager','desc'=>'Full sales access + reports',                     'color'=>'#2980b9', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'sales_rep'  => ['name'=>'Sales Rep',    'desc'=>'Orders, quotes, customers, invoices',             'color'=>'#3498db', 'icon'=>'fa-handshake',           'pages'=>['orders','quotes','customers','invoices','payments']],
+            'fulfillment'=> ['name'=>'Fulfillment',  'desc'=>'Order fulfillment and inventory',                 'color'=>'#27ae60', 'icon'=>'fa-truck',               'pages'=>['fulfillment','products']],
+        ],
+        'manufacturing' => [
+            'admin'               => ['name'=>'Production Manager',  'desc'=>'Full manufacturing access',      'color'=>'#e67e22', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'machine_operator'    => ['name'=>'Machine Operator',    'desc'=>'Work orders and production logs', 'color'=>'#3498db', 'icon'=>'fa-cogs',                'pages'=>['workorders','production','machines']],
+            'quality_controller'  => ['name'=>'Quality Controller',  'desc'=>'Quality checks and reports',     'color'=>'#27ae60', 'icon'=>'fa-check-circle',        'pages'=>['quality']],
+            'procurement_officer' => ['name'=>'Procurement Officer', 'desc'=>'Suppliers, procurement, inventory','color'=>'#9b59b6','icon'=>'fa-shopping-cart',       'pages'=>['suppliers','procurement','inventory']],
+        ],
+        'salon' => [
+            'admin'         => ['name'=>'Salon Manager','desc'=>'Full salon management access',                 'color'=>'#e91e63', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'stylist'       => ['name'=>'Stylist',       'desc'=>'Appointments, clients and services',          'color'=>'#3498db', 'icon'=>'fa-cut',                 'pages'=>['appointments','clients','services']],
+            'cashier'       => ['name'=>'Cashier',       'desc'=>'Payments and billing',                        'color'=>'#27ae60', 'icon'=>'fa-cash-register',       'pages'=>['payments','appointments']],
+            'receptionist'  => ['name'=>'Receptionist',  'desc'=>'Bookings and client management',             'color'=>'#9b59b6', 'icon'=>'fa-calendar-alt',        'pages'=>['appointments','clients']],
+        ],
+        'pos' => [
+            'admin'    => ['name'=>'POS Manager', 'desc'=>'Full POS access including reports',                   'color'=>'#f39c12', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'cashier'  => ['name'=>'Cashier',     'desc'=>'Process sales and returns',                           'color'=>'#27ae60', 'icon'=>'fa-cash-register',       'pages'=>['sales','returns','customers','discounts']],
+            'stock'    => ['name'=>'Stock Manager','desc'=>'Inventory, purchases and products',                  'color'=>'#3498db', 'icon'=>'fa-boxes',               'pages'=>['products','stock','purchases','suppliers','categories']],
+        ],
+        'caryard' => [
+            'admin'     => ['name'=>'Yard Manager',   'desc'=>'Full car yard access',                            'color'=>'#e67e22', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'sales_rep' => ['name'=>'Sales Rep',      'desc'=>'Vehicles, customers, test drives, sales',         'color'=>'#3498db', 'icon'=>'fa-handshake',           'pages'=>['vehicles','customers','testdrives','sales','inquiries']],
+            'mechanic'  => ['name'=>'Mechanic',       'desc'=>'Services and reconditioning tasks',               'color'=>'#27ae60', 'icon'=>'fa-wrench',              'pages'=>['services','reconditioning','parts']],
+            'finance'   => ['name'=>'Finance Officer','desc'=>'Finance plans, insurance, valuations',            'color'=>'#9b59b6', 'icon'=>'fa-university',          'pages'=>['finance','insurance','valuations']],
+        ],
+        'tour' => [
+            'admin'      => ['name'=>'Tour Manager', 'desc'=>'Full tour operations access',                      'color'=>'#16a085', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'guide'      => ['name'=>'Tour Guide',   'desc'=>'Active tours and booking details',                 'color'=>'#3498db', 'icon'=>'fa-map-marked-alt',      'pages'=>['bookings','packages','customers']],
+            'accounts'   => ['name'=>'Accounts',     'desc'=>'Payments and financial reports',                   'color'=>'#27ae60', 'icon'=>'fa-money-bill-wave',     'pages'=>['payments','invoices','reports']],
+        ],
+        'events' => [
+            'admin'        => ['name'=>'Events Manager','desc'=>'Full events access',                            'color'=>'#9b59b6', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'coordinator'  => ['name'=>'Coordinator',   'desc'=>'Event planning and attendee management',        'color'=>'#3498db', 'icon'=>'fa-calendar-check',      'pages'=>['events','attendees','venues','speakers']],
+            'ticketing'    => ['name'=>'Ticketing',     'desc'=>'Ticket sales and check-in',                     'color'=>'#27ae60', 'icon'=>'fa-ticket-alt',          'pages'=>['tickets','attendees']],
+        ],
+    ];
+}
+
+/**
+ * Get roles for a specific module.
+ * Returns array of role_key => role_definition.
+ */
+function getModuleRoles(string $slug): array {
+    $all = getModuleRoleDefinitions();
+    return $all[$slug] ?? [
+        'admin' => ['name'=>'Administrator', 'desc'=>'Full access', 'color'=>'#0B2D4E', 'icon'=>'fa-shield-alt', 'pages'=>'*'],
+        'staff' => ['name'=>'Staff',          'desc'=>'Standard access', 'color'=>'#64748b', 'icon'=>'fa-user', 'pages'=>'*'],
+    ];
+}
+
+/**
+ * Get the role a user has been assigned within a specific module.
+ * Returns role_key string, or 'admin' for client_admin users, or '' if none.
+ */
+function getUserModuleRole(int $userId, string $slug): string {
+    global $pdo;
+    // client_admin always has full admin role
+    $sessionRole = $_SESSION['user_role'] ?? '';
+    if ($sessionRole === 'client_admin' || $sessionRole === 'super_admin') return 'admin';
+
+    try {
+        $stmt = $pdo->prepare("SELECT role_key FROM user_module_roles WHERE user_id=? AND module_slug=? LIMIT 1");
+        $stmt->execute([$userId, $slug]);
+        return $stmt->fetchColumn() ?: 'staff';
+    } catch (Exception $e) {
+        return 'staff';
+    }
+}
+
+/**
+ * Get all module role assignments for all users in an org.
+ * Returns [user_id => [module_slug => role_key, ...], ...]
+ */
+function getOrgUserModuleRoles(int $orgId): array {
+    global $pdo;
+    $result = [];
+    try {
+        $stmt = $pdo->prepare("SELECT user_id, module_slug, role_key FROM user_module_roles WHERE org_id=?");
+        $stmt->execute([$orgId]);
+        foreach ($stmt->fetchAll() as $row) {
+            $result[$row['user_id']][$row['module_slug']] = $row['role_key'];
+        }
+    } catch (Exception $e) {}
+    return $result;
+}
+
+/**
+ * Check if the current user has a specific role (or one of many roles) within a module.
+ * client_admin always returns true.
+ *
+ * @param string|array $roles  Single role key or array of allowed role keys
+ */
+function hasModuleRole(string $slug, string|array $roles): bool {
+    $user    = currentUser();
+    $userId  = (int)$user['id'];
+    $sRole   = $user['role'] ?? '';
+    if ($sRole === 'client_admin' || $sRole === 'super_admin') return true;
+
+    $current = getUserModuleRole($userId, $slug);
+    $allowed = is_array($roles) ? $roles : [$roles];
+    return in_array($current, $allowed, true);
+}
+
+/**
+ * Check if the current user's module role allows access to a specific page slug.
+ * Always returns true for client_admin. 'index' is always accessible.
+ */
+function canAccessModulePage(string $moduleSlug, string $pageSlug): bool {
+    // Module index is always accessible to anyone who has module access
+    if ($pageSlug === 'index' || $pageSlug === '') return true;
+
+    $user = currentUser();
+    if (in_array($user['role'] ?? '', ['client_admin', 'super_admin'])) return true;
+
+    $roleKey = getUserModuleRole((int)$user['id'], $moduleSlug);
+    $roles   = getModuleRoles($moduleSlug);
+    $roleDef = $roles[$roleKey] ?? null;
+    if (!$roleDef) return false;
+    if ($roleDef['pages'] === '*') return true;
+
+    return in_array($pageSlug, (array)$roleDef['pages'], true);
+}
+
+/**
+ * Check if the current user's module role is read-only.
+ */
+function isModuleRoleReadOnly(string $moduleSlug): bool {
+    $user = currentUser();
+    if (in_array($user['role'] ?? '', ['client_admin', 'super_admin'])) return false;
+    $roleKey = getUserModuleRole((int)$user['id'], $moduleSlug);
+    $roles   = getModuleRoles($moduleSlug);
+    return !empty($roles[$roleKey]['readonly']);
+}
+
+/**
+ * Abort with 403 if the current user does not have one of the specified module roles.
+ * Call at top of sensitive module pages.
+ *
+ * @param string       $moduleSlug
+ * @param string|array $roles  Allowed role keys (e.g. ['admin','finance'])
+ */
+function requireModuleRole(string $moduleSlug, string|array $roles): void {
+    if (!hasModuleRole($moduleSlug, $roles)) {
+        http_response_code(403);
+        setFlash('danger', 'You do not have permission to access this section. Contact your administrator.');
+        $ref = $_SERVER['HTTP_REFERER'] ?? (APP_URL . '/modules/' . $moduleSlug . '/index.php');
+        header('Location: ' . $ref);
+        exit;
+    }
+}
+
+/**
+ * Save module role assignments for a user.
+ * $roles is [module_slug => role_key, ...]
+ */
+function saveUserModuleRoles(PDO $pdo, int $userId, int $orgId, int $grantedBy, array $roles): void {
+    // Remove roles for modules no longer assigned
+    $pdo->prepare("DELETE FROM user_module_roles WHERE user_id=? AND org_id=?")->execute([$userId, $orgId]);
+    if (empty($roles)) return;
+    $ins = $pdo->prepare("INSERT INTO user_module_roles (user_id, org_id, module_slug, role_key, granted_by) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE role_key=VALUES(role_key), granted_by=VALUES(granted_by)");
+    foreach ($roles as $slug => $roleKey) {
+        $cleanSlug = preg_replace('/[^a-z0-9_-]/', '', strtolower($slug));
+        $cleanRole = preg_replace('/[^a-z0-9_]/', '', strtolower($roleKey));
+        if ($cleanSlug && $cleanRole) {
+            $ins->execute([$userId, $orgId, $cleanSlug, $cleanRole, $grantedBy]);
+        }
+    }
+    // Also update the role column in user_module_access for quick joins
+    try {
+        foreach ($roles as $slug => $roleKey) {
+            $pdo->prepare("UPDATE user_module_access SET module_role=? WHERE user_id=? AND org_id=? AND module_slug=?")
+                ->execute([$roleKey, $userId, $orgId, $slug]);
+        }
+    } catch (Exception $e) {}
+}

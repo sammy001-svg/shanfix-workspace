@@ -19,16 +19,19 @@ $modules = getOrgModules((int)$user['org_id']);
 $pageTitle = $pageTitle ?? APP_NAME;
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" id="htmlRoot">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= e($pageTitle) ?> — <?= APP_NAME ?></title>
 <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/assets/images/favicon.svg">
+<script>/* Prevent dark mode FOUC */(function(){const t=localStorage.getItem('odTheme');if(t)document.getElementById('htmlRoot')?.setAttribute('data-theme',t);})();</script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
 <link href="<?= APP_URL ?>/assets/css/style.css" rel="stylesheet">
+<link href="<?= APP_URL ?>/assets/css/mobile.css" rel="stylesheet">
+<link href="<?= APP_URL ?>/assets/css/dark-mode.css" rel="stylesheet">
 <style>
 .notif-bell { position:relative; }
 .notif-badge { position:absolute; top:-4px; right:-4px; background:#e74c3c; color:white; border-radius:50%; width:18px; height:18px; font-size:.65rem; display:flex; align-items:center; justify-content:center; font-weight:700; }
@@ -178,6 +181,18 @@ document.addEventListener('DOMContentLoaded', function() {
     <?php endforeach; ?>
     <?php endif; ?>
 
+    <div class="nav-label">TOOLS</div>
+    <a href="<?= APP_URL ?>/client/analytics.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'analytics.php' ? 'active' : '' ?>">
+      <i class="fas fa-chart-line"></i><span>Analytics</span></a>
+    <a href="<?= APP_URL ?>/client/reminders.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'reminders.php' ? 'active' : '' ?>">
+      <i class="fas fa-bell"></i><span>Reminders</span></a>
+    <a href="<?= APP_URL ?>/client/reports.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'reports.php' ? 'active' : '' ?>">
+      <i class="fas fa-file-chart-bar"></i><span>Reports</span></a>
+    <?php if (($user['role'] ?? '') === 'client_admin'): ?>
+    <a href="<?= APP_URL ?>/client/audit-trail.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'audit-trail.php' ? 'active' : '' ?>">
+      <i class="fas fa-history"></i><span>Audit Trail</span></a>
+    <?php endif; ?>
+
     <div class="nav-label">ACCOUNT</div>
     <a href="<?= APP_URL ?>/client/billing.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'billing.php' ? 'active' : '' ?>">
       <i class="fas fa-file-invoice-dollar"></i><span>Billing</span></a>
@@ -282,10 +297,28 @@ document.addEventListener('DOMContentLoaded', function() {
         <ul class="dropdown-menu dropdown-menu-end">
           <li><a class="dropdown-item" href="<?= APP_URL ?>/client/profile.php"><i class="fas fa-user me-2"></i>My Profile</a></li>
           <li><a class="dropdown-item" href="<?= APP_URL ?>/client/billing.php"><i class="fas fa-credit-card me-2"></i>Billing</a></li>
+          <li><a class="dropdown-item" href="<?= APP_URL ?>/client/settings.php"><i class="fas fa-cog me-2"></i>Settings</a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><button class="dropdown-item" onclick="toggleDarkMode()"><i class="dm-icon fas fa-moon me-2"></i><span class="dm-label">Dark Mode</span></button></li>
           <li><hr class="dropdown-divider"></li>
           <li><a class="dropdown-item text-danger" href="<?= APP_URL ?>/auth/logout.php"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
         </ul>
       </div>
+      <?php
+      // Reminders badge
+      $__remCount = 0;
+      try {
+        $__rq = $pdo->prepare("SELECT COUNT(*) FROM org_reminders WHERE user_id=? AND status='pending' AND (due_date IS NULL OR due_date <= CURDATE())");
+        $__rq->execute([(int)$user['id']]);
+        $__remCount = (int)$__rq->fetchColumn();
+      } catch (Exception $e) {}
+      if ($__remCount > 0):
+      ?>
+      <a href="<?= APP_URL ?>/client/reminders.php" class="btn-icon position-relative" title="<?= $__remCount ?> reminder(s) due">
+        <i class="fas fa-tasks"></i>
+        <span class="notif-badge"><?= $__remCount > 9 ? '9+' : $__remCount ?></span>
+      </a>
+      <?php endif; ?>
     </div>
   </header>
 

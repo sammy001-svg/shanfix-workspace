@@ -1,6 +1,7 @@
 <?php
 $pageTitle = 'Team Management';
 require_once __DIR__ . '/../includes/header-client.php';
+require_once __DIR__ . '/../includes/mailer.php';
 
 // Only client_admin can manage team
 if ($user['role'] !== 'client_admin') {
@@ -11,14 +12,24 @@ if ($user['role'] !== 'client_admin') {
 $orgId = (int)$user['org_id'];
 $myId  = (int)$user['id'];
 
-// ── Helper: save module grants for a staff user ────────────────────────────
-function saveModuleGrants(PDO $pdo, int $uid, int $orgId, int $grantedBy, array $slugs): void {
+// ── Helper: save module grants + roles for a staff user ──────────────────
+function saveModuleGrants(PDO $pdo, int $uid, int $orgId, int $grantedBy, array $slugs, array $moduleRoles = []): void {
     $pdo->prepare("DELETE FROM user_module_access WHERE user_id=? AND org_id=?")->execute([$uid, $orgId]);
-    $ins = $pdo->prepare("INSERT IGNORE INTO user_module_access (user_id,org_id,module_slug,granted_by) VALUES (?,?,?,?)");
+    $ins = $pdo->prepare("INSERT IGNORE INTO user_module_access (user_id,org_id,module_slug,granted_by,module_role) VALUES (?,?,?,?,?)");
     foreach ($slugs as $slug) {
         $clean = preg_replace('/[^a-z0-9_-]/', '', strtolower($slug));
-        if ($clean) $ins->execute([$uid, $orgId, $clean, $grantedBy]);
+        if ($clean) {
+            $roleKey = $moduleRoles[$clean] ?? 'staff';
+            $ins->execute([$uid, $orgId, $clean, $grantedBy, $roleKey]);
+        }
     }
+    // Save to user_module_roles table
+    saveUserModuleRoles($pdo, $uid, $orgId, $grantedBy, array_filter(
+        array_combine(
+            array_map(fn($s) => preg_replace('/[^a-z0-9_-]/', '', strtolower($s)), $slugs),
+            array_map(fn($s) => $moduleRoles[preg_replace('/[^a-z0-9_-]/', '', strtolower($s))] ?? 'staff', $slugs)
+        )
+    ));
 }
 
 // ── POST handler ───────────────────────────────────────────────────────────
@@ -31,9 +42,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $name    = sanitize($_POST['name']  ?? '');
         $email   = strtolower(trim($_POST['email'] ?? ''));
         $phone   = sanitize($_POST['phone'] ?? '');
-        $role    = in_array($_POST['role'] ?? '', ['client_admin', 'staff']) ? $_POST['role'] : 'staff';
-        $pwd     = $_POST['password'] ?? '';
-        $modules = $_POST['modules'] ?? [];
+        $role        = in_array($_POST['role'] ?? '', ['client_admin', 'staff']) ? $_POST['role'] : 'staff';
+        $pwd         = $_POST['password'] ?? '';
+        $modules     = $_POST['modules'] ?? [];
+        $moduleRoles = $_POST['module_roles'] ?? []; // [slug => role_key]
 
         if (!$name || !$email || !$pwd) {
             setFlash('danger', 'Name, email, and password are required.');
@@ -50,13 +62,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare("INSERT INTO users (org_id,name,email,password,phone,role,status) VALUES (?,?,?,?,?,?,'active')")
                     ->execute([$orgId, $name, $email, password_hash($pwd, PASSWORD_BCRYPT), $phone, $role]);
                 $newId = (int)$pdo->lastInsertId();
-                // Grant module access for staff members
+                // Grant module access + roles for staff members
                 if ($role === 'staff' && $newId) {
-                    saveModuleGrants($pdo, $newId, $orgId, $myId, $modules);
+                    saveModuleGrants($pdo, $newId, $orgId, $myId, $modules, $moduleRoles);
                 }
                 logActivity('add_team_member', 'client', "Added: $name ($role)");
                 $modCount = $role === 'staff' ? count($modules) : 'all';
                 setFlash('success', "Team member '$name' added with access to {$modCount} module(s).");
+
+                // Send welcome email to new team member
+                try {
+                    $orgName  = $user['org_name'];
+                    $loginUrl = APP_URL . '/auth/login.php';
+                    $roleLabel = $role === 'client_admin' ? 'Administrator' : 'Staff';
+                    $modLine  = $role === 'client_admin'
+                        ? '<p>As an <strong>Administrator</strong>, you have full access to all modules on the workspace.</p>'
+                        : ($modCount > 0
+                            ? "<p>You have been granted access to <strong>{$modCount} module(s)</strong>. Log in to see your workspace.</p>"
+                            : '<p>Your workspace access is being set up — your administrator will grant module access shortly.</p>');
+                    $body = "
+                    <div style='font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;background:#f0f4f8;padding:24px'>
+                      <div style='background:#0B2D4E;padding:20px 28px;border-radius:12px 12px 0 0;text-align:center'>
+                        <span style='color:white;font-size:1.2rem;font-weight:800'>" . APP_NAME . "</span>
+                      </div>
+                      <div style='background:white;padding:32px;border-radius:0 0 12px 12px'>
+                        <h2 style='color:#0B2D4E;margin-top:0'>You've been added to " . htmlspecialchars($orgName) . "</h2>
+                        <p>Hi <strong>" . htmlspecialchars($name) . "</strong>,</p>
+                        <p><strong>" . htmlspecialchars($user['name']) . "</strong> has added you to the <strong>" . htmlspecialchars($orgName) . "</strong> workspace on " . APP_NAME . " as <strong>{$roleLabel}</strong>.</p>
+                        {$modLine}
+                        <table style='width:100%;border-collapse:collapse;margin:16px 0'>
+                          <tr><td style='padding:8px;border:1px solid #eee;color:#666'>Email</td><td style='padding:8px;border:1px solid #eee;font-weight:600'>" . htmlspecialchars($email) . "</td></tr>
+                          <tr><td style='padding:8px;border:1px solid #eee;color:#666'>Temporary Password</td><td style='padding:8px;border:1px solid #eee;font-weight:600'>" . htmlspecialchars($pwd) . "</td></tr>
+                        </table>
+                        <p style='color:#e67e22;font-size:.85rem;background:#fff9f0;border:1px solid #f6c06e;padding:10px 14px;border-radius:8px'>
+                          ⚠ Please log in and change your password immediately via your Profile settings.
+                        </p>
+                        <div style='text-align:center;margin:24px 0'>
+                          <a href='{$loginUrl}' style='background:#1A8A4E;color:white;padding:12px 28px;border-radius:50px;text-decoration:none;font-weight:700;display:inline-block'>
+                            Log In to Your Workspace →
+                          </a>
+                        </div>
+                        <hr style='border:none;border-top:1px solid #eee;margin:24px 0'>
+                        <p style='color:#999;font-size:.8rem;margin:0'>&copy; " . date('Y') . " " . APP_NAME . "</p>
+                      </div>
+                    </div>";
+                    mailer()->send($email, "You've been added to {$orgName} — " . APP_NAME, $body);
+                } catch (Exception $e) {
+                    error_log('[users] Staff welcome email failed: ' . $e->getMessage());
+                }
             }
         }
         redirect(APP_URL . '/client/users.php');
@@ -67,18 +120,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $uid     = (int)($_POST['user_id'] ?? 0);
         $name    = sanitize($_POST['name']  ?? '');
         $phone   = sanitize($_POST['phone'] ?? '');
-        $role    = in_array($_POST['role'] ?? '', ['client_admin', 'staff']) ? $_POST['role'] : 'staff';
-        $modules = $_POST['modules'] ?? [];
+        $role        = in_array($_POST['role'] ?? '', ['client_admin', 'staff']) ? $_POST['role'] : 'staff';
+        $modules     = $_POST['modules'] ?? [];
+        $moduleRoles = $_POST['module_roles'] ?? [];
         // Guard: cannot demote yourself
         if ($uid === $myId) $role = 'client_admin';
         $pdo->prepare("UPDATE users SET name=?,phone=?,role=? WHERE id=? AND org_id=? AND role!='super_admin'")
             ->execute([$name, $phone, $role, $uid, $orgId]);
-        // Update module grants (always re-sync; clear for admins, set for staff)
+        // Update module grants + roles (always re-sync; clear for admins, set for staff)
         if ($role === 'staff') {
-            saveModuleGrants($pdo, $uid, $orgId, $myId, $modules);
+            saveModuleGrants($pdo, $uid, $orgId, $myId, $modules, $moduleRoles);
         } else {
             // Admins don't need explicit grants — clear any old ones
             $pdo->prepare("DELETE FROM user_module_access WHERE user_id=? AND org_id=?")->execute([$uid, $orgId]);
+            saveUserModuleRoles($pdo, $uid, $orgId, $myId, []);
         }
         logActivity('edit_team_member', 'client', "Edited user #$uid");
         setFlash('success', 'Team member updated successfully.');
@@ -175,8 +230,24 @@ try {
     }
 } catch (Exception $e) {}
 
-// Pass grants indexed by user_id as JSON for JS
-$grantsJson = json_encode(array_map(fn($v) => array_values($v), $grantsRaw), JSON_THROW_ON_ERROR);
+// Per-user module role assignments: [user_id => [slug => role_key]]
+$rolesRaw = getOrgUserModuleRoles($orgId);
+
+// Build JS payload: {user_id: {grants:[...], roles:{slug:role_key}}}
+$userPermissionsJson = json_encode(array_reduce(
+    array_unique(array_merge(array_keys($grantsRaw), array_keys($rolesRaw))),
+    function($carry, $uid) use ($grantsRaw, $rolesRaw) {
+        $carry[$uid] = [
+            'grants' => array_values($grantsRaw[$uid] ?? []),
+            'roles'  => $rolesRaw[$uid] ?? [],
+        ];
+        return $carry;
+    },
+    []
+));
+
+// Pre-build module roles definitions for JS (roles per module)
+$allModuleRoleDefs = getModuleRoleDefinitions();
 ?>
 
 <div class="page-header d-flex align-items-center justify-content-between mb-4">
@@ -258,10 +329,19 @@ $grantsJson = json_encode(array_map(fn($v) => array_values($v), $grantsRaw), JSO
         </span>
         <?php else: ?>
         <div class="d-flex flex-wrap gap-1">
-          <?php foreach ($orgModules as $mod): if (in_array($mod['slug'], $grants)): ?>
-          <span class="badge small" style="background:<?= e($mod['color']) ?>20;color:<?= e($mod['color']) ?>;border:1px solid <?= e($mod['color']) ?>50">
-            <i class="<?= e($mod['icon']) ?> me-1" style="font-size:.6rem"></i><?= e($mod['name']) ?>
-          </span>
+          <?php foreach ($orgModules as $mod): if (in_array($mod['slug'], $grants)):
+            $userRole    = $rolesRaw[(int)$m['id']][$mod['slug']] ?? 'staff';
+            $roleDefs    = getModuleRoles($mod['slug']);
+            $roleName    = $roleDefs[$userRole]['name'] ?? ucfirst($userRole);
+            $roleColor   = $roleDefs[$userRole]['color'] ?? $mod['color'];
+          ?>
+          <div class="d-flex align-items-center gap-1 rounded px-2 py-1 mb-1"
+               style="background:<?= e($mod['color']) ?>15;border:1px solid <?= e($mod['color']) ?>40;font-size:.72rem">
+            <i class="<?= e($mod['icon']) ?>" style="color:<?= e($mod['color']) ?>;font-size:.65rem"></i>
+            <span class="fw-semibold" style="color:<?= e($mod['color']) ?>"><?= e($mod['name']) ?></span>
+            <span class="text-muted">·</span>
+            <span style="color:<?= e($roleColor) ?>;font-size:.68rem"><?= e($roleName) ?></span>
+          </div>
           <?php endif; endforeach; ?>
         </div>
         <?php endif; ?>
@@ -280,7 +360,8 @@ $grantsJson = json_encode(array_map(fn($v) => array_values($v), $grantsRaw), JSO
                     'name'  => $m['name'],
                     'phone' => $m['phone'] ?? '',
                     'role'  => $m['role'],
-                    'grants'=> array_values($grants)
+                    'grants'=> array_values($grants),
+                    'roles' => $rolesRaw[(int)$m['id']] ?? new stdClass(),
                 ]), ENT_QUOTES) ?>)'>
           <i class="fas fa-edit me-1"></i>Edit
         </button>
@@ -398,7 +479,7 @@ $grantsJson = json_encode(array_map(fn($v) => array_values($v), $grantsRaw), JSO
                 </div>
               </div>
 
-              <!-- Staff: module grid -->
+              <!-- Staff: module grid with role selectors -->
               <div id="addModuleGrid">
                 <?php if (empty($orgModules)): ?>
                 <div class="text-center text-muted py-5">
@@ -408,37 +489,46 @@ $grantsJson = json_encode(array_map(fn($v) => array_values($v), $grantsRaw), JSO
                 <?php else: ?>
 
                 <?php foreach ($modulesByCategory as $category => $mods): ?>
-                <!-- Category header -->
                 <div class="d-flex align-items-center gap-2 mb-2 <?= $category !== array_key_first($modulesByCategory) ? 'mt-3' : '' ?>">
                   <span class="small fw-bold text-uppercase text-muted" style="letter-spacing:.05em"><?= e($category) ?></span>
                   <hr class="flex-fill my-0">
                 </div>
-                <div class="row g-2 mb-1">
-                  <?php foreach ($mods as $mod): ?>
-                  <div class="col-sm-6">
-                    <label class="d-block h-100 cursor-pointer module-perm-card"
-                           for="add_<?= e($mod['slug']) ?>"
-                           style="--mod-color:<?= e($mod['color']) ?>">
-                      <div class="d-flex align-items-start gap-2 h-100">
-                        <div class="module-perm-icon flex-shrink-0" style="background:<?= e($mod['color']) ?>20;color:<?= e($mod['color']) ?>">
-                          <i class="<?= e($mod['icon']) ?>"></i>
-                        </div>
-                        <div class="flex-fill overflow-hidden">
-                          <div class="fw-semibold small text-dark"><?= e($mod['name']) ?></div>
-                          <?php if (!empty($mod['description'])): ?>
-                          <div class="text-muted" style="font-size:.72rem;line-height:1.3">
-                            <?= e(mb_strimwidth($mod['description'], 0, 72, '…')) ?>
-                          </div>
-                          <?php endif; ?>
-                        </div>
-                        <input class="form-check-input flex-shrink-0 mt-1" type="checkbox"
-                               name="modules[]" value="<?= e($mod['slug']) ?>"
-                               id="add_<?= e($mod['slug']) ?>">
-                      </div>
-                    </label>
+                <?php foreach ($mods as $mod):
+                  $modRoles = getModuleRoles($mod['slug']);
+                ?>
+                <div class="module-perm-card mb-2" id="addCard_<?= e($mod['slug']) ?>"
+                     style="--mod-color:<?= e($mod['color']) ?>">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="form-check mb-0">
+                      <input class="form-check-input module-cb" type="checkbox"
+                             name="modules[]" value="<?= e($mod['slug']) ?>"
+                             id="add_<?= e($mod['slug']) ?>"
+                             onchange="toggleRoleRow(this,'addRole_<?= e($mod['slug']) ?>')">
+                    </div>
+                    <div class="module-perm-icon flex-shrink-0" style="background:<?= e($mod['color']) ?>20;color:<?= e($mod['color']) ?>">
+                      <i class="<?= e($mod['icon']) ?>"></i>
+                    </div>
+                    <div class="flex-fill">
+                      <label for="add_<?= e($mod['slug']) ?>" class="fw-semibold small mb-0 cursor-pointer"><?= e($mod['name']) ?></label>
+                    </div>
+                    <div id="addRole_<?= e($mod['slug']) ?>" style="display:none;min-width:140px">
+                      <select name="module_roles[<?= e($mod['slug']) ?>]" class="form-select form-select-sm"
+                              id="addRoleSel_<?= e($mod['slug']) ?>"
+                              onchange="updateRoleDesc('add','<?= e($mod['slug']) ?>')">
+                        <?php foreach ($modRoles as $rKey => $rDef): ?>
+                        <option value="<?= e($rKey) ?>" data-desc="<?= e($rDef['desc'] ?? '') ?>"><?= e($rDef['name']) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
                   </div>
-                  <?php endforeach; ?>
+                  <?php if (!empty($modRoles)): ?>
+                  <div id="addRoleDesc_<?= e($mod['slug']) ?>" class="small text-muted ps-5 mt-1" style="display:none;font-size:.72rem">
+                    <?php $firstRole = reset($modRoles); ?>
+                    <i class="fas fa-info-circle me-1"></i><span id="addRoleDescText_<?= e($mod['slug']) ?>"><?= e($firstRole['desc'] ?? '') ?></span>
+                  </div>
+                  <?php endif; ?>
                 </div>
+                <?php endforeach; ?>
                 <?php endforeach; ?>
 
                 <?php endif; ?>
@@ -538,32 +628,38 @@ $grantsJson = json_encode(array_map(fn($v) => array_values($v), $grantsRaw), JSO
                   <span class="small fw-bold text-uppercase text-muted" style="letter-spacing:.05em"><?= e($category) ?></span>
                   <hr class="flex-fill my-0">
                 </div>
-                <div class="row g-2 mb-1">
-                  <?php foreach ($mods as $mod): ?>
-                  <div class="col-sm-6">
-                    <label class="d-block h-100 cursor-pointer module-perm-card"
-                           for="edit_<?= e($mod['slug']) ?>"
-                           style="--mod-color:<?= e($mod['color']) ?>">
-                      <div class="d-flex align-items-start gap-2 h-100">
-                        <div class="module-perm-icon flex-shrink-0" style="background:<?= e($mod['color']) ?>20;color:<?= e($mod['color']) ?>">
-                          <i class="<?= e($mod['icon']) ?>"></i>
-                        </div>
-                        <div class="flex-fill overflow-hidden">
-                          <div class="fw-semibold small text-dark"><?= e($mod['name']) ?></div>
-                          <?php if (!empty($mod['description'])): ?>
-                          <div class="text-muted" style="font-size:.72rem;line-height:1.3">
-                            <?= e(mb_strimwidth($mod['description'], 0, 72, '…')) ?>
-                          </div>
-                          <?php endif; ?>
-                        </div>
-                        <input class="form-check-input flex-shrink-0 mt-1" type="checkbox"
-                               name="modules[]" value="<?= e($mod['slug']) ?>"
-                               id="edit_<?= e($mod['slug']) ?>">
-                      </div>
-                    </label>
+                <?php foreach ($mods as $mod):
+                  $modRoles = getModuleRoles($mod['slug']);
+                ?>
+                <div class="module-perm-card mb-2" id="editCard_<?= e($mod['slug']) ?>"
+                     style="--mod-color:<?= e($mod['color']) ?>">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="form-check mb-0">
+                      <input class="form-check-input module-cb" type="checkbox"
+                             name="modules[]" value="<?= e($mod['slug']) ?>"
+                             id="edit_<?= e($mod['slug']) ?>"
+                             onchange="toggleRoleRow(this,'editRole_<?= e($mod['slug']) ?>')">
+                    </div>
+                    <div class="module-perm-icon flex-shrink-0" style="background:<?= e($mod['color']) ?>20;color:<?= e($mod['color']) ?>">
+                      <i class="<?= e($mod['icon']) ?>"></i>
+                    </div>
+                    <div class="flex-fill">
+                      <label for="edit_<?= e($mod['slug']) ?>" class="fw-semibold small mb-0 cursor-pointer"><?= e($mod['name']) ?></label>
+                    </div>
+                    <div id="editRole_<?= e($mod['slug']) ?>" style="display:none;min-width:140px">
+                      <select name="module_roles[<?= e($mod['slug']) ?>]" class="form-select form-select-sm" id="editRoleSel_<?= e($mod['slug']) ?>"
+                              onchange="updateRoleDesc('edit','<?= e($mod['slug']) ?>')">
+                        <?php foreach ($modRoles as $rKey => $rDef): ?>
+                        <option value="<?= e($rKey) ?>" data-desc="<?= e($rDef['desc'] ?? '') ?>"><?= e($rDef['name']) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
                   </div>
-                  <?php endforeach; ?>
+                  <div id="editRoleDesc_<?= e($mod['slug']) ?>" class="small text-muted ps-5 mt-1" style="display:none;font-size:.72rem">
+                    <i class="fas fa-info-circle me-1"></i><span id="editRoleDescText_<?= e($mod['slug']) ?>"></span>
+                  </div>
                 </div>
+                <?php endforeach; ?>
                 <?php endforeach; ?>
 
                 <?php endif; ?>
@@ -672,9 +768,34 @@ function onEditRoleChange() {
     document.getElementById('editModuleActions').classList.toggle('d-none', isAdmin);
 }
 
+// ── Show/hide role dropdown when a module checkbox is ticked ─────────────────
+function toggleRoleRow(cb, roleRowId) {
+    const row  = document.getElementById(roleRowId);
+    if (!row) return;
+    const slug   = cb.value;
+    const prefix = roleRowId.startsWith('edit') ? 'edit' : 'add';
+    const desc   = document.getElementById(prefix + 'RoleDesc_' + slug);
+    row.style.display  = cb.checked ? '' : 'none';
+    if (desc) desc.style.display = cb.checked ? '' : 'none';
+    if (cb.checked) updateRoleDesc(prefix, slug);
+}
+
+// ── Update description text when the role select changes ─────────────────────
+function updateRoleDesc(prefix, slug) {
+    const sel  = document.getElementById(prefix + 'RoleSel_' + slug);
+    const span = document.getElementById(prefix + 'RoleDescText_' + slug);
+    if (!sel || !span) return;
+    const opt = sel.options[sel.selectedIndex];
+    span.textContent = opt ? (opt.dataset.desc || '') : '';
+}
+
 // ── Select all / none ────────────────────────────────────────────────────────
 function toggleAllChecks(gridId, state) {
-    document.querySelectorAll('#' + gridId + ' input[type=checkbox]').forEach(cb => cb.checked = state);
+    document.querySelectorAll('#' + gridId + ' input[type=checkbox]').forEach(cb => {
+        cb.checked = state;
+        const prefix = gridId.startsWith('edit') ? 'edit' : 'add';
+        toggleRoleRow(cb, prefix + 'Role_' + cb.value);
+    });
 }
 
 // ── Open edit modal ──────────────────────────────────────────────────────────
@@ -684,9 +805,16 @@ function openEdit(m) {
     document.getElementById('editPhone').value  = m.phone || '';
     document.getElementById('editRole').value   = m.role  || 'staff';
 
-    // Tick granted slugs
+    // Tick granted slugs, show role rows, and restore saved role selection
     document.querySelectorAll('#editModuleGrid input[type=checkbox]').forEach(cb => {
-        cb.checked = Array.isArray(m.grants) && m.grants.includes(cb.value);
+        const slug    = cb.value;
+        const granted = Array.isArray(m.grants) && m.grants.includes(slug);
+        cb.checked    = granted;
+        toggleRoleRow(cb, 'editRole_' + slug);
+        if (granted && m.roles && m.roles[slug]) {
+            const sel = document.getElementById('editRoleSel_' + slug);
+            if (sel) { sel.value = m.roles[slug]; updateRoleDesc('edit', slug); }
+        }
     });
 
     // Show/hide panels based on role

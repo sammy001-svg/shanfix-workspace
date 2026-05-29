@@ -58,3 +58,6 @@ require_once __DIR__ . '/../includes/settings.php';
 
 // Load encryption helpers (AES-256-CBC PII protection)
 require_once __DIR__ . '/../includes/encryption.php';
+
+// Custom domain / subdomain detection (sets $detectedOrgId, $detectedOrgSlug)
+require_once __DIR__ . '/../includes/domain-router.php';

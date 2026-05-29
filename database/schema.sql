@@ -11,18 +11,20 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- ────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS organizations (
-    id            INT AUTO_INCREMENT PRIMARY KEY,
-    name          VARCHAR(255)    NOT NULL,
-    email         VARCHAR(255),
-    phone         VARCHAR(25),
-    address       TEXT,
-    city          VARCHAR(100),
-    country       VARCHAR(100)    DEFAULT 'Kenya',
-    logo          VARCHAR(500),
-    slug          VARCHAR(150)    UNIQUE,
-    status        ENUM('active','inactive','suspended') DEFAULT 'active',
-    created_at    TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
-    updated_at    TIMESTAMP       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    id             INT AUTO_INCREMENT PRIMARY KEY,
+    name           VARCHAR(255)    NOT NULL,
+    email          VARCHAR(255),
+    phone          VARCHAR(25),
+    address        TEXT,
+    city           VARCHAR(100),
+    country        VARCHAR(100)    DEFAULT 'Kenya',
+    logo           VARCHAR(500),
+    slug           VARCHAR(150)    UNIQUE,
+    custom_domain  VARCHAR(255)    DEFAULT NULL  COMMENT 'Optional white-label domain mapped to this org',
+    wallet_balance DECIMAL(12,2)   NOT NULL DEFAULT 0.00 COMMENT 'Pre-loaded KES balance for invoice payments',
+    status         ENUM('active','inactive','suspended') DEFAULT 'active',
+    created_at     TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
+    updated_at     TIMESTAMP       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS users (
@@ -1340,15 +1342,54 @@ CREATE TABLE IF NOT EXISTS notifications (
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS mpesa_pending (
-    id          INT AUTO_INCREMENT PRIMARY KEY,
-    org_id      INT NOT NULL,
-    invoice_id  INT,
-    checkout_id VARCHAR(100) NOT NULL UNIQUE,
-    amount      DECIMAL(12,2),
-    phone       VARCHAR(20),
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_checkout (checkout_id)
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    org_id        INT          NOT NULL,
+    invoice_id    INT          DEFAULT NULL,
+    checkout_id   VARCHAR(255) NOT NULL UNIQUE COMMENT 'KopoKopo payment_id from Location header',
+    kopokopo_id   VARCHAR(255) DEFAULT NULL    COMMENT 'Alias for checkout_id, kept for legacy joins',
+    amount        DECIMAL(12,2),
+    phone         VARCHAR(30),
+    status        VARCHAR(20)  NOT NULL DEFAULT 'pending' COMMENT 'pending | completed | failed',
+    mpesa_receipt VARCHAR(100) DEFAULT NULL               COMMENT 'M-Pesa receipt number from webhook',
+    created_at    TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_checkout (checkout_id(100))
 ) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS wallet_transactions (
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    org_id        INT          NOT NULL,
+    type          ENUM('topup','deduction','refund') NOT NULL,
+    amount        DECIMAL(12,2) NOT NULL,
+    balance_after DECIMAL(12,2) NOT NULL DEFAULT 0.00 COMMENT 'Wallet balance after this transaction',
+    description   VARCHAR(255)  DEFAULT NULL,
+    invoice_id    INT           DEFAULT NULL  COMMENT 'Set for deductions linked to an invoice',
+    checkout_id   VARCHAR(255)  DEFAULT NULL  COMMENT 'KopoKopo payment_id for top-ups',
+    mpesa_receipt VARCHAR(100)  DEFAULT NULL,
+    status        ENUM('pending','completed','failed') NOT NULL DEFAULT 'pending',
+    created_at    TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_org (org_id),
+    INDEX idx_co  (checkout_id(100)),
+    INDEX idx_inv (invoice_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS payment_callbacks (
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    provider      VARCHAR(20)   NOT NULL DEFAULT 'kopokopo',
+    event_type    VARCHAR(100)  DEFAULT NULL,
+    checkout_id   VARCHAR(255)  DEFAULT NULL  COMMENT 'KopoKopo payment_id',
+    invoice_id    INT           DEFAULT NULL,
+    org_id        INT           DEFAULT NULL,
+    amount        DECIMAL(12,2) DEFAULT NULL,
+    currency      VARCHAR(10)   NOT NULL DEFAULT 'KES',
+    phone         VARCHAR(30)   DEFAULT NULL,
+    mpesa_receipt VARCHAR(100)  DEFAULT NULL,
+    status        VARCHAR(50)   DEFAULT NULL,
+    raw_payload   MEDIUMTEXT    DEFAULT NULL,
+    processed_at  TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_checkout (checkout_id(100)),
+    INDEX idx_invoice  (invoice_id),
+    INDEX idx_org      (org_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ────────────────────────────────────────────────────────────
 -- SEED DATA

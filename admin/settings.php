@@ -224,11 +224,15 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
             <input type="text" class="form-control" value="<?= APP_URL ?>/api/mpesa-callback.php" readonly>
             <div class="form-text">Add this URL in your KopoKopo dashboard under Webhooks.</div>
           </div>
-          <div class="col-12">
+          <div class="col-12 d-flex gap-2 flex-wrap">
             <button class="btn btn-primary" onclick="saveSection('kopokopo',['kopokopo_client_id','kopokopo_client_secret','kopokopo_till_number','kopokopo_api_secret','kopokopo_env'])">
               <i class="fas fa-save me-2"></i>Save KopoKopo Settings
             </button>
+            <button class="btn btn-outline-success" type="button" id="kkTestBtn" onclick="testKopokopo()">
+              <i class="fas fa-plug me-2"></i>Test Connection
+            </button>
           </div>
+          <div class="col-12" id="kkTestResult" style="display:none"></div>
         </div>
       </div>
     </div>

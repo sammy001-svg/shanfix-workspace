@@ -69,6 +69,8 @@ function markNotifsRead() {
       <i class="fas fa-puzzle-piece"></i><span>Modules</span></a>
     <a href="<?= APP_URL ?>/admin/plans.php"         class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'plans.php'         ? 'active' : '' ?>">
       <i class="fas fa-layer-group"></i><span>Plans</span></a>
+    <a href="<?= APP_URL ?>/admin/promo-codes.php"   class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'promo-codes.php'   ? 'active' : '' ?>">
+      <i class="fas fa-tags"></i><span>Promo Codes</span></a>
     <a href="<?= APP_URL ?>/admin/users.php"         class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'users.php'         ? 'active' : '' ?>">
       <i class="fas fa-users"></i><span>Users</span></a>
     <a href="<?= APP_URL ?>/admin/notifications.php"  class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'notifications.php' ? 'active' : '' ?>">
@@ -89,6 +91,8 @@ function markNotifsRead() {
       <i class="fas fa-chart-bar"></i><span>Reports</span></a>
     <a href="<?= APP_URL ?>/admin/activity.php"      class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'activity.php'      ? 'active' : '' ?>">
       <i class="fas fa-history"></i><span>Activity Log</span></a>
+    <a href="<?= APP_URL ?>/admin/custom-domains.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'custom-domains.php' ? 'active' : '' ?>">
+      <i class="fas fa-globe"></i><span>Custom Domains</span></a>
     <a href="<?= APP_URL ?>/admin/settings.php"      class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'settings.php'      ? 'active' : '' ?>">
       <i class="fas fa-cog"></i><span>Settings</span></a>
 

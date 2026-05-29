@@ -9,17 +9,31 @@ requireModuleAccess($moduleSlug ?? '');
 $user    = currentUser();
 $modules = getOrgModules((int)$user['org_id']);
 $pageTitle = ($moduleName ?? 'Module') . ' — ' . APP_NAME;
+
+// ── Page-level RBAC guard ─────────────────────────────────────────────────
+// Derives page slug from the current PHP filename (e.g. prescription.php → "prescription")
+// and checks if the user's module role allows access. Always passes for index pages.
+$_currentPageSlug = pathinfo(basename($_SERVER['PHP_SELF'] ?? ''), PATHINFO_FILENAME);
+if (!canAccessModulePage($moduleSlug ?? '', $_currentPageSlug)) {
+    setFlash('danger', 'Your assigned role does not allow access to this section. Contact your administrator.');
+    header('Location: ' . APP_URL . '/modules/' . ($moduleSlug ?? '') . '/index.php');
+    exit;
+}
+$_isReadOnly = isModuleRoleReadOnly($moduleSlug ?? '');
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" id="htmlRoot">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= e($moduleName ?? 'Module') ?> — <?= APP_NAME ?></title>
+<script>/* Prevent dark mode FOUC */(function(){const t=localStorage.getItem('odTheme');if(t)document.getElementById('htmlRoot')?.setAttribute('data-theme',t);})();</script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
 <link href="<?= APP_URL ?>/assets/css/style.css" rel="stylesheet">
+<link href="<?= APP_URL ?>/assets/css/mobile.css" rel="stylesheet">
+<link href="<?= APP_URL ?>/assets/css/dark-mode.css" rel="stylesheet">
 <style>
 /* ── Header search bar ───────────────────────────────────────── */
 .header-search { position:relative; display:flex; align-items:center; }
@@ -41,6 +55,7 @@ $pageTitle = ($moduleName ?? 'Module') . ' — ' . APP_NAME;
 .hsd-section { padding:6px 14px 4px; font-size:.65rem; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.06em; background:#fafafa; }
 .hsd-empty { padding:18px 14px; text-align:center; color:#94a3b8; font-size:.8rem; }
 @media(max-width:640px) { .header-search-form:focus-within { width:160px; } .header-title { display:none; } }
+.notif-badge { position:absolute; top:-4px; right:-4px; background:#e74c3c; color:white; border-radius:50%; width:18px; height:18px; font-size:.65rem; display:flex; align-items:center; justify-content:center; font-weight:700; }
 </style>
 <script>
 /* ── Header live-search ──────────────────────────────────────── */
@@ -136,7 +151,10 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
   <div class="sidebar-nav">
     <div class="nav-label">MODULE</div>
-    <?php foreach($moduleNav ?? [] as $nav): ?>
+    <?php foreach($moduleNav ?? [] as $nav):
+      $_navSlug = pathinfo($nav['url'], PATHINFO_FILENAME);
+      if (!canAccessModulePage($moduleSlug ?? '', $_navSlug)) continue;
+    ?>
     <a href="<?= e($nav['url']) ?>" class="nav-item <?= basename($_SERVER['PHP_SELF']) === basename($nav['url']) ? 'active' : '' ?>">
       <i class="<?= e($nav['icon']) ?>"></i><span><?= e($nav['label']) ?></span></a>
     <?php endforeach; ?>
@@ -194,11 +212,38 @@ document.addEventListener('DOMContentLoaded', function() {
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
           <li><a class="dropdown-item" href="<?= APP_URL ?>/client/profile.php"><i class="fas fa-user me-2"></i>Profile</a></li>
+          <li><a class="dropdown-item" href="<?= APP_URL ?>/client/index.php"><i class="fas fa-home me-2"></i>Dashboard</a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><button class="dropdown-item" onclick="toggleDarkMode()"><i class="dm-icon fas fa-moon me-2"></i><span class="dm-label">Dark Mode</span></button></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item" href="<?= APP_URL ?>/client/reminders.php"><i class="fas fa-tasks me-2"></i>Reminders</a></li>
           <li><a class="dropdown-item text-danger" href="<?= APP_URL ?>/auth/logout.php"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
         </ul>
       </div>
+      <?php
+      /* ── Reminders badge ─────────────────────────────────────── */
+      $__remCount = 0;
+      try {
+        $__remStmt = $pdo->prepare("SELECT COUNT(*) FROM org_reminders WHERE user_id=? AND status='pending' AND (due_date IS NULL OR due_date <= CURDATE())");
+        $__remStmt->execute([(int)$user['id']]);
+        $__remCount = (int)$__remStmt->fetchColumn();
+      } catch (Exception $e) {}
+      if ($__remCount > 0):
+      ?>
+      <a href="<?= APP_URL ?>/client/reminders.php" class="btn-icon position-relative" title="<?= $__remCount ?> reminder(s) due" style="text-decoration:none">
+        <i class="fas fa-tasks"></i>
+        <span class="notif-badge"><?= $__remCount > 9 ? '9+' : $__remCount ?></span>
+      </a>
+      <?php endif; ?>
     </div>
   </header>
   <main class="main-content">
     <?= flashAlert() ?>
     <?php require_once __DIR__ . '/_org-login-banner.php'; ?>
+    <?php if ($_isReadOnly): ?>
+    <div class="alert alert-warning alert-dismissible fade show d-flex align-items-center gap-2 py-2 mb-3" role="alert">
+      <i class="fas fa-eye fa-fw"></i>
+      <div class="small"><strong>Read-only mode.</strong> Your role in this module only allows viewing records — create, edit, and delete actions are disabled.</div>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    <?php endif; ?>

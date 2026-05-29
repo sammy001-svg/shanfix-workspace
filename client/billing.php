@@ -3,7 +3,58 @@
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/mailer.php';
 requireClientAdmin();
+
+// ── Payment confirmation email helper ────────────────────────────
+function sendPaymentConfirmation(PDO $pdo, int $orgId, array $inv, string $method = '', string $reference = ''): void {
+    try {
+        $adminRow = $pdo->prepare("SELECT name, email FROM users WHERE org_id=? AND role='client_admin' LIMIT 1");
+        $adminRow->execute([$orgId]);
+        $admin = $adminRow->fetch();
+        if (!$admin || !$admin['email']) return;
+
+        $amount      = number_format((float)$inv['total'], 2);
+        $methodLabel = $method ? ucwords(str_replace('_', ' ', $method)) : 'Online Payment';
+        $refLine     = $reference ? "<p style='color:#666;font-size:.85rem'>Reference: <strong>{$reference}</strong></p>" : '';
+
+        $body = "
+        <div style='font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;background:#f0f4f8;padding:24px'>
+          <div style='background:#0B2D4E;padding:20px 28px;border-radius:12px 12px 0 0;text-align:center'>
+            <span style='color:white;font-size:1.2rem;font-weight:800'>" . APP_NAME . "</span>
+          </div>
+          <div style='background:white;padding:32px;border-radius:0 0 12px 12px'>
+            <div style='text-align:center;margin-bottom:24px'>
+              <div style='display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;background:#E6F5EE;border-radius:50%;margin-bottom:10px'>
+                <span style='font-size:1.6rem'>✅</span>
+              </div>
+              <h2 style='color:#1A8A4E;margin:0'>Payment Received</h2>
+            </div>
+            <p>Dear <strong>" . htmlspecialchars($admin['name']) . "</strong>,</p>
+            <p>We have successfully received your payment. Here are the details:</p>
+            <table style='width:100%;border-collapse:collapse;margin:16px 0'>
+              <tr><td style='padding:8px;border:1px solid #eee;color:#666'>Invoice #</td><td style='padding:8px;border:1px solid #eee;font-weight:700'>" . htmlspecialchars($inv['invoice_number']) . "</td></tr>
+              <tr style='background:#f0f9f4'><td style='padding:8px;border:1px solid #eee;font-weight:700'>Amount Paid</td><td style='padding:8px;border:1px solid #eee;font-weight:700;color:#1A8A4E'>KES {$amount}</td></tr>
+              <tr><td style='padding:8px;border:1px solid #eee;color:#666'>Payment Method</td><td style='padding:8px;border:1px solid #eee'>{$methodLabel}</td></tr>
+              <tr><td style='padding:8px;border:1px solid #eee;color:#666'>Date</td><td style='padding:8px;border:1px solid #eee'>" . date('d M Y, h:i A') . "</td></tr>
+            </table>
+            {$refLine}
+            <div style='text-align:center;margin:24px 0'>
+              <a href='" . APP_URL . "/client/billing.php' style='background:#1A8A4E;color:white;padding:12px 28px;border-radius:50px;text-decoration:none;font-weight:700;display:inline-block'>
+                View Billing Portal →
+              </a>
+            </div>
+            <p style='color:#64748b;font-size:.82rem'>Thank you for your prompt payment. Your services will remain active without interruption.</p>
+            <hr style='border:none;border-top:1px solid #eee;margin:24px 0'>
+            <p style='color:#999;font-size:.8rem;margin:0'>&copy; " . date('Y') . " " . APP_NAME . "</p>
+          </div>
+        </div>";
+
+        mailer()->send($admin['email'], 'Payment Confirmed — Invoice ' . $inv['invoice_number'] . ' — ' . APP_NAME, $body);
+    } catch (Exception $e) {
+        error_log('[billing] Payment confirmation email failed: ' . $e->getMessage());
+    }
+}
 
 $user  = currentUser();
 $orgId = (int)$user['org_id'];
@@ -47,6 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'recor
         }
 
         logActivity('payment', 'billing', "Invoice {$inv['invoice_number']} paid — {$method}" . ($reference ? ", ref: {$reference}" : ''));
+        sendPaymentConfirmation($pdo, $orgId, $inv, $method, $reference);
     } else {
         setFlash('error', 'Invoice not found or already paid.');
     }
@@ -104,6 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'pay_f
 
         $pdo->commit();
         logActivity('wallet_payment', 'billing', "Invoice {$inv['invoice_number']} paid from wallet — KES {$total}. Balance: {$newBal}");
+        sendPaymentConfirmation($pdo, $orgId, $inv, 'wallet');
         $msg = "Invoice <strong>{$inv['invoice_number']}</strong> paid from wallet.";
         if (!empty($modName)) $msg .= " <strong>{$modName}</strong> is now active.";
         setFlash('success', $msg);
@@ -148,6 +201,9 @@ $pmtCfg = getSettings(['mpesa_paybill', 'mpesa_account_ref', 'bank_name', 'bank_
 require_once __DIR__ . '/../includes/header-client.php';
 
 $plans = $pdo->query("SELECT * FROM subscription_plans WHERE status='active' ORDER BY price_monthly")->fetchAll();
+
+// ── Usage limits (for overview tab banners) ───────────────────────
+$usageLimits = checkUsageLimits($orgId);
 
 // ── Data ─────────────────────────────────────────────────────────
 $activeTab    = $_GET['tab'] ?? 'overview';
@@ -267,6 +323,44 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
     </div>
   </div>
 </div>
+<?php endif; ?>
+
+<?php
+// ── Usage limits warning banners ─────────────────────────────────
+$usersNear   = $usageLimits['users_max']   > 0 && $usageLimits['users_used']   >= $usageLimits['users_max']   * 0.9;
+$modulesNear = $usageLimits['modules_max'] > 0 && $usageLimits['modules_used'] >= $usageLimits['modules_max'] * 0.9;
+if ($usersNear || $modulesNear):
+?>
+<?php if ($usersNear): ?>
+<div class="alert alert-<?= $usageLimits['users_ok'] ? 'warning' : 'danger' ?> alert-dismissible d-flex align-items-center gap-3 mb-3" role="alert">
+  <i class="fas fa-users flex-shrink-0"></i>
+  <div>
+    <?php if (!$usageLimits['users_ok']): ?>
+      You've reached your seat limit (<strong><?= $usageLimits['users_used'] ?> of <?= $usageLimits['users_max'] ?></strong> seats used).
+      <a href="?tab=plans" class="fw-bold ms-1">Upgrade your plan to add more team members &rarr;</a>
+    <?php else: ?>
+      You're using <strong><?= $usageLimits['users_used'] ?> of <?= $usageLimits['users_max'] ?></strong> seats &mdash; almost at your limit.
+      <a href="?tab=plans" class="fw-bold ms-1">Upgrade to add more team members &rarr;</a>
+    <?php endif; ?>
+  </div>
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<?php endif; ?>
+<?php if ($modulesNear): ?>
+<div class="alert alert-<?= $usageLimits['modules_ok'] ? 'warning' : 'danger' ?> alert-dismissible d-flex align-items-center gap-3 mb-3" role="alert">
+  <i class="fas fa-puzzle-piece flex-shrink-0"></i>
+  <div>
+    <?php if (!$usageLimits['modules_ok']): ?>
+      You've reached your module limit (<strong><?= $usageLimits['modules_used'] ?> of <?= $usageLimits['modules_max'] ?></strong> module slots used).
+      <a href="?tab=plans" class="fw-bold ms-1">Upgrade your plan for more modules &rarr;</a>
+    <?php else: ?>
+      You're using <strong><?= $usageLimits['modules_used'] ?> of <?= $usageLimits['modules_max'] ?></strong> module slots &mdash; almost at your limit.
+      <a href="?tab=plans" class="fw-bold ms-1">Upgrade for more module slots &rarr;</a>
+    <?php endif; ?>
+  </div>
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<?php endif; ?>
 <?php endif; ?>
 
 <div class="row g-3 mb-4">
@@ -512,6 +606,27 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
   <div class="col-lg-7">
     <?php if ($focusInv): ?>
 
+    <!-- Promo code card -->
+    <div class="card mb-3" id="promoCard">
+      <div class="card-body py-3">
+        <h6 class="fw-semibold mb-2"><i class="fas fa-tag text-green me-2"></i>Have a promo code?</h6>
+        <div class="d-flex gap-2">
+          <input type="text" id="promoCodeInput" class="form-control form-control-sm text-uppercase fw-bold"
+                 placeholder="e.g. SAVE20" maxlength="50" style="letter-spacing:1px;font-family:monospace;max-width:220px"
+                 oninput="this.value=this.value.toUpperCase()">
+          <button type="button" class="btn btn-sm btn-outline-success" onclick="applyPromoCode()" id="applyPromoBtn">
+            <i class="fas fa-check me-1"></i>Apply
+          </button>
+          <button type="button" class="btn btn-sm btn-outline-secondary d-none" onclick="removePromoCode()" id="removePromoBtn">
+            <i class="fas fa-times me-1"></i>Remove
+          </button>
+        </div>
+        <div id="promoMsg" class="mt-2 small"></div>
+        <input type="hidden" id="appliedPromoId" value="">
+        <input type="hidden" id="appliedDiscount" value="0">
+      </div>
+    </div>
+
     <!-- Invoice summary card -->
     <div class="card mb-3">
       <div class="card-body">
@@ -533,7 +648,16 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
         <table class="table table-sm table-borderless mb-0">
           <tr><td class="text-muted">Subtotal</td><td class="text-end"><?= formatCurrency((float)$focusInv['amount']) ?></td></tr>
           <tr><td class="text-muted">VAT (16%)</td><td class="text-end"><?= formatCurrency((float)$focusInv['tax']) ?></td></tr>
-          <tr class="border-top"><td class="fw-bold">Total Due</td><td class="text-end fw-800 text-green fs-5"><?= formatCurrency((float)$focusInv['total']) ?></td></tr>
+          <tr id="promoDiscountRow" class="d-none text-success">
+            <td><i class="fas fa-tag me-1"></i>Promo Discount</td>
+            <td class="text-end fw-semibold" id="promoDiscountDisplay">— KES 0.00</td>
+          </tr>
+          <tr class="border-top">
+            <td class="fw-bold">Total Due</td>
+            <td class="text-end fw-800 text-green fs-5">
+              <span id="invoiceTotalDisplay"><?= formatCurrency((float)$focusInv['total']) ?></span>
+            </td>
+          </tr>
         </table>
       </div>
     </div>
@@ -555,6 +679,7 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
             <?= csrfField() ?>
             <input type="hidden" name="action" value="pay_from_wallet">
             <input type="hidden" name="invoice_id" value="<?= $focusInv['id'] ?>">
+            <input type="hidden" name="promo_id" id="walletPromoId" value="">
             <button type="submit" class="btn btn-success w-100 fw-bold"
                     onclick="return confirm('Pay <?= formatCurrency((float)$focusInv['total']) ?> from your wallet balance?')">
               <i class="fas fa-wallet me-2"></i>Pay <?= formatCurrency((float)$focusInv['total']) ?> from Wallet
@@ -604,6 +729,7 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
             <?= csrfField() ?>
             <input type="hidden" name="action" value="record_payment">
             <input type="hidden" name="invoice_id" value="<?= $focusInv['id'] ?>">
+            <input type="hidden" name="promo_id" id="cashPromoId" value="">
             <div class="row g-2 mb-3">
               <div class="col-sm-6">
                 <label class="form-label small fw-semibold">Payment Method</label>
@@ -818,6 +944,7 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
 <?php endif; ?>
 
 <?php
+$focusInvTotal = (float)($focusInv['total'] ?? 0);
 $extraJs = '<script>
 function initiateTopUp(btn) {
   const phone  = document.getElementById("topupPhone").value.trim();
@@ -880,6 +1007,79 @@ function setTopupAmount(n) {
 function updateTopupBtn() {
   const v = parseFloat(document.getElementById("topupAmount").value)||0;
   document.getElementById("topupBtn").disabled = v < 10;
+}
+
+// ── Promo code helpers ────────────────────────────────────────────
+const INVOICE_TOTAL = ' . $focusInvTotal . ';
+
+function applyPromoCode() {
+  const code = document.getElementById("promoCodeInput").value.trim();
+  if (!code) {
+    showPromoMsg("warning", "Please enter a promo code.");
+    return;
+  }
+  const btn = document.getElementById("applyPromoBtn");
+  btn.disabled = true;
+  btn.innerHTML = \'<i class="fas fa-spinner fa-spin me-1"></i>Checking…\';
+
+  fetch("' . APP_URL . '/api/apply-promo.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `code=${encodeURIComponent(code)}&amount=${encodeURIComponent(INVOICE_TOTAL)}`
+  })
+  .then(r => r.json())
+  .then(data => {
+    btn.disabled = false;
+    btn.innerHTML = \'<i class="fas fa-check me-1"></i>Apply\';
+    if (data.valid) {
+      document.getElementById("appliedPromoId").value   = data.promo_id || "";
+      document.getElementById("appliedDiscount").value  = data.discount || 0;
+      document.getElementById("walletPromoId").value    = data.promo_id || "";
+      document.getElementById("cashPromoId").value      = data.promo_id || "";
+
+      // Show discount row
+      document.getElementById("promoDiscountRow").classList.remove("d-none");
+      document.getElementById("promoDiscountDisplay").textContent = "— " + formatKES(data.discount);
+      document.getElementById("invoiceTotalDisplay").textContent  = formatKES(data.final_price);
+
+      showPromoMsg("success", data.message);
+      document.getElementById("applyPromoBtn").classList.add("d-none");
+      document.getElementById("removePromoBtn").classList.remove("d-none");
+      document.getElementById("promoCodeInput").readOnly = true;
+    } else {
+      showPromoMsg("danger", data.message || "Invalid promo code.");
+    }
+  })
+  .catch(() => {
+    btn.disabled = false;
+    btn.innerHTML = \'<i class="fas fa-check me-1"></i>Apply\';
+    showPromoMsg("danger", "Network error. Please try again.");
+  });
+}
+
+function removePromoCode() {
+  document.getElementById("appliedPromoId").value  = "";
+  document.getElementById("appliedDiscount").value = "0";
+  document.getElementById("walletPromoId").value   = "";
+  document.getElementById("cashPromoId").value     = "";
+  document.getElementById("promoCodeInput").value  = "";
+  document.getElementById("promoCodeInput").readOnly = false;
+  document.getElementById("promoDiscountRow").classList.add("d-none");
+  document.getElementById("invoiceTotalDisplay").textContent = formatKES(INVOICE_TOTAL);
+  document.getElementById("applyPromoBtn").classList.remove("d-none");
+  document.getElementById("removePromoBtn").classList.add("d-none");
+  showPromoMsg("", "");
+}
+
+function showPromoMsg(type, msg) {
+  const el = document.getElementById("promoMsg");
+  if (!type || !msg) { el.innerHTML = ""; return; }
+  const icons = { success:"fa-check-circle", danger:"fa-exclamation-circle", warning:"fa-exclamation-triangle" };
+  el.innerHTML = `<span class="text-${type}"><i class="fas ${icons[type]||"fa-info-circle"} me-1"></i>${msg}</span>`;
+}
+
+function formatKES(amount) {
+  return "KES " + parseFloat(amount).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function initiateMpesa(invoiceId, amount) {
