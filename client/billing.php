@@ -177,6 +177,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
     $plan->execute([$planId]);
     $plan = $plan->fetch();
     if ($plan) {
+        // Guard: do not create a duplicate if a pending upgrade invoice already exists for this plan+cycle
+        $dupNotes = "Plan: {$plan['name']} ({$cycle})";
+        $dupStmt  = $pdo->prepare("SELECT id FROM invoices WHERE org_id=? AND status IN ('draft','sent','overdue') AND notes=? LIMIT 1");
+        $dupStmt->execute([$orgId, $dupNotes]);
+        if ($dupRow = $dupStmt->fetch()) {
+            setFlash('warning', "You already have a pending invoice for the <strong>{$plan['name']}</strong> ({$cycle}) plan. <a href='?tab=pay&inv={$dupRow['id']}' class='fw-bold'>Pay it now →</a>");
+            redirect(APP_URL . '/client/billing.php?tab=plans');
+        }
+
         $amount    = $cycle === 'annual' ? (float)$plan['price_annual'] : (float)$plan['price_monthly'];
         $tax       = round($amount * 0.16, 2);
         $total     = $amount + $tax;
@@ -185,7 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
         $pdo->prepare("INSERT INTO invoices (org_id, subscription_id, invoice_number, amount, tax, total, status, due_date, notes)
             VALUES (?,?,?,?,?,?,'sent',?,?)")->execute([
             $orgId, $sub['id'] ?? null, $invoiceNo, $amount, $tax, $total, $dueDate,
-            "Plan: {$plan['name']} ({$cycle})"
+            $dupNotes
         ]);
         $invoiceId = (int)$pdo->lastInsertId();
         logActivity('create', 'billing', "Plan upgrade invoice: {$plan['name']} — {$invoiceNo}");
@@ -282,10 +291,48 @@ try {
     $walletTxns = $wt->fetchAll();
 } catch (Exception $e) {}
 
+// ── Invoice totals: dedicated aggregate query (no JOIN, no column bleed) ──────
+$totalPaid    = 0.0;
+$totalPending = 0.0;
+$invoiceCount = 0;
+try {
+    $aggStmt = $pdo->prepare("
+        SELECT
+            COALESCE(SUM(CASE WHEN status = 'paid'
+                              THEN CAST(total AS DECIMAL(12,2)) ELSE 0 END), 0)            AS total_paid,
+            COALESCE(SUM(CASE WHEN status IN ('draft','sent','overdue')
+                              THEN CAST(total AS DECIMAL(12,2)) ELSE 0 END), 0)            AS total_pending,
+            COUNT(*)                                                                        AS invoice_count
+        FROM invoices
+        WHERE org_id = ?
+    ");
+    $aggStmt->execute([$orgId]);
+    $agg          = $aggStmt->fetch(PDO::FETCH_ASSOC);
+    $totalPaid    = (float)($agg['total_paid']    ?? 0);
+    $totalPending = (float)($agg['total_pending'] ?? 0);
+    $invoiceCount = (int)($agg['invoice_count']   ?? 0);
+} catch (Exception $e) {}
+
+// ── Invoice list: explicit columns + CAST to prevent type confusion ──────────
 $invoices = [];
 try {
     $stmt = $pdo->prepare("
-        SELECT i.*, m.name AS module_name, m.icon AS module_icon, m.color AS module_color
+        SELECT
+            i.id,
+            i.org_id,
+            i.module_id,
+            i.invoice_number,
+            CAST(i.amount AS DECIMAL(12,2))  AS amount,
+            CAST(i.tax    AS DECIMAL(12,2))  AS tax,
+            CAST(i.total  AS DECIMAL(12,2))  AS total,
+            i.status,
+            i.due_date,
+            i.paid_at,
+            i.notes,
+            i.created_at,
+            m.name  AS module_name,
+            m.icon  AS module_icon,
+            m.color AS module_color
         FROM invoices i
         LEFT JOIN modules m ON i.module_id = m.id
         WHERE i.org_id = ?
@@ -293,13 +340,11 @@ try {
         LIMIT 100
     ");
     $stmt->execute([$orgId]);
-    $invoices = $stmt->fetchAll();
+    $invoices = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {}
 
-$unpaidInvoices  = array_filter($invoices, fn($i) => in_array($i['status'], ['draft','sent','overdue']));
-$totalPaid       = array_sum(array_map(fn($i) => $i['status'] === 'paid' ? (float)$i['total'] : 0, $invoices));
-$totalPending    = array_sum(array_map(fn($i) => in_array($i['status'],['draft','sent','overdue']) ? (float)$i['total'] : 0, $invoices));
-$statusColors    = ['draft'=>'secondary','sent'=>'info','paid'=>'success','overdue'=>'danger','cancelled'=>'dark'];
+$unpaidInvoices = array_filter($invoices, fn($i) => in_array($i['status'], ['draft','sent','overdue']));
+$statusColors   = ['draft'=>'secondary','sent'=>'info','paid'=>'success','overdue'=>'danger','cancelled'=>'dark'];
 
 // Focus invoice for pay tab
 $focusInv = null;
