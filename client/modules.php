@@ -167,17 +167,25 @@ $categories   = array_unique(array_filter(array_column($allModules, 'category'))
 $activeCount  = count($activeSlug);
 $pendingCount = count($pendingBySlug);
 
+// USD exchange rate — read from admin settings
+$usdRate = max(1, (float)(getSetting('usd_rate', '130') ?: 130));
+
 // Embed module details for JS modal (all modules, keyed by slug)
 $moduleMap = [];
 foreach ($allModules as $m) {
+    $kesMo  = (float)$m['monthly_price'];
+    $kesAnn = (float)$m['annual_price'];
     $moduleMap[$m['slug']] = [
-        'name'    => $m['name'],
-        'desc'    => $m['description'],
-        'icon'    => $m['icon'],
-        'color'   => $m['color'],
-        'price'   => (float)$m['monthly_price'],
-        'cat'     => $m['category'],
-        'slug'    => $m['slug'],
+        'name'          => $m['name'],
+        'desc'          => $m['description'],
+        'icon'          => $m['icon'],
+        'color'         => $m['color'],
+        'price'         => $kesMo,                                             // KES monthly
+        'price_usd'     => $kesMo  > 0 ? round($kesMo  / $usdRate, 2) : 0,   // USD monthly
+        'price_ann'     => $kesAnn,                                            // KES annual
+        'price_ann_usd' => $kesAnn > 0 ? round($kesAnn / $usdRate, 2) : 0,    // USD annual
+        'cat'           => $m['category'],
+        'slug'          => $m['slug'],
     ];
 }
 
@@ -191,8 +199,19 @@ $csrfToken  = $_SESSION['csrf_token']; // guaranteed set above
     <h4><i class="fas fa-store me-2 text-green"></i>Module Marketplace</h4>
     <p class="text-muted mb-0 small">Add modules to your workspace — pay instantly via M-Pesa</p>
   </div>
-  <div class="d-flex gap-2 align-items-center">
-    <div class="input-group input-group-sm" style="width:220px">
+  <div class="d-flex gap-2 align-items-center flex-wrap">
+    <!-- Currency toggle -->
+    <div style="display:inline-flex;background:#f1f5f9;border:1.5px solid #e2e8f0;border-radius:999px;overflow:hidden">
+      <button id="mktBtnUSD" onclick="setCurrency('USD')"
+              style="border:none;padding:.3rem .85rem;font-size:.75rem;font-weight:700;cursor:pointer;transition:all .18s;background:#0B2D4E;color:#fff;border-radius:999px">
+        $ USD
+      </button>
+      <button id="mktBtnKES" onclick="setCurrency('KES')"
+              style="border:none;padding:.3rem .85rem;font-size:.75rem;font-weight:700;cursor:pointer;transition:all .18s;background:transparent;color:#64748b;border-radius:999px">
+        KES
+      </button>
+    </div>
+    <div class="input-group input-group-sm" style="width:210px">
       <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted" style="font-size:.8rem"></i></span>
       <input type="text" id="moduleSearch" class="form-control border-start-0 ps-1" placeholder="Search modules…" style="font-size:.82rem">
     </div>
@@ -275,8 +294,10 @@ $csrfToken  = $_SESSION['csrf_token']; // guaranteed set above
     $isActive  = in_array($m['slug'], $activeSlug);
     $isPending = isset($pendingBySlug[$m['slug']]);
     $pendingId = $isPending ? $pendingBySlug[$m['slug']] : 0;
-    $taxRate   = 16; // displayed approximate; actual uses DB setting on invoice creation
-    $displayTotal = (float)$m['monthly_price'] * 1.16;
+    $kesMo        = (float)$m['monthly_price'];
+    $usdMo        = $kesMo > 0 ? round($kesMo / $usdRate, 2) : 0;
+    $taxRate      = 16;
+    $displayTotal = $kesMo * 1.16; // KES total incl. VAT — used for M-Pesa (always KES)
   ?>
   <div class="col-6 col-md-4 col-lg-3 module-col"
        data-category="<?= e($m['category']) ?>"
@@ -309,11 +330,18 @@ $csrfToken  = $_SESSION['csrf_token']; // guaranteed set above
           <i class="fas fa-info-circle me-1"></i>More details
         </button>
 
-        <!-- Price -->
+        <!-- Price — data-* attrs hold both currencies; JS switches display -->
         <?php if (!$isActive): ?>
-        <div class="fw-800 text-dark mb-2" style="font-size:1.1rem">
-          <?= formatCurrency((float)$m['monthly_price']) ?>
-          <span class="fw-400 text-muted" style="font-size:.68rem">+VAT/mo</span>
+        <div class="mod-price-display fw-bold text-dark mb-1" style="font-size:1.05rem"
+             data-kes="<?= number_format($kesMo, 2) ?>"
+             data-usd="<?= number_format($usdMo, 2) ?>">
+          <span class="price-val">$ <?= number_format($usdMo, 2) ?></span>
+          <span class="fw-normal text-muted" style="font-size:.66rem">+VAT/mo</span>
+        </div>
+        <div class="text-muted mb-2 mod-price-sub" style="font-size:.68rem"
+             data-kes="<?= number_format($kesMo, 2) ?>"
+             data-usd="<?= number_format($usdMo, 2) ?>">
+          ≈ KES <?= number_format($kesMo, 2) ?>
         </div>
         <?php endif; ?>
 
@@ -466,10 +494,57 @@ $csrfToken  = $_SESSION['csrf_token']; // guaranteed set above
 const MODULE_MAP   = <?= json_encode($moduleMap, JSON_HEX_TAG) ?>;
 const APP_URL      = '<?= APP_URL ?>';
 const CSRF_TOKEN   = '<?= $csrfToken ?>';
+const USD_RATE     = <?= (float)$usdRate ?>;
 
 function fmtKES(n) {
   return 'KES ' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
+function fmtUSD(n) {
+  return '$ ' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+function fmtCur(n, cur) {
+  return cur === 'USD' ? fmtUSD(n) : fmtKES(n);
+}
+
+// ── Currency toggle ───────────────────────────────────────────────
+let activeCur = localStorage.getItem('mktCurrency') || 'USD';
+
+function setCurrency(cur) {
+  activeCur = cur;
+  localStorage.setItem('mktCurrency', cur);
+  updateMarketplacePrices();
+}
+
+function updateMarketplacePrices() {
+  const isUSD = activeCur === 'USD';
+
+  // Toggle button styles
+  const uBtn = document.getElementById('mktBtnUSD');
+  const kBtn = document.getElementById('mktBtnKES');
+  if (uBtn && kBtn) {
+    uBtn.style.background = isUSD  ? '#0B2D4E' : 'transparent';
+    uBtn.style.color      = isUSD  ? '#fff'    : '#64748b';
+    kBtn.style.background = !isUSD ? '#0B2D4E' : 'transparent';
+    kBtn.style.color      = !isUSD ? '#fff'    : '#64748b';
+  }
+
+  // Update card primary price values
+  document.querySelectorAll('.mod-price-display').forEach(function(el) {
+    const priceEl = el.querySelector('.price-val');
+    if (!priceEl) return;
+    const val = isUSD ? el.dataset.usd : el.dataset.kes;
+    priceEl.textContent = (isUSD ? '$ ' : 'KES ') + val;
+  });
+
+  // Update secondary "≈ ..." lines
+  document.querySelectorAll('.mod-price-sub').forEach(function(el) {
+    const altVal = isUSD ? el.dataset.kes : el.dataset.usd;
+    el.textContent = isUSD ? '≈ KES ' + altVal : '≈ $ ' + altVal;
+  });
+}
+
+// Apply saved preference on page load
+updateMarketplacePrices();
 
 // ── Category filter ───────────────────────────────────────────────
 document.querySelectorAll('.category-btn').forEach(btn => {
@@ -503,10 +578,23 @@ function applyFilters() {
 function openDetail(slug) {
   const m = MODULE_MAP[slug];
   if (!m) return;
+  const isUSD  = activeCur === 'USD';
+  const primary   = isUSD ? fmtUSD(m.price_usd) : fmtKES(m.price);
+  const secondary = isUSD ? '≈ ' + fmtKES(m.price) : '≈ ' + fmtUSD(m.price_usd);
+  const annLine = m.price_ann > 0
+    ? (isUSD
+        ? '$ ' + Number(m.price_ann_usd).toFixed(2) + '/yr  (≈ KES ' + Number(m.price_ann).toLocaleString('en-KE') + ')'
+        : 'KES ' + Number(m.price_ann).toLocaleString('en-KE') + '/yr  (≈ $ ' + Number(m.price_ann_usd).toFixed(2) + ')')
+    : '';
+
   document.getElementById('detailTitle').textContent = m.name;
   document.getElementById('detailCat').textContent   = m.cat;
   document.getElementById('detailDesc').textContent  = m.desc;
-  document.getElementById('detailPrice').textContent = fmtKES(m.price);
+  document.getElementById('detailPrice').innerHTML   =
+    '<span class="fw-bold">' + primary + '</span>' +
+    '<span class="text-muted ms-2 small">' + secondary + '</span>' +
+    (annLine ? '<div class="text-muted mt-1" style="font-size:.72rem">' + annLine + '/yr</div>' : '');
+
   const iconEl = document.getElementById('detailIcon');
   iconEl.style.background = m.color + '1a';
   iconEl.style.color      = m.color;
@@ -514,9 +602,9 @@ function openDetail(slug) {
 
   const addBtn = document.getElementById('detailAddBtn');
   addBtn.style.background = m.color;
-  addBtn.onclick = () => {
+  addBtn.onclick = function() {
     bootstrap.Modal.getInstance(document.getElementById('detailModal'))?.hide();
-    addAndPay(slug, m.name, Math.round(m.price * 1.16));
+    addAndPay(slug, m.name, Math.round(m.price * 1.16)); // always KES for M-Pesa
   };
 
   new bootstrap.Modal(document.getElementById('detailModal')).show();
@@ -527,8 +615,12 @@ let _currentSlug = '';
 
 function addAndPay(slug, name, totalKes) {
   _currentSlug = slug;
-  document.getElementById('payModuleName').textContent   = name;
-  document.getElementById('payModuleAmount').textContent = fmtKES(totalKes);
+  const totalUsd = (totalKes / USD_RATE).toFixed(2);
+  document.getElementById('payModuleName').textContent = name;
+  // Pay modal always shows KES (M-Pesa charges in KES) + USD equivalent
+  document.getElementById('payModuleAmount').innerHTML =
+    '<span class="fw-bold">' + fmtKES(totalKes) + '</span>' +
+    '<div class="text-muted small" style="font-size:.72rem">≈ $ ' + totalUsd + ' · includes 16% VAT</div>';
   showPayPhase('input');
   document.getElementById('payError').classList.add('d-none');
 
