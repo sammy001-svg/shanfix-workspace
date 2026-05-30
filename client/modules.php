@@ -18,14 +18,16 @@ if (empty($_SESSION['csrf_token'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'deactivate') {
     verifyCsrf();
     $slug = sanitize($_POST['module_slug'] ?? '');
-    if ($sub && $slug) {
+    if ($slug) {
         try {
+            // Use org_id via subscriptions join — works regardless of which subscription the module is on
             $pdo->prepare("
                 UPDATE subscription_modules sm
-                INNER JOIN modules m ON sm.module_id = m.id
+                INNER JOIN subscriptions s  ON sm.subscription_id = s.id
+                INNER JOIN modules m        ON sm.module_id = m.id
                 SET sm.status = 'inactive'
-                WHERE sm.subscription_id = ? AND m.slug = ?
-            ")->execute([$sub['id'], $slug]);
+                WHERE s.org_id = ? AND m.slug = ?
+            ")->execute([$orgId, $slug]);
             setFlash('info', 'Module deactivated. You can reactivate it anytime by purchasing again.');
         } catch (Throwable $e) {
             error_log('[deactivate_module] ' . $e->getMessage());
@@ -377,11 +379,15 @@ $csrfToken  = $_SESSION['csrf_token']; // guaranteed set above
               <i class="fas fa-lock me-1"></i>Subscribe First
             </a>
           <?php else: ?>
-            <button type="button" class="btn btn-sm w-100 text-white fw-700"
-                    style="background:<?= e($m['color']) ?>;border-radius:8px"
-                    onclick="addAndPay('<?= e($m['slug']) ?>','<?= e(addslashes($m['name'])) ?>',<?= (int)round($displayTotal) ?>)">
-              <i class="fas fa-plus-circle me-1"></i>Add &amp; Pay
-            </button>
+            <form method="POST" action="<?= APP_URL ?>/client/modules.php">
+              <?= csrfField() ?>
+              <input type="hidden" name="action" value="add_module">
+              <input type="hidden" name="module_slug" value="<?= e($m['slug']) ?>">
+              <button type="submit" class="btn btn-sm w-100 text-white fw-700"
+                      style="background:<?= e($m['color']) ?>;border-radius:8px">
+                <i class="fas fa-plus-circle me-1"></i>Add &amp; Pay
+              </button>
+            </form>
           <?php endif; ?>
         <?php endif; ?>
       </div>
@@ -425,93 +431,27 @@ $csrfToken  = $_SESSION['csrf_token']; // guaranteed set above
   </div>
 </div>
 
-<!-- ═══ M-Pesa Pay Modal ══════════════════════════════════════════ -->
-<div class="modal fade" id="payModal" tabindex="-1" data-bs-backdrop="static">
-  <div class="modal-dialog modal-dialog-centered" style="max-width:400px">
-    <div class="modal-content border-0 shadow" style="border-radius:16px;overflow:hidden">
-      <div class="modal-header border-0 pb-0" style="background:linear-gradient(135deg,#0B2D4E,#1A8A4E)">
-        <div class="d-flex align-items-center gap-2">
-          <i class="fas fa-mobile-alt text-white fa-lg"></i>
-          <h5 class="modal-title fw-800 text-white mb-0">Pay via M-Pesa</h5>
-        </div>
-        <button type="button" class="btn-close btn-close-white ms-auto" id="payModalClose" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body p-4">
-
-        <!-- Summary box -->
-        <div class="rounded-2 p-3 mb-3" style="background:#f0fdf4;border:1px solid #bbf7d0">
-          <div class="d-flex justify-content-between align-items-center">
-            <div>
-              <div class="text-muted small">Activating</div>
-              <div class="fw-700 text-dark" id="payModuleName"></div>
-            </div>
-            <div class="text-end">
-              <div class="text-muted small">Amount</div>
-              <div class="fw-800 text-green" style="font-size:1.25rem" id="payModuleAmount"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Phone field -->
-        <div id="payPhaseInput">
-          <label class="form-label small fw-600">M-Pesa Phone Number</label>
-          <div class="input-group mb-1">
-            <span class="input-group-text"><i class="fas fa-phone-alt text-muted" style="font-size:.8rem"></i></span>
-            <input type="tel" id="payModulePhone" class="form-control"
-                   placeholder="07XXXXXXXX or +2547XXXXXXXX"
-                   value="<?= e($userPhone) ?>">
-          </div>
-          <div class="form-text">You will receive an M-Pesa STK push prompt on this number.</div>
-          <div id="payError" class="alert alert-danger small d-none mt-2 mb-0 py-2"></div>
-        </div>
-
-        <!-- Waiting state (shown after STK sent) -->
-        <div id="payPhaseWaiting" class="d-none text-center py-2">
-          <div class="mb-3">
-            <div style="width:60px;height:60px;border-radius:50%;background:#f0fdf4;border:2px solid #1A8A4E;display:flex;align-items:center;justify-content:center;margin:0 auto">
-              <i class="fas fa-spinner fa-spin text-green fa-lg"></i>
-            </div>
-          </div>
-          <div class="fw-700 text-dark mb-1">Check your phone</div>
-          <p class="text-muted small mb-0">Enter your M-Pesa PIN on the prompt sent to <strong id="payPhoneDisplay"></strong></p>
-          <div class="progress mt-3" style="height:4px">
-            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width:100%"></div>
-          </div>
-          <div class="text-muted mt-2" style="font-size:.72rem">Waiting for confirmation…</div>
-        </div>
-
-      </div>
-      <div class="modal-footer border-0 pt-0 gap-2" id="payModalFooter">
-        <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-        <button class="btn btn-success fw-700" id="payConfirmBtn">
-          <i class="fas fa-mobile-alt me-2"></i>Send STK Push
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Hidden deactivate form (submitted by JS) -->
+<!-- Hidden forms submitted by JS -->
 <form method="POST" action="<?= APP_URL ?>/client/modules.php" id="deactivateForm">
   <?= csrfField() ?>
   <input type="hidden" name="action" value="deactivate">
   <input type="hidden" name="module_slug" id="deactivateSlug">
 </form>
+<form method="POST" action="<?= APP_URL ?>/client/modules.php" id="addModuleForm">
+  <?= csrfField() ?>
+  <input type="hidden" name="action" value="add_module">
+  <input type="hidden" name="module_slug" id="addModuleSlug">
+</form>
 
 <script>
-const MODULE_MAP   = <?= json_encode($moduleMap, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?: '{}' ?>;
-const APP_URL      = '<?= APP_URL ?>';
-const CSRF_TOKEN   = '<?= $csrfToken ?>';
-const USD_RATE     = <?= (float)$usdRate ?>;
+const MODULE_MAP = <?= json_encode($moduleMap, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?: '{}' ?>;
+const USD_RATE   = <?= (float)$usdRate ?>;
 
 function fmtKES(n) {
   return 'KES ' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 function fmtUSD(n) {
   return '$ ' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-}
-function fmtCur(n, cur) {
-  return cur === 'USD' ? fmtUSD(n) : fmtKES(n);
 }
 
 // ── Currency toggle ───────────────────────────────────────────────
@@ -612,177 +552,18 @@ function openDetail(slug) {
   addBtn.style.background = m.color;
   addBtn.onclick = function() {
     bootstrap.Modal.getOrCreateInstance(document.getElementById('detailModal')).hide();
-    addAndPay(slug, m.name, Math.round(m.price * 1.16)); // always KES for M-Pesa
+    document.getElementById('addModuleSlug').value = slug;
+    document.getElementById('addModuleForm').submit();
   };
 
   bootstrap.Modal.getOrCreateInstance(document.getElementById('detailModal')).show();
 }
 
-// ── Add & Pay modal ───────────────────────────────────────────────
-let _currentSlug = '';
-
-function addAndPay(slug, name, totalKes) {
-  _currentSlug = slug;
-  const totalUsd = (totalKes / USD_RATE).toFixed(2);
-  document.getElementById('payModuleName').textContent = name;
-  // Pay modal always shows KES (M-Pesa charges in KES) + USD equivalent
-  document.getElementById('payModuleAmount').innerHTML =
-    '<span class="fw-bold">' + fmtKES(totalKes) + '</span>' +
-    '<div class="text-muted small" style="font-size:.72rem">≈ $ ' + totalUsd + ' · includes 16% VAT</div>';
-  showPayPhase('input');
-  document.getElementById('payError').classList.add('d-none');
-
-  const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('payModal'));
-  modal.show();
-
-  document.getElementById('payConfirmBtn').onclick = () => {
-    const phone = document.getElementById('payModulePhone').value.trim();
-    if (!phone) { showPayError('Please enter your M-Pesa phone number.'); return; }
-    startPay(slug, name, totalKes, phone, modal);
-  };
-}
-
-function startPay(slug, name, totalKes, phone, modal) {
-  setPayBtn(true, '<i class="fas fa-spinner fa-spin me-2"></i>Creating invoice…');
-  clearPayError();
-
-  // Step 1: Create invoice via AJAX
-  const fd = new FormData();
-  fd.append('action',      'add_module');
-  fd.append('module_slug', slug);
-  fd.append('ajax',        '1');
-  fd.append('_token',      CSRF_TOKEN);
-
-  fetch(window.location.pathname, { method: 'POST', body: fd })
-    .then(r => {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    })
-    .then(data => {
-      if (!data.success) {
-        setPayBtn(false);
-        showPayError(data.error || 'Could not create invoice. Please try again.');
-        return;
-      }
-
-      const invoiceId = data.invoice_id;
-      setPayBtn(true, '<i class="fas fa-spinner fa-spin me-2"></i>Sending STK Push…');
-
-      // Step 2: STK push
-      const fd2 = new FormData();
-      fd2.append('phone',      phone);
-      fd2.append('amount',     totalKes);
-      fd2.append('invoice_id', invoiceId);
-
-      fetch(APP_URL + '/api/mpesa-stk.php', { method: 'POST', body: fd2 })
-        .then(r => r.json())
-        .then(stk => {
-          if (!stk.success) {
-            setPayBtn(false);
-            showPayError(stk.message || 'STK push failed. Please try again.');
-            return;
-          }
-
-          // Show waiting state
-          document.getElementById('payPhoneDisplay').textContent = phone;
-          showPayPhase('waiting');
-          document.getElementById('payModalFooter').classList.add('d-none');
-          document.getElementById('payModalClose').style.display = 'none';
-
-          pollModulePayment(stk.checkout_id, modal, name);
-        })
-        .catch(() => { setPayBtn(false); showPayError('Network error sending STK push.'); });
-    })
-    .catch(err => { setPayBtn(false); showPayError('Request failed: ' + (err.message || 'network error') + '. Please try again.'); });
-}
-
-function pollModulePayment(checkoutId, modal, moduleName) {
-  const MAX = 40;
-  let attempts = 0;
-  const timer = setInterval(() => {
-    attempts++;
-    if (attempts > MAX) {
-      clearInterval(timer);
-      resetPayModal();
-      Swal.fire({
-        icon: 'warning', title: 'Timeout',
-        text: 'We did not receive payment confirmation. If you completed the M-Pesa prompt, refresh this page to check module status.',
-        confirmButtonColor: '#1A8A4E'
-      });
-      return;
-    }
-    fetch(APP_URL + '/api/check-payment.php?id=' + encodeURIComponent(checkoutId))
-      .then(r => r.json())
-      .then(res => {
-        if (res.status === 'completed') {
-          clearInterval(timer);
-          modal.hide();
-          Swal.fire({
-            icon: 'success',
-            title: moduleName + ' Activated!',
-            html: 'Payment confirmed. Your module is now active.<br><small class="text-muted">Receipt: ' + (res.receipt || '') + '</small>',
-            confirmButtonColor: '#1A8A4E',
-            confirmButtonText: 'Open Marketplace'
-          }).then(() => location.reload());
-        } else if (res.status === 'failed') {
-          clearInterval(timer);
-          resetPayModal();
-          showPayError('Payment failed or was cancelled. Please try again.');
-        }
-      })
-      .catch(() => {}); // silent, keep polling
-  }, 3000);
-}
-
-function showPayPhase(phase) {
-  document.getElementById('payPhaseInput').classList.toggle('d-none', phase !== 'input');
-  document.getElementById('payPhaseWaiting').classList.toggle('d-none', phase !== 'waiting');
-}
-
-function showPayError(msg) {
-  const el = document.getElementById('payError');
-  el.textContent = msg;
-  el.classList.remove('d-none');
-}
-
-function clearPayError() {
-  document.getElementById('payError').classList.add('d-none');
-}
-
-function setPayBtn(disabled, label) {
-  const btn = document.getElementById('payConfirmBtn');
-  btn.disabled = disabled;
-  if (label) btn.innerHTML = label;
-  else        btn.innerHTML = '<i class="fas fa-mobile-alt me-2"></i>Send STK Push';
-}
-
-function resetPayModal() {
-  showPayPhase('input');
-  setPayBtn(false);
-  document.getElementById('payModalFooter').classList.remove('d-none');
-  document.getElementById('payModalClose').style.display = '';
-}
-
-// Reset modal state when closed
-document.getElementById('payModal').addEventListener('hidden.bs.modal', resetPayModal);
-
-// ── Deactivate with SweetAlert2 confirm ──────────────────────────
+// ── Deactivate ───────────────────────────────────────────────────
 function confirmDeactivate(slug, name) {
-  Swal.fire({
-    icon: 'warning',
-    title: 'Deactivate ' + name + '?',
-    text: 'Your data will be preserved. You can reactivate by purchasing again.',
-    showCancelButton: true,
-    confirmButtonColor: '#dc2626',
-    cancelButtonColor: '#6b7280',
-    confirmButtonText: 'Yes, Deactivate',
-    cancelButtonText: 'Cancel'
-  }).then(result => {
-    if (result.isConfirmed) {
-      document.getElementById('deactivateSlug').value = slug;
-      document.getElementById('deactivateForm').submit();
-    }
-  });
+  if (!confirm('Deactivate ' + name + '?\n\nYour data will be preserved. You can reactivate by purchasing again.')) return;
+  document.getElementById('deactivateSlug').value = slug;
+  document.getElementById('deactivateForm').submit();
 }
 </script>
 
