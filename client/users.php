@@ -19,22 +19,46 @@ $myId  = (int)$user['id'];
 
 // ── Helper: save module grants + roles for a staff user ──────────────────
 function saveModuleGrants(PDO $pdo, int $uid, int $orgId, int $grantedBy, array $slugs, array $moduleRoles = []): void {
+    // Clear old grants (throws if user_module_access doesn't exist — caller should catch)
     $pdo->prepare("DELETE FROM user_module_access WHERE user_id=? AND org_id=?")->execute([$uid, $orgId]);
-    $ins = $pdo->prepare("INSERT IGNORE INTO user_module_access (user_id,org_id,module_slug,granted_by,module_role) VALUES (?,?,?,?,?)");
+
+    if (empty($slugs)) {
+        try { saveUserModuleRoles($pdo, $uid, $orgId, $grantedBy, []); } catch (Throwable $e) {}
+        return;
+    }
+
+    // Detect whether module_role column exists by trying to prepare with it first
+    $withRoleCol = true;
+    try {
+        $ins = $pdo->prepare("INSERT IGNORE INTO user_module_access (user_id,org_id,module_slug,granted_by,module_role) VALUES (?,?,?,?,?)");
+    } catch (Throwable $e) {
+        $withRoleCol = false;
+        $ins = $pdo->prepare("INSERT IGNORE INTO user_module_access (user_id,org_id,module_slug,granted_by) VALUES (?,?,?,?)");
+    }
+
+    $rolesMap = [];
     foreach ($slugs as $slug) {
         $clean = preg_replace('/[^a-z0-9_-]/', '', strtolower($slug));
-        if ($clean) {
-            $roleKey = $moduleRoles[$clean] ?? 'staff';
-            $ins->execute([$uid, $orgId, $clean, $grantedBy, $roleKey]);
+        if (!$clean) continue;
+        $roleKey        = $moduleRoles[$clean] ?? 'staff';
+        $rolesMap[$clean] = $roleKey;
+        try {
+            if ($withRoleCol) {
+                $ins->execute([$uid, $orgId, $clean, $grantedBy, $roleKey]);
+            } else {
+                $ins->execute([$uid, $orgId, $clean, $grantedBy]);
+            }
+        } catch (Throwable $e) {
+            error_log('[saveModuleGrants insert] ' . $e->getMessage());
         }
     }
-    // Save to user_module_roles table
-    saveUserModuleRoles($pdo, $uid, $orgId, $grantedBy, array_filter(
-        array_combine(
-            array_map(fn($s) => preg_replace('/[^a-z0-9_-]/', '', strtolower($s)), $slugs),
-            array_map(fn($s) => $moduleRoles[preg_replace('/[^a-z0-9_-]/', '', strtolower($s))] ?? 'staff', $slugs)
-        )
-    ));
+
+    // Save per-module role keys (user_module_roles table — silently skip if missing)
+    try {
+        saveUserModuleRoles($pdo, $uid, $orgId, $grantedBy, $rolesMap);
+    } catch (Throwable $e) {
+        error_log('[saveModuleGrants roles] ' . $e->getMessage());
+    }
 }
 
 // ── POST handler ───────────────────────────────────────────────────────────
@@ -67,18 +91,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare("INSERT INTO users (org_id,name,email,password,phone,role,status) VALUES (?,?,?,?,?,?,'active')")
                     ->execute([$orgId, $name, $email, password_hash($pwd, PASSWORD_BCRYPT), $phone, $role]);
                 $newId = (int)$pdo->lastInsertId();
+                $grantsOk = true;
                 // Grant module access + roles for staff members
                 if ($role === 'staff' && $newId) {
                     try {
                         saveModuleGrants($pdo, $newId, $orgId, $myId, $modules, $moduleRoles);
                     } catch (Throwable $e) {
+                        $grantsOk = false;
                         error_log('[users add grants] ' . $e->getMessage());
-                        setFlash('warning', "Team member created but module permissions could not be saved — please run the staff/module-roles migrations on your database.");
                     }
                 }
                 logActivity('add_team_member', 'client', "Added: $name ($role)");
                 $modCount = $role === 'staff' ? count($modules) : 'all';
-                setFlash('success', "Team member '$name' added with access to {$modCount} module(s).");
+                if (!$grantsOk) {
+                    setFlash('warning', "Team member <strong>$name</strong> was created but module permissions could not be saved. Run the staff &amp; module-roles database migrations, then edit the member to reassign modules.");
+                } else {
+                    setFlash('success', "Team member <strong>$name</strong> added with access to {$modCount} module(s).");
+                }
 
                 // Send welcome email to new team member
                 try {
@@ -138,20 +167,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare("UPDATE users SET name=?,phone=?,role=? WHERE id=? AND org_id=? AND role!='super_admin'")
             ->execute([$name, $phone, $role, $uid, $orgId]);
         // Update module grants + roles (always re-sync; clear for admins, set for staff)
+        $editGrantsOk = true;
         try {
             if ($role === 'staff') {
                 saveModuleGrants($pdo, $uid, $orgId, $myId, $modules, $moduleRoles);
             } else {
                 // Admins don't need explicit grants — clear any old ones
                 $pdo->prepare("DELETE FROM user_module_access WHERE user_id=? AND org_id=?")->execute([$uid, $orgId]);
-                saveUserModuleRoles($pdo, $uid, $orgId, $myId, []);
+                try { saveUserModuleRoles($pdo, $uid, $orgId, $myId, []); } catch (Throwable $e) {}
             }
         } catch (Throwable $e) {
+            $editGrantsOk = false;
             error_log('[users edit grants] ' . $e->getMessage());
-            setFlash('warning', "Profile updated but module permissions could not be saved — please run the staff/module-roles migrations on your database.");
         }
         logActivity('edit_team_member', 'client', "Edited user #$uid");
-        setFlash('success', 'Team member updated successfully.');
+        if (!$editGrantsOk) {
+            setFlash('warning', 'Profile updated but module permissions could not be saved. Run the staff &amp; module-roles database migrations, then try again.');
+        } else {
+            setFlash('success', 'Team member and module permissions updated successfully.');
+        }
         redirect(APP_URL . '/client/users.php');
     }
 
