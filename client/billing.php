@@ -202,12 +202,42 @@ require_once __DIR__ . '/../includes/header-client.php';
 
 $plans = $pdo->query("SELECT * FROM subscription_plans WHERE status='active' ORDER BY price_monthly")->fetchAll();
 
+// ── USD rate ──────────────────────────────────────────────────────
+$usdRate = max(1, (float)(getSetting('usd_rate', '130') ?: 130));
+
 // ── Usage limits (for overview tab banners) ───────────────────────
 $usageLimits = checkUsageLimits($orgId);
 
 // ── Data ─────────────────────────────────────────────────────────
 $activeTab    = $_GET['tab'] ?? 'overview';
 $highlightInv = (int)($_GET['inv'] ?? 0);
+
+// ── Current plan — live prices from subscription_plans ────────────
+$currentPlan = null;
+if ($sub && !empty($sub['plan_id'])) {
+    $cpStmt = $pdo->prepare("SELECT * FROM subscription_plans WHERE id=?");
+    $cpStmt->execute([$sub['plan_id']]);
+    $currentPlan = $cpStmt->fetch() ?: null;
+}
+
+// ── Active modules with their live prices ─────────────────────────
+$activeModules = [];
+$totalModulesMonthly = 0.0;
+if ($sub) {
+    try {
+        $amStmt = $pdo->prepare("
+            SELECT m.name, m.icon, m.color, m.slug,
+                   m.monthly_price, m.annual_price
+            FROM modules m
+            INNER JOIN subscription_modules sm ON m.id = sm.module_id
+            WHERE sm.subscription_id = ? AND sm.status = 'active'
+            ORDER BY m.sort_order, m.name
+        ");
+        $amStmt->execute([$sub['id']]);
+        $activeModules = $amStmt->fetchAll();
+        $totalModulesMonthly = array_sum(array_column($activeModules, 'monthly_price'));
+    } catch (Exception $e) {}
+}
 
 // ── Wallet data ───────────────────────────────────────────────────
 $walletBalance = 0.00;
@@ -216,7 +246,9 @@ try {
     $wb = $pdo->prepare("SELECT wallet_balance FROM organizations WHERE id=?");
     $wb->execute([$orgId]);
     $walletBalance = (float)($wb->fetchColumn() ?: 0);
+} catch (Exception $e) {}
 
+try {
     $wt = $pdo->prepare("SELECT * FROM wallet_transactions WHERE org_id=? ORDER BY created_at DESC LIMIT 50");
     $wt->execute([$orgId]);
     $walletTxns = $wt->fetchAll();
@@ -398,29 +430,116 @@ if ($usersNear || $modulesNear):
 <div class="row g-4">
   <div class="col-lg-4">
     <div class="card h-100">
-      <div class="card-header fw-bold"><i class="fas fa-layer-group text-green me-2"></i>Current Subscription</div>
-      <div class="card-body">
-        <?php if ($sub): ?>
-        <div class="text-center mb-3">
-          <div class="display-6 fw-800 text-navy mb-1"><?= e($sub['plan_name'] ?? 'Custom') ?></div>
-          <?= statusBadge($sub['status']) ?>
+      <div class="card-header fw-bold d-flex align-items-center justify-content-between">
+        <span><i class="fas fa-receipt text-green me-2"></i>Charges Summary</span>
+        <?php if ($sub): ?><?= statusBadge($sub['status']) ?><?php endif; ?>
+      </div>
+      <div class="card-body p-0">
+        <?php if ($sub && $currentPlan): ?>
+
+        <?php
+          $isAnnual    = ($sub['billing_cycle'] ?? 'monthly') === 'annual';
+          $planPrice   = $isAnnual ? (float)$currentPlan['price_annual'] : (float)$currentPlan['price_monthly'];
+          $planPriceUsd= $planPrice > 0 ? round($planPrice / $usdRate, 2) : 0;
+          $cycleLabel  = $isAnnual ? '/yr' : '/mo';
+          $nextDate    = $sub['ends_at'] ? formatDate($sub['ends_at']) : ($sub['trial_ends_at'] ? formatDate($sub['trial_ends_at']) : '—');
+        ?>
+
+        <!-- Plan line -->
+        <div class="px-3 pt-3 pb-2 border-bottom">
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <div>
+              <div class="fw-bold text-navy"><?= e($currentPlan['name']) ?> Plan</div>
+              <div class="text-muted small text-capitalize"><?= e($sub['billing_cycle'] ?? 'monthly') ?> billing · <?= $currentPlan['max_users'] ?> users · <?= $currentPlan['max_modules'] ?> modules</div>
+            </div>
+            <div class="text-end">
+              <div class="fw-bold text-green"><?= formatCurrency($planPrice) ?><span class="text-muted fw-normal" style="font-size:.75rem"><?= $cycleLabel ?></span></div>
+              <div class="text-muted" style="font-size:.7rem">≈ $ <?= number_format($planPriceUsd, 2) ?></div>
+            </div>
+          </div>
         </div>
-        <table class="table table-sm table-borderless mb-3">
-          <tr><td class="text-muted small">Billing</td><td class="fw-bold text-capitalize small"><?= e($sub['billing_cycle']) ?></td></tr>
-          <tr><td class="text-muted small">Amount</td><td class="fw-bold text-green small"><?= formatCurrency((float)$sub['amount']) ?>/<?= $sub['billing_cycle'] === 'annual' ? 'yr' : 'mo' ?></td></tr>
-          <?php if ($sub['trial_ends_at']): ?>
-          <tr><td class="text-muted small">Trial Ends</td><td class="fw-bold text-warning small"><?= formatDate($sub['trial_ends_at']) ?></td></tr>
-          <?php endif; ?>
-          <?php if ($sub['ends_at']): ?>
-          <tr><td class="text-muted small">Renews</td><td class="small"><?= formatDate($sub['ends_at']) ?></td></tr>
-          <?php endif; ?>
-        </table>
-        <a href="?tab=plans" class="btn btn-sm btn-outline-primary w-100"><i class="fas fa-arrow-up me-1"></i>Upgrade Plan</a>
+
+        <!-- Active modules breakdown -->
+        <?php if (!empty($activeModules)): ?>
+        <div class="px-3 py-2 border-bottom">
+          <div class="text-muted small fw-semibold mb-2" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em">Active Modules (<?= count($activeModules) ?>)</div>
+          <?php foreach ($activeModules as $am):
+            $amPrice    = (float)$am['monthly_price'];
+            $amPriceUsd = $amPrice > 0 ? round($amPrice / $usdRate, 2) : 0;
+          ?>
+          <div class="d-flex align-items-center justify-content-between py-1">
+            <div class="d-flex align-items-center gap-2">
+              <div style="width:22px;height:22px;border-radius:6px;background:<?= e($am['color']) ?>1a;
+                          color:<?= e($am['color']) ?>;display:flex;align-items:center;justify-content:center;font-size:.7rem;flex-shrink:0">
+                <i class="<?= e($am['icon']) ?>"></i>
+              </div>
+              <span class="small"><?= e($am['name']) ?></span>
+            </div>
+            <div class="text-end">
+              <span class="fw-semibold small"><?= formatCurrency($amPrice) ?><span class="text-muted fw-normal">/mo</span></span>
+              <div class="text-muted" style="font-size:.68rem">≈ $ <?= number_format($amPriceUsd, 2) ?></div>
+            </div>
+          </div>
+          <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
+        <!-- Total & next billing -->
+        <?php
+          $grandTotal    = $planPrice + ($isAnnual ? 0 : $totalModulesMonthly);
+          $grandTotalUsd = $grandTotal > 0 ? round($grandTotal / $usdRate, 2) : 0;
+          $taxEst        = round($grandTotal * 0.16, 2);
+        ?>
+        <div class="px-3 py-3 bg-light">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="small text-muted">Subtotal</span>
+            <span class="fw-semibold small"><?= formatCurrency($grandTotal) ?><?= $cycleLabel ?></span>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small text-muted">VAT (16%)</span>
+            <span class="small text-muted"><?= formatCurrency($taxEst) ?></span>
+          </div>
+          <div class="d-flex justify-content-between align-items-center border-top pt-2">
+            <span class="fw-bold">Total<?= $cycleLabel ?></span>
+            <div class="text-end">
+              <span class="fw-bold text-green"><?= formatCurrency($grandTotal + $taxEst) ?></span>
+              <div class="text-muted" style="font-size:.7rem">≈ $ <?= number_format(round(($grandTotal + $taxEst) / $usdRate, 2), 2) ?></div>
+            </div>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
+            <span class="small text-muted"><i class="fas fa-calendar-alt me-1"></i>Next billing</span>
+            <span class="small fw-semibold"><?= $nextDate ?></span>
+          </div>
+        </div>
+
+        <div class="px-3 py-2">
+          <a href="?tab=plans" class="btn btn-sm btn-outline-primary w-100">
+            <i class="fas fa-arrow-up me-1"></i>Upgrade Plan
+          </a>
+        </div>
+
+        <?php elseif ($sub): ?>
+        <!-- Subscription exists but plan not found -->
+        <div class="p-3">
+          <div class="text-center mb-3">
+            <div class="fw-bold text-navy fs-5"><?= e($sub['plan_name'] ?? 'Custom Plan') ?></div>
+            <?= statusBadge($sub['status']) ?>
+          </div>
+          <table class="table table-sm table-borderless">
+            <tr><td class="text-muted small">Billing cycle</td><td class="fw-bold text-capitalize small"><?= e($sub['billing_cycle'] ?? '—') ?></td></tr>
+            <tr><td class="text-muted small">Amount</td><td class="fw-bold text-green small"><?= formatCurrency((float)$sub['amount']) ?></td></tr>
+            <?php if ($sub['ends_at']): ?>
+            <tr><td class="text-muted small">Renews</td><td class="small"><?= formatDate($sub['ends_at']) ?></td></tr>
+            <?php endif; ?>
+          </table>
+          <a href="?tab=plans" class="btn btn-sm btn-outline-primary w-100">Upgrade Plan</a>
+        </div>
         <?php else: ?>
-        <div class="text-center py-4 text-muted">
-          <i class="fas fa-layer-group fa-3x mb-2 d-block"></i>
-          No subscription yet.
-          <div class="mt-3"><a href="?tab=plans" class="btn btn-primary btn-sm">Choose a Plan</a></div>
+        <div class="text-center py-5 text-muted px-3">
+          <i class="fas fa-layer-group fa-3x mb-3 d-block opacity-25"></i>
+          <div class="fw-semibold mb-1">No active subscription</div>
+          <div class="small mb-3">Choose a plan to unlock your workspace.</div>
+          <a href="?tab=plans" class="btn btn-primary btn-sm"><i class="fas fa-layer-group me-1"></i>Choose a Plan</a>
         </div>
         <?php endif; ?>
       </div>
@@ -778,55 +897,116 @@ if ($usersNear || $modulesNear):
 <!-- ═══════════════ PLANS ═══════════════ -->
 <?php elseif ($activeTab === 'plans'): ?>
 
+<!-- Currency toggle -->
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <h6 class="fw-bold text-navy mb-0">Available Plans</h6>
+    <div class="text-muted small">All prices are exact as set by our team. VAT (16%) added at checkout.</div>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <span class="small text-muted">Show prices in:</span>
+    <div style="display:inline-flex;background:#f1f5f9;border:1.5px solid #e2e8f0;border-radius:999px;overflow:hidden">
+      <button id="planBtnUSD" onclick="setPlanCurrency('USD')"
+              style="border:none;padding:.3rem .85rem;font-size:.75rem;font-weight:700;cursor:pointer;transition:all .18s;background:#0B2D4E;color:#fff;border-radius:999px">
+        $ USD
+      </button>
+      <button id="planBtnKES" onclick="setPlanCurrency('KES')"
+              style="border:none;padding:.3rem .85rem;font-size:.75rem;font-weight:700;cursor:pointer;transition:all .18s;background:transparent;color:#64748b;border-radius:999px">
+        KES
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="row g-3 justify-content-center">
   <?php foreach ($plans as $p):
-    $isCurrent = $sub && $sub['plan_id'] == $p['id'];
+    $isCurrent  = $sub && $sub['plan_id'] == $p['id'];
+    $kesMo      = (float)$p['price_monthly'];
+    $kesAnn     = (float)$p['price_annual'];
+    $usdMo      = $kesMo  > 0 ? round($kesMo  / $usdRate, 2) : 0;
+    $usdAnn     = $kesAnn > 0 ? round($kesAnn / $usdRate, 2) : 0;
+    $savePct    = $kesMo > 0 && $kesAnn > 0
+                  ? max(0, round((1 - $kesAnn / (12 * $kesMo)) * 100)) : 0;
   ?>
-  <div class="col-md-4">
-    <div class="card h-100 <?= $isCurrent ? 'border-success border-2' : ($p['is_popular'] ? 'border-primary border-2 shadow' : '') ?>">
+  <div class="col-md-6 col-lg-4">
+    <div class="card h-100 <?= $isCurrent ? 'border-success border-2 shadow-sm' : ($p['is_popular'] ? 'border-primary border-2 shadow' : '') ?>">
       <?php if ($isCurrent): ?>
-      <div class="text-center py-1 bg-success text-white" style="font-size:.75rem;font-weight:700;border-radius:.375rem .375rem 0 0">✓ YOUR CURRENT PLAN</div>
+      <div class="text-center py-1 bg-success text-white fw-bold" style="font-size:.72rem;border-radius:.375rem .375rem 0 0">
+        <i class="fas fa-check me-1"></i>YOUR CURRENT PLAN
+      </div>
       <?php elseif ($p['is_popular']): ?>
-      <div class="text-center py-1 bg-primary text-white" style="font-size:.75rem;font-weight:700;border-radius:.375rem .375rem 0 0">⭐ MOST POPULAR</div>
+      <div class="text-center py-1 bg-primary text-white fw-bold" style="font-size:.72rem;border-radius:.375rem .375rem 0 0">
+        ⭐ MOST POPULAR
+      </div>
       <?php endif; ?>
-      <div class="card-body text-center">
-        <h5 class="fw-800 text-navy mb-1"><?= e($p['name']) ?></h5>
+
+      <div class="card-body text-center d-flex flex-column">
+        <h5 class="fw-bold text-navy mb-1"><?= e($p['name']) ?></h5>
         <p class="text-muted small mb-3"><?= e($p['description']) ?></p>
+
+        <!-- Monthly price — switches via JS -->
         <div class="mb-1">
-          <span class="display-5 fw-800 text-green"><?= formatCurrency((float)$p['price_monthly']) ?></span>
-          <span class="text-muted">/mo</span>
+          <span class="fw-bold text-success" style="font-size:2rem"
+                id="planPriceMo<?= $p['id'] ?>"
+                data-usd="$ <?= number_format($usdMo, 2) ?>"
+                data-kes="KES <?= number_format($kesMo, 0) ?>">
+            $ <?= number_format($usdMo, 2) ?>
+          </span>
+          <span class="text-muted small">/mo</span>
         </div>
+        <!-- Annual price row -->
         <div class="text-muted small mb-3">
-          or <?= formatCurrency((float)$p['price_annual']) ?>/yr
-          <span class="badge bg-success ms-1">Save ~17%</span>
+          or <span class="fw-semibold"
+                   id="planPriceAnn<?= $p['id'] ?>"
+                   data-usd="$ <?= number_format($usdAnn, 2) ?>"
+                   data-kes="KES <?= number_format($kesAnn, 0) ?>">
+               $ <?= number_format($usdAnn, 2) ?>
+             </span>/yr
+          <?php if ($savePct > 0): ?>
+          <span class="badge bg-success ms-1">Save <?= $savePct ?>%</span>
+          <?php endif; ?>
         </div>
-        <ul class="list-unstyled text-start mb-4 small">
-          <li class="mb-1"><i class="fas fa-check text-success me-2"></i><?= $p['max_users'] ?> team members</li>
-          <li class="mb-1"><i class="fas fa-check text-success me-2"></i><?= $p['max_modules'] ?> modules</li>
+
+        <ul class="list-unstyled text-start mb-4 small flex-grow-1">
+          <li class="mb-1"><i class="fas fa-users text-success me-2"></i>Up to <strong><?= $p['max_users'] ?></strong> team members</li>
+          <li class="mb-1"><i class="fas fa-puzzle-piece text-success me-2"></i>Up to <strong><?= $p['max_modules'] ?></strong> modules</li>
           <li class="mb-1"><i class="fas fa-check text-success me-2"></i>All core features</li>
-          <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Email & chat support</li>
+          <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Email &amp; chat support</li>
           <?php if ($p['is_popular']): ?>
           <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Priority support</li>
           <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Advanced analytics</li>
           <?php endif; ?>
         </ul>
+
         <?php if ($isCurrent): ?>
-        <button class="btn btn-outline-success w-100" disabled><i class="fas fa-check me-1"></i>Active Plan</button>
+        <div class="bg-success bg-opacity-10 rounded-3 p-3 mb-3 text-start">
+          <div class="fw-semibold text-success small"><i class="fas fa-check-circle me-1"></i>Active — <?= ucfirst($sub['billing_cycle'] ?? 'monthly') ?> billing</div>
+          <?php if ($sub['ends_at']): ?>
+          <div class="text-muted small mt-1"><i class="fas fa-calendar-alt me-1"></i>Renews <?= formatDate($sub['ends_at']) ?></div>
+          <?php endif; ?>
+        </div>
+        <button class="btn btn-outline-success w-100" disabled>
+          <i class="fas fa-check me-1"></i>Current Plan
+        </button>
         <?php else: ?>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 mt-auto">
           <form method="POST" class="flex-grow-1">
             <?= csrfField() ?>
             <input type="hidden" name="action" value="request_upgrade">
             <input type="hidden" name="plan_id" value="<?= $p['id'] ?>">
             <input type="hidden" name="billing_cycle" value="monthly">
-            <button type="submit" class="btn btn-outline-primary btn-sm w-100">Monthly</button>
+            <button type="submit" class="btn btn-outline-primary btn-sm w-100">
+              Monthly
+            </button>
           </form>
           <form method="POST" class="flex-grow-1">
             <?= csrfField() ?>
             <input type="hidden" name="action" value="request_upgrade">
             <input type="hidden" name="plan_id" value="<?= $p['id'] ?>">
             <input type="hidden" name="billing_cycle" value="annual">
-            <button type="submit" class="btn btn-primary btn-sm w-100">Annual</button>
+            <button type="submit" class="btn btn-primary btn-sm w-100">
+              Annual
+            </button>
           </form>
         </div>
         <?php endif; ?>
@@ -836,18 +1016,53 @@ if ($usersNear || $modulesNear):
   <?php endforeach; ?>
 </div>
 
+<?php if (empty($plans)): ?>
+<div class="text-center py-5 text-muted">
+  <i class="fas fa-layer-group fa-3x mb-3 d-block opacity-25"></i>
+  No active plans available. Contact support.
+</div>
+<?php endif; ?>
+
 <!-- ═══════════════ WALLET ═══════════════ -->
 <?php elseif ($activeTab === 'wallet'): ?>
 
 <div class="row g-4">
   <!-- Left: Balance + Top-up -->
   <div class="col-lg-5">
-    <div class="card mb-3" style="background:linear-gradient(135deg,#0B2D4E,#1A8A4E);color:white;border:none">
+
+    <!-- Balance card — always shown, even at 0 -->
+    <div class="card mb-3 border-0 text-white"
+         style="background:linear-gradient(135deg,#0B2D4E 0%,#1A8A4E 100%)">
       <div class="card-body text-center py-4">
-        <div class="mb-1" style="font-size:.85rem;opacity:.8"><i class="fas fa-wallet me-1"></i>Wallet Balance</div>
-        <div style="font-size:2.5rem;font-weight:800;letter-spacing:-1px"><?= formatCurrency($walletBalance) ?></div>
-        <div style="font-size:.8rem;opacity:.7">Available for invoice payments</div>
+        <div class="mb-2" style="font-size:.82rem;opacity:.75">
+          <i class="fas fa-wallet me-1"></i>Available Wallet Balance
+        </div>
+        <?php if ($walletBalance <= 0): ?>
+        <!-- Zero-state: explicit KES 0.00 display -->
+        <div id="walletBalanceDisplay" style="font-size:2.6rem;font-weight:900;letter-spacing:-1.5px;opacity:.6">
+          KES 0.00
+        </div>
+        <div style="font-size:.78rem;opacity:.65;margin-top:.3rem">
+          <i class="fas fa-info-circle me-1"></i>No balance — top up below to pay invoices instantly
+        </div>
+        <?php else: ?>
+        <div id="walletBalanceDisplay" style="font-size:2.6rem;font-weight:900;letter-spacing:-1.5px">
+          <?= formatCurrency($walletBalance) ?>
+        </div>
+        <div style="font-size:.78rem;opacity:.75;margin-top:.3rem">
+          ≈ $ <?= number_format(round($walletBalance / $usdRate, 2), 2) ?> · Available for invoice payments
+        </div>
+        <?php endif; ?>
       </div>
+
+      <?php if ($walletBalance > 0): ?>
+      <!-- Quick-pay banner when balance is sufficient -->
+      <div class="px-3 pb-3">
+        <a href="?tab=pay" class="btn btn-light btn-sm w-100 fw-semibold" style="color:#0B2D4E">
+          <i class="fas fa-bolt me-1"></i>Pay Invoice from Wallet
+        </a>
+      </div>
+      <?php endif; ?>
     </div>
 
     <div class="card">
@@ -859,26 +1074,26 @@ if ($usersNear || $modulesNear):
             <?php foreach ([500, 1000, 2000, 5000, 10000] as $preset): ?>
             <button type="button" class="btn btn-sm btn-outline-secondary preset-btn"
                     onclick="setTopupAmount(<?= $preset ?>)">
-              <?= number_format($preset) ?>
+              KES <?= number_format($preset) ?>
             </button>
             <?php endforeach; ?>
           </div>
           <input type="number" id="topupAmount" class="form-control" min="10" max="150000"
-                 placeholder="Enter amount…" oninput="updateTopupBtn()">
-          <div class="form-text">Min KES 10 · Max KES 150,000 per top-up</div>
+                 placeholder="Enter amount in KES…" oninput="updateTopupBtn()">
+          <div class="form-text" id="topupUsdHint">Min KES 10 · Max KES 150,000 per top-up</div>
         </div>
         <div class="mb-3">
           <label class="form-label fw-semibold">M-Pesa Phone Number</label>
           <input type="tel" id="topupPhone" class="form-control"
-                 placeholder="+254 700 000 000"
+                 placeholder="+254 7XX XXX XXX"
                  value="<?= e(preg_replace('/[^0-9+]/', '', $user['phone'] ?? '')) ?>">
         </div>
         <button class="btn btn-success w-100 fw-bold" id="topupBtn" onclick="initiateTopUp(this)" disabled>
           <i class="fas fa-wallet me-2"></i>Top Up Wallet
         </button>
-        <div class="alert alert-info small mt-3 mb-0">
-          <i class="fas fa-info-circle me-1"></i>
-          Funds are credited instantly after M-Pesa confirmation. Use your wallet to pay any invoice with one click.
+        <div class="alert alert-info small mt-3 mb-0 py-2">
+          <i class="fas fa-bolt me-1 text-info"></i>
+          Funds credited <strong>instantly</strong> after M-Pesa confirmation. Use your wallet to pay invoices in one click — no PIN needed per payment.
         </div>
       </div>
     </div>
@@ -887,12 +1102,23 @@ if ($usersNear || $modulesNear):
   <!-- Right: Transaction history -->
   <div class="col-lg-7">
     <div class="card">
-      <div class="card-header fw-bold"><i class="fas fa-history text-green me-2"></i>Transaction History</div>
+      <div class="card-header fw-bold d-flex align-items-center justify-content-between">
+        <span><i class="fas fa-history text-green me-2"></i>Transaction History</span>
+        <?php if (!empty($walletTxns)): ?>
+        <span class="badge bg-primary"><?= count($walletTxns) ?> transactions</span>
+        <?php endif; ?>
+      </div>
       <div class="card-body p-0">
         <?php if (empty($walletTxns)): ?>
         <div class="text-center py-5 text-muted">
-          <i class="fas fa-wallet fa-2x mb-2 d-block opacity-25"></i>
-          No transactions yet. Top up your wallet to get started.
+          <i class="fas fa-wallet fa-2x mb-3 d-block opacity-25"></i>
+          <div class="fw-semibold mb-1">No transactions yet</div>
+          <div class="small">Your wallet is at KES 0.00. Top up above to get started.</div>
+          <div class="mt-3">
+            <button class="btn btn-outline-success btn-sm" onclick="document.getElementById('topupAmount').focus()">
+              <i class="fas fa-plus-circle me-1"></i>Make Your First Top-Up
+            </button>
+          </div>
         </div>
         <?php else: ?>
         <div class="table-responsive">
@@ -946,6 +1172,34 @@ if ($usersNear || $modulesNear):
 <?php
 $focusInvTotal = (float)($focusInv['total'] ?? 0);
 $extraJs = '<script>
+const BILLING_USD_RATE = ' . (float)$usdRate . ';
+
+// ── Plans tab: currency toggle ────────────────────────────────────
+let planCur = localStorage.getItem("billingPlanCur") || "USD";
+
+function setPlanCurrency(cur) {
+  planCur = cur;
+  localStorage.setItem("billingPlanCur", cur);
+  const isUSD = cur === "USD";
+
+  const uBtn = document.getElementById("planBtnUSD");
+  const kBtn = document.getElementById("planBtnKES");
+  if (uBtn && kBtn) {
+    uBtn.style.background = isUSD  ? "#0B2D4E" : "transparent";
+    uBtn.style.color      = isUSD  ? "#fff"    : "#64748b";
+    kBtn.style.background = !isUSD ? "#0B2D4E" : "transparent";
+    kBtn.style.color      = !isUSD ? "#fff"    : "#64748b";
+  }
+
+  document.querySelectorAll("[id^=planPriceMo],[id^=planPriceAnn]").forEach(function(el) {
+    el.textContent = isUSD ? el.dataset.usd : el.dataset.kes;
+  });
+}
+
+// Apply saved preference on load
+if (document.getElementById("planBtnUSD")) setPlanCurrency(planCur);
+
+// ── Wallet: top-up USD hint ────────────────────────────────────────
 function initiateTopUp(btn) {
   const phone  = document.getElementById("topupPhone").value.trim();
   const amount = parseFloat(document.getElementById("topupAmount").value) || 0;
@@ -1005,8 +1259,14 @@ function setTopupAmount(n) {
   updateTopupBtn();
 }
 function updateTopupBtn() {
-  const v = parseFloat(document.getElementById("topupAmount").value)||0;
+  const v    = parseFloat(document.getElementById("topupAmount").value) || 0;
+  const hint = document.getElementById("topupUsdHint");
   document.getElementById("topupBtn").disabled = v < 10;
+  if (hint) {
+    hint.textContent = v >= 10
+      ? "KES " + v.toLocaleString("en-KE") + " ≈ $ " + (v / BILLING_USD_RATE).toFixed(2) + " · Min KES 10, Max KES 150,000"
+      : "Min KES 10 · Max KES 150,000 per top-up";
+  }
 }
 
 // ── Promo code helpers ────────────────────────────────────────────
