@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // ── Manufacturing: Inventory / Stock Levels ─────────────────────
 $moduleSlug  = 'manufacturing';
 $moduleName  = 'Manufacturing';
@@ -25,7 +25,7 @@ $orgId = (int)$user['org_id'];
 
 // POST handler — stock adjustment
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    verifyCsrf();
+    verifyCsrf();denyIfReadOnly($moduleSlug);
     $action = $_POST['action'] ?? '';
 
     if ($action === 'save') {

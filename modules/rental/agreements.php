@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // ── Rental: Property Agreements / Side Agreements ──────────────
 $moduleSlug  = 'rental';
 $moduleName  = 'Rental & Property';
@@ -24,7 +24,7 @@ $user  = currentUser();
 $orgId = (int)$user['org_id'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    verifyCsrf();
+    verifyCsrf();denyIfReadOnly($moduleSlug);
     $action = $_POST['action'] ?? '';
     if ($action === 'save') {
         $id         = (int)($_POST['id'] ?? 0);

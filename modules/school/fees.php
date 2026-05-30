@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/_nav.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -19,7 +19,7 @@ function getCurrencySymbol(string $curr): string {
 
 // ── POST Handlers ─────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    verifyCsrf();
+    verifyCsrf();denyIfReadOnly($moduleSlug);
     $action = $_POST['action'] ?? '';
 
     if ($action === 'invoice') {

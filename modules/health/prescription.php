@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $moduleSlug  = 'health';
 $moduleName  = 'Health & Clinic';
 $moduleIcon  = 'fas fa-heartbeat';
@@ -52,7 +52,7 @@ try {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once __DIR__ . '/../../includes/header-module.php';
-    verifyCsrf();
+    verifyCsrf();denyIfReadOnly($moduleSlug);
     $orgId  = (int)$user['org_id'];
     $action = $_POST['action'] ?? '';
 

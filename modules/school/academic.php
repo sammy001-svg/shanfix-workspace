@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/functions.php';
 if (session_status() === PHP_SESSION_NONE) session_start();
@@ -10,7 +10,7 @@ $orgId = (int)$user['org_id'];
 
 // ── POST Handlers ─────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    verifyCsrf();
+    verifyCsrf();denyIfReadOnly($moduleSlug);
     $action = $_POST['action'] ?? '';
 
     if ($action === 'save_year') {

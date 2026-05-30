@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $moduleSlug  = 'church';
 $moduleName  = 'Church Management';
 $moduleIcon  = 'fas fa-church';
@@ -22,7 +22,7 @@ $moduleNav   = [
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once __DIR__ . '/../../includes/header-module.php';
-    verifyCsrf();
+    verifyCsrf();denyIfReadOnly($moduleSlug);
     $orgId  = (int)$user['org_id'];
     $action = $_POST['action'] ?? '';
 

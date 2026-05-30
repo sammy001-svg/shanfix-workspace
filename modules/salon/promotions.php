@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // ── Salon: Promotions & Discount Campaigns ──────────────────────
 $moduleSlug = 'salon';
 $moduleName = 'Salon & Spa';
@@ -25,7 +25,7 @@ $orgId = (int)$user['org_id'];
 
 // POST handler
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    verifyCsrf();
+    verifyCsrf();denyIfReadOnly($moduleSlug);
     $action = $_POST['action'] ?? '';
 
     if ($action === 'save') {

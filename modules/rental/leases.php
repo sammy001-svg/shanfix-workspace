@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $moduleSlug  = 'rental';
 $moduleName  = 'Rental & Property';
 $moduleIcon  = 'fas fa-building';
@@ -37,7 +37,7 @@ if (isset($_GET['fetch'])) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once __DIR__ . '/../../includes/header-module.php';
-    verifyCsrf();
+    verifyCsrf();denyIfReadOnly($moduleSlug);
     $orgId  = (int)$user['org_id'];
     $action = $_POST['action'] ?? '';
 

@@ -5,7 +5,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     require_once __DIR__.'/../../config/database.php';
     require_once __DIR__.'/../../includes/functions.php';
     if(session_status()===PHP_SESSION_NONE)session_start();
-    verifyCsrf();$user=currentUser();$orgId=(int)$user['org_id'];$action=$_POST['action']??'';
+    verifyCsrf();denyIfReadOnly($moduleSlug);$user=currentUser();$orgId=(int)$user['org_id'];$action=$_POST['action']??'';
     if($action==='save'){
         $id=(int)($_POST['id']??0);
         $classId=(int)($_POST['class_id']??0);$subjectId=(int)($_POST['subject_id']??0);

@@ -1197,6 +1197,26 @@ function isModuleRoleReadOnly(string $moduleSlug): bool {
 }
 
 /**
+ * Abort the current request if the user's module role is read-only.
+ * AJAX requests receive a JSON error; regular POSTs get a flash + redirect.
+ * Call immediately after verifyCsrf() in every module POST handler.
+ */
+function denyIfReadOnly(string $moduleSlug): void {
+    if (!isModuleRoleReadOnly($moduleSlug)) return;
+    $isAjax = (($_POST['ajax'] ?? '') === '1')
+           || (strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'xmlhttprequest');
+    if ($isAjax) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'error' => 'Your role is read-only. You cannot modify records in this module.']);
+        exit;
+    }
+    setFlash('danger', 'Your role is read-only. You cannot create, edit, or delete records in this module.');
+    $ref = $_SERVER['HTTP_REFERER'] ?? (APP_URL . '/modules/' . $moduleSlug . '/index.php');
+    header('Location: ' . $ref);
+    exit;
+}
+
+/**
  * Abort with 403 if the current user does not have one of the specified module roles.
  * Call at top of sensitive module pages.
  *

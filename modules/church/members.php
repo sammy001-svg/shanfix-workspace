@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $moduleSlug  = 'church';
 $moduleName  = 'Church Management';
 $moduleIcon  = 'fas fa-church';
@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once __DIR__ . '/../../config/database.php';
     require_once __DIR__ . '/../../includes/functions.php';
     if (session_status() === PHP_SESSION_NONE) session_start();
-    verifyCsrf();
+    verifyCsrf();denyIfReadOnly($moduleSlug);
     $user = currentUser();
     $orgId = (int)$user['org_id'];
     $action = $_POST['action'] ?? '';

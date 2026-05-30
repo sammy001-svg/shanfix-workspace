@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $moduleSlug  = 'sacco';
 $moduleName  = 'SACCO Management';
 $moduleIcon  = 'fas fa-piggy-bank';
@@ -21,7 +21,7 @@ $moduleNav   = [
 // ── POST Handler ──────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once __DIR__ . '/../../includes/header-module.php';
-    verifyCsrf();
+    verifyCsrf();denyIfReadOnly($moduleSlug);
     $orgId  = (int)$user['org_id'];
     $action = $_POST['action'] ?? '';
 

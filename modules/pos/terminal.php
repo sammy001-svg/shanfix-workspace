@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * POS Live Terminal — full-screen, no sidebar layout
  */
@@ -42,7 +42,7 @@ if ($openShift) {
 // ── Process sale POST ──────────────────────────────────────────
 $receiptData = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    verifyCsrf();
+    verifyCsrf();denyIfReadOnly($moduleSlug);
     $cartJson   = $_POST['cart']            ?? '[]';
     $custName   = sanitize($_POST['customer_name']  ?? '');
     $payMethod  = in_array($_POST['payment_method'] ?? '', ['cash','mpesa','card','credit'])

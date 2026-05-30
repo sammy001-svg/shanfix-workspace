@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // ── POS: Sales History ─────────────────────────────────────────
 $moduleSlug  = 'pos';
 $moduleName  = 'Point of Sale';
@@ -10,7 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once __DIR__ . '/../../config/database.php';
     require_once __DIR__ . '/../../includes/functions.php';
     if (session_status() === PHP_SESSION_NONE) session_start();
-    verifyCsrf();
+    verifyCsrf();denyIfReadOnly($moduleSlug);
     $user  = currentUser();
     $orgId = (int)$user['org_id'];
     $action = $_POST['action'] ?? '';
