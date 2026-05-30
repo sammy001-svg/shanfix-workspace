@@ -19,13 +19,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'deact
     verifyCsrf();
     $slug = sanitize($_POST['module_slug'] ?? '');
     if ($sub && $slug) {
-        $pdo->prepare("
-            UPDATE subscription_modules sm
-            INNER JOIN modules m ON sm.module_id = m.id
-            SET sm.status = 'inactive'
-            WHERE sm.subscription_id = ? AND m.slug = ?
-        ")->execute([$sub['id'], $slug]);
-        setFlash('info', 'Module deactivated. You can reactivate it anytime by purchasing again.');
+        try {
+            $pdo->prepare("
+                UPDATE subscription_modules sm
+                INNER JOIN modules m ON sm.module_id = m.id
+                SET sm.status = 'inactive'
+                WHERE sm.subscription_id = ? AND m.slug = ?
+            ")->execute([$sub['id'], $slug]);
+            setFlash('info', 'Module deactivated. You can reactivate it anytime by purchasing again.');
+        } catch (Throwable $e) {
+            error_log('[deactivate_module] ' . $e->getMessage());
+            setFlash('danger', 'Could not deactivate module. Please try again.');
+        }
     }
     redirect(APP_URL . '/client/modules.php');
 }
@@ -34,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'deact
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_module') {
     $isAjax = ($_POST['ajax'] ?? '') === '1';
 
-    // For AJAX callers, return JSON error instead of dying with HTML
+    // Set JSON content-type immediately for all AJAX paths
     if ($isAjax) {
         header('Content-Type: application/json');
         if (!hash_equals($_SESSION['csrf_token'], $_POST['_token'] ?? '')) {
@@ -87,7 +92,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     $stmtDup->execute([$orgId, $mod['id']]);
     if ($dup = $stmtDup->fetch()) {
         if ($isAjax) {
-            header('Content-Type: application/json');
             echo json_encode(['success' => false, 'error' => 'Pending invoice exists.', 'invoice_id' => (int)$dup['id']]);
             exit;
         }
@@ -104,20 +108,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     $invoiceNo = $prefix . '-' . strtoupper(substr(md5(uniqid($orgId, true)), 0, 8));
     $dueDate   = date('Y-m-d', strtotime('+7 days'));
 
-    $pdo->prepare("
-        INSERT INTO invoices
-            (org_id, subscription_id, module_id, invoice_number, amount, tax, total, status, due_date, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'sent', ?, ?)
-    ")->execute([
-        $orgId, $sub['id'], $mod['id'],
-        $invoiceNo, $price, $tax, $total, $dueDate,
-        "Module activation: {$mod['name']}"
-    ]);
+    try {
+        $pdo->prepare("
+            INSERT INTO invoices
+                (org_id, subscription_id, module_id, invoice_number, amount, tax, total, status, due_date, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'sent', ?, ?)
+        ")->execute([
+            $orgId, $sub['id'], $mod['id'],
+            $invoiceNo, $price, $tax, $total, $dueDate,
+            "Module activation: {$mod['name']}"
+        ]);
+    } catch (Throwable $e) {
+        error_log('[add_module invoice] ' . $e->getMessage());
+        $jsonError('Failed to create invoice. Please try again.');
+    }
     $invoiceId = (int)$pdo->lastInsertId();
-    logActivity('create', 'billing', "Invoice {$invoiceNo} — {$mod['name']}");
+    try { logActivity('create', 'billing', "Invoice {$invoiceNo} — {$mod['name']}"); } catch (Throwable $e) {}
 
     if ($isAjax) {
-        header('Content-Type: application/json');
         echo json_encode([
             'success'     => true,
             'invoice_id'  => $invoiceId,
@@ -491,7 +499,7 @@ $csrfToken  = $_SESSION['csrf_token']; // guaranteed set above
 </form>
 
 <script>
-const MODULE_MAP   = <?= json_encode($moduleMap, JSON_HEX_TAG) ?>;
+const MODULE_MAP   = <?= json_encode($moduleMap, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?: '{}' ?>;
 const APP_URL      = '<?= APP_URL ?>';
 const CSRF_TOKEN   = '<?= $csrfToken ?>';
 const USD_RATE     = <?= (float)$usdRate ?>;
@@ -603,11 +611,11 @@ function openDetail(slug) {
   const addBtn = document.getElementById('detailAddBtn');
   addBtn.style.background = m.color;
   addBtn.onclick = function() {
-    bootstrap.Modal.getInstance(document.getElementById('detailModal'))?.hide();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('detailModal')).hide();
     addAndPay(slug, m.name, Math.round(m.price * 1.16)); // always KES for M-Pesa
   };
 
-  new bootstrap.Modal(document.getElementById('detailModal')).show();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('detailModal')).show();
 }
 
 // ── Add & Pay modal ───────────────────────────────────────────────
@@ -624,7 +632,7 @@ function addAndPay(slug, name, totalKes) {
   showPayPhase('input');
   document.getElementById('payError').classList.add('d-none');
 
-  const modal = new bootstrap.Modal(document.getElementById('payModal'));
+  const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('payModal'));
   modal.show();
 
   document.getElementById('payConfirmBtn').onclick = () => {
