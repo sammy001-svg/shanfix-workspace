@@ -67,12 +67,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
     if (!in_array($priority, $validPrios)) $priority = 'normal';
 
     if ($subject && $message) {
-        $ticketNo = 'TKT-' . strtoupper(substr(md5(uniqid($orgId, true)), 0, 7));
-        $pdo->prepare("INSERT INTO support_tickets (org_id, user_id, ticket_number, subject, category, priority, message)
-            VALUES (?,?,?,?,?,?,?)")->execute([$orgId, $uid, $ticketNo, $subject, $category, $priority, $message]);
-        $newId = (int)$pdo->lastInsertId();
+        try {
+            $ticketNo = 'TKT-' . strtoupper(substr(md5(uniqid($orgId, true)), 0, 7));
+            $pdo->prepare("INSERT INTO support_tickets (org_id, user_id, ticket_number, subject, category, priority, message)
+                VALUES (?,?,?,?,?,?,?)")->execute([$orgId, $uid, $ticketNo, $subject, $category, $priority, $message]);
+            $newId = (int)$pdo->lastInsertId();
+        } catch (Exception $e) {
+            error_log('[create_ticket] ' . $e->getMessage());
+            setFlash('danger', 'Could not create ticket. Please contact support or try again later.');
+            redirect(APP_URL . '/client/support.php');
+        }
+
         try { saveTicketFiles($pdo, $newId, null, $orgId, $uid); } catch (Exception $e) {}
-        logActivity('create', 'support', "Ticket {$ticketNo}: {$subject}");
+        try { logActivity('create', 'support', "Ticket {$ticketNo}: {$subject}"); } catch (Exception $e) {}
 
         // Notify super_admin of new ticket via email
         try {
@@ -81,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
             $orgStmt = $pdo->prepare("SELECT name FROM organizations WHERE id=? LIMIT 1");
             $orgStmt->execute([$orgId]);
             $orgRow  = $orgStmt->fetch();
-            $orgName = $orgRow['org_name'] ?? $orgRow['name'] ?? 'Unknown Org';
+            $orgName = $orgRow['name'] ?? 'Unknown Org';
             $saStmt  = $pdo->query("SELECT name, email FROM users WHERE role='super_admin' LIMIT 5");
             foreach ($saStmt->fetchAll() as $sa) {
                 _sendNotifEmail(

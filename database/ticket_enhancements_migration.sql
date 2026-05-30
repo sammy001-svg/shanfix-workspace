@@ -5,6 +5,10 @@
 ALTER TABLE ticket_replies
     ADD COLUMN IF NOT EXISTS is_internal TINYINT(1) NOT NULL DEFAULT 0;
 
+-- Star rating left by client when closing the ticket (1–5, nullable)
+ALTER TABLE support_tickets
+    ADD COLUMN IF NOT EXISTS rating TINYINT DEFAULT NULL;
+
 -- File attachments table
 CREATE TABLE IF NOT EXISTS ticket_attachments (
     id            INT AUTO_INCREMENT PRIMARY KEY,

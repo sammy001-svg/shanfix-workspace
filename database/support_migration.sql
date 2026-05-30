@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS support_tickets (
   status          ENUM('open','in_progress','resolved','closed') DEFAULT 'open',
   message         TEXT NOT NULL,
   admin_id        INT DEFAULT NULL,
+  rating          TINYINT DEFAULT NULL,
   closed_at       DATETIME DEFAULT NULL,
   created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
