@@ -1424,8 +1424,8 @@ INSERT IGNORE INTO subscription_plans (name, description, max_users, max_modules
 ('Professional', 'Ideal for growing businesses with diverse operational needs',     25, 8, 12999, 129990,1),
 ('Enterprise',   'Full-scale ERP solution for large & multi-branch organizations',  200,20,29999, 299990,0);
 
--- Super Admin account  (password: Admin@2024)
+-- Super Admin account  (password: Orbit@123@1)
 INSERT IGNORE INTO users (name, email, password, role, status) VALUES
-('System Administrator','admin@shanfix.com','$2y$12$LkHdZ5zGJ4o3qwVl7B8nNeU6gvpZnL1kE3rVa7RwTs9Y4mOdIWb0a','super_admin','active');
+('OrbitDesk Support','support@orbitdesk.net','$2y$10$0yHlQS.i57rLR2pPqg2j6.gaKJb2CrLaIWoOF1xYj2bxO/ufH4WPe','super_admin','active');
 
 SET FOREIGN_KEY_CHECKS = 1;

@@ -22,7 +22,15 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
   </div>
 </div>
 
-<div id="settingsAlert"></div>
+<!-- Fixed toast container — always visible regardless of scroll position -->
+<div class="position-fixed top-0 end-0 p-3" style="z-index:9999" id="toastContainer">
+  <div id="settingsToast" class="toast align-items-center border-0 shadow" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="4000">
+    <div class="d-flex">
+      <div class="toast-body fw-semibold" id="toastBody"></div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
 
 <div class="row g-4">
   <div class="col-lg-3">
@@ -64,7 +72,7 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
           <div class="col-md-6"><label class="form-label">Trial Period (days)</label><input type="number" class="form-control" id="trial_days" value="<?= $s('trial_days','14') ?>"></div>
           <div class="col-md-6"><label class="form-label">Max Users (default)</label><input type="number" class="form-control" id="max_users" value="<?= $s('max_users','5') ?>"></div>
           <div class="col-12">
-            <button class="btn btn-primary" onclick="saveSection('general',['app_name','app_tagline','support_email','default_currency','default_timezone','trial_days','max_users'])">
+            <button class="btn btn-primary" onclick="saveSection('general',['app_name','app_tagline','support_email','default_currency','default_timezone','trial_days','max_users'],this)">
               <i class="fas fa-save me-2"></i>Save General Settings
             </button>
           </div>
@@ -84,7 +92,7 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
             <input type="url" class="form-control" id="company_website" value="<?= $s('company_website') ?>" placeholder="https://yourdomain.co.ke">
           </div>
           <div class="col-12">
-            <button class="btn btn-primary" onclick="saveSection('company',['company_address','company_website'])">
+            <button class="btn btn-primary" onclick="saveSection('company',['company_address','company_website'],this)">
               <i class="fas fa-save me-2"></i>Save Company Settings
             </button>
           </div>
@@ -143,7 +151,7 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
             <input type="text" class="form-control" id="bank_branch" value="<?= $s('bank_branch') ?>" placeholder="e.g. Nairobi CBD">
           </div>
           <div class="col-12">
-            <button class="btn btn-primary" onclick="saveSection('billing',['invoice_prefix','invoice_tax_rate','invoice_footer','invoice_notes','mpesa_paybill','mpesa_account_ref','bank_name','bank_account','bank_branch'])">
+            <button class="btn btn-primary" onclick="saveSection('billing',['invoice_prefix','invoice_tax_rate','invoice_footer','invoice_notes','mpesa_paybill','mpesa_account_ref','bank_name','bank_account','bank_branch'],this)">
               <i class="fas fa-save me-2"></i>Save Billing Settings
             </button>
           </div>
@@ -174,13 +182,13 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
           <div class="col-md-6 d-flex align-items-end">
             <div class="input-group">
               <input type="email" class="form-control" id="testEmailAddr" placeholder="Send test to...">
-              <button class="btn btn-outline-secondary" type="button" onclick="sendTestEmail()">
-                <i class="fas fa-paper-plane me-1"></i>Test
+              <button class="btn btn-outline-secondary" type="button" id="testEmailBtn" onclick="sendTestEmail()">
+                <i class="fas fa-paper-plane me-1"></i>Send Test
               </button>
             </div>
           </div>
           <div class="col-12">
-            <button class="btn btn-primary" onclick="saveSection('email',['smtp_host','smtp_port','smtp_user','smtp_pass','smtp_enc','mail_from','mail_from_name'])">
+            <button class="btn btn-primary" onclick="saveSection('email',['smtp_host','smtp_port','smtp_user','smtp_pass','smtp_enc','mail_from','mail_from_name'],this)">
               <i class="fas fa-save me-2"></i>Save Email Settings
             </button>
           </div>
@@ -225,7 +233,7 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
             <div class="form-text">Add this URL in your KopoKopo dashboard under Webhooks.</div>
           </div>
           <div class="col-12 d-flex gap-2 flex-wrap">
-            <button class="btn btn-primary" onclick="saveSection('kopokopo',['kopokopo_client_id','kopokopo_client_secret','kopokopo_till_number','kopokopo_api_secret','kopokopo_env'])">
+            <button class="btn btn-primary" onclick="saveSection('kopokopo',['kopokopo_client_id','kopokopo_client_secret','kopokopo_till_number','kopokopo_api_secret','kopokopo_env'],this)">
               <i class="fas fa-save me-2"></i>Save KopoKopo Settings
             </button>
             <button class="btn btn-outline-success" type="button" id="kkTestBtn" onclick="testKopokopo()">
@@ -245,7 +253,7 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
           <div class="col-md-6"><label class="form-label">Session Timeout (hours)</label><input type="number" class="form-control" id="session_timeout" value="<?= $s('session_timeout','8') ?>"></div>
           <div class="col-md-6"><label class="form-label">Max Login Attempts</label><input type="number" class="form-control" id="max_login_attempts" value="<?= $s('max_login_attempts','5') ?>"></div>
           <div class="col-12">
-            <button class="btn btn-primary" onclick="saveSection('security',['session_timeout','max_login_attempts'])">
+            <button class="btn btn-primary" onclick="saveSection('security',['session_timeout','max_login_attempts'],this)">
               <i class="fas fa-save me-2"></i>Save Security Settings
             </button>
           </div>
@@ -267,10 +275,21 @@ document.querySelectorAll('#settingsTabs a').forEach(a => {
   });
 });
 
+// ── Toast notification (always visible, top-right, regardless of scroll) ──────
 function showAlert(type, msg) {
-  const el = document.getElementById('settingsAlert');
-  el.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show"><strong>${msg}</strong><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
-  el.scrollIntoView({behavior:'smooth', block:'nearest'});
+  const toast = document.getElementById('settingsToast');
+  const body  = document.getElementById('toastBody');
+  const icons = { success:'fa-check-circle', danger:'fa-times-circle', warning:'fa-exclamation-triangle', info:'fa-info-circle' };
+  const colors= { success:'bg-success', danger:'bg-danger', warning:'bg-warning', info:'bg-info' };
+  const icon  = icons[type]  || icons.info;
+  const bg    = colors[type] || colors.info;
+
+  // Reset classes
+  toast.className = `toast align-items-center border-0 shadow text-white ${bg}`;
+  body.innerHTML  = `<i class="fas ${icon} me-2"></i>${msg}`;
+
+  const bsToast = bootstrap.Toast.getOrCreateInstance(toast);
+  bsToast.show();
 }
 
 function gatherData(keys) {
@@ -282,9 +301,14 @@ function gatherData(keys) {
   return data;
 }
 
-function saveSection(section, keys) {
+// ── Save section with button spinner ──────────────────────────────────────────
+function saveSection(section, keys, btn) {
+  // btn is the clicked element (pass `this` from onclick)
+  const origHTML = btn ? btn.innerHTML : null;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving…'; }
+
   const data = gatherData(keys);
-  // Skip empty password fields so we don't overwrite with blank
+  // Skip empty password fields so we don't overwrite saved values with blank
   ['smtp_pass','kopokopo_client_secret','kopokopo_api_secret'].forEach(k => {
     if (k in data && data[k] === '') delete data[k];
   });
@@ -296,12 +320,17 @@ function saveSection(section, keys) {
   })
   .then(r => r.json())
   .then(res => {
+    if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
     if (res.success) showAlert('success', 'Settings saved successfully.');
-    else showAlert('danger', res.error ?? 'Failed to save settings.');
+    else             showAlert('danger',  res.error ?? 'Failed to save settings.');
   })
-  .catch(() => showAlert('danger', 'Network error. Please try again.'));
+  .catch(() => {
+    if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
+    showAlert('danger', 'Network error — settings not saved. Check your connection.');
+  });
 }
 
+// ── KopoKopo connection test ──────────────────────────────────────────────────
 function testKopokopo() {
   const btn    = document.getElementById('kkTestBtn');
   const result = document.getElementById('kkTestResult');
@@ -322,18 +351,25 @@ function testKopokopo() {
     const icon = res.success ? 'fa-check-circle' : 'fa-times-circle';
     result.style.display = '';
     result.innerHTML = `<div class="alert alert-${cls} small mb-0 py-2"><i class="fas ${icon} me-2"></i>${res.message ?? (res.error ?? 'Unknown error')}</div>`;
+    showAlert(cls, res.success ? 'KopoKopo connected successfully.' : 'KopoKopo connection failed.');
   })
   .catch(() => {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-plug me-2"></i>Test Connection';
     result.style.display = '';
     result.innerHTML = '<div class="alert alert-danger small mb-0 py-2"><i class="fas fa-times-circle me-2"></i>Network error — could not reach server.</div>';
+    showAlert('danger', 'Network error — could not reach server.');
   });
 }
 
+// ── Test email with spinner and clear feedback ────────────────────────────────
 function sendTestEmail() {
   const addr = document.getElementById('testEmailAddr').value.trim();
-  if (!addr) { showAlert('warning', 'Enter an email address to send the test to.'); return; }
+  if (!addr) { showAlert('warning', 'Enter a recipient email address first.'); return; }
+
+  const btn      = document.getElementById('testEmailBtn');
+  const origHTML = btn ? btn.innerHTML : null;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sending…'; }
 
   fetch('<?= APP_URL ?>/admin/ajax.php', {
     method: 'POST',
@@ -341,8 +377,14 @@ function sendTestEmail() {
     body: JSON.stringify({action: 'send_test_email', email: addr})
   })
   .then(r => r.json())
-  .then(res => showAlert(res.success ? 'success' : 'danger', res.message ?? (res.error ?? 'Unknown error')))
-  .catch(() => showAlert('danger', 'Network error. Please try again.'));
+  .then(res => {
+    if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
+    showAlert(res.success ? 'success' : 'danger', res.message ?? (res.error ?? 'Unknown error'));
+  })
+  .catch(() => {
+    if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
+    showAlert('danger', 'Network error — test email could not be sent.');
+  });
 }
 </script>
 
