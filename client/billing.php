@@ -212,12 +212,25 @@ $usageLimits = checkUsageLimits($orgId);
 $activeTab    = $_GET['tab'] ?? 'overview';
 $highlightInv = (int)($_GET['inv'] ?? 0);
 
-// ── Current plan — live prices from subscription_plans ────────────
+// ── Current plan — explicit columns to prevent alias collisions ───
 $currentPlan = null;
 if ($sub && !empty($sub['plan_id'])) {
-    $cpStmt = $pdo->prepare("SELECT * FROM subscription_plans WHERE id=?");
-    $cpStmt->execute([$sub['plan_id']]);
+    $cpStmt = $pdo->prepare("
+        SELECT id, name, description,
+               max_users, max_modules, is_popular,
+               CAST(price_monthly AS DECIMAL(12,2)) AS price_monthly,
+               CAST(price_annual  AS DECIMAL(12,2)) AS price_annual,
+               status
+        FROM subscription_plans WHERE id=? LIMIT 1
+    ");
+    $cpStmt->execute([(int)$sub['plan_id']]);
     $currentPlan = $cpStmt->fetch() ?: null;
+}
+
+// Validate plan prices — cap at 10 million to guard against bad data
+if ($currentPlan) {
+    $currentPlan['price_monthly'] = min((float)$currentPlan['price_monthly'], 9_999_999);
+    $currentPlan['price_annual']  = min((float)$currentPlan['price_annual'],  9_999_999);
 }
 
 // ── All active modules (name + icon only — for display list) ──────
@@ -466,16 +479,22 @@ if ($usersNear || $modulesNear):
             <div>
               <div class="fw-bold text-navy" style="font-size:.9rem"><?= e($currentPlan['name']) ?> Plan</div>
               <div class="text-muted" style="font-size:.72rem">
-                <?= ucfirst($sub['billing_cycle'] ?? 'monthly') ?> ·
-                <?= $currentPlan['max_users'] ?> users ·
-                up to <?= $currentPlan['max_modules'] ?> modules
+                <?= ucfirst($sub['billing_cycle'] ?? 'monthly') ?> billing
+                &bull; <?= (int)$currentPlan['max_users'] ?> users
+                &bull; up to <?= (int)$currentPlan['max_modules'] ?> modules
               </div>
             </div>
             <div class="text-end flex-shrink-0">
-              <div class="fw-bold text-green" style="font-size:.9rem">
-                <?= formatCurrency($planPrice) ?><span class="text-muted fw-normal" style="font-size:.7rem"><?= $cycleLabel ?></span>
+              <!-- KES price on its own line — no inline USD to prevent merging -->
+              <div class="fw-bold text-green" style="font-size:.92rem;white-space:nowrap">
+                KES <?= number_format($planPrice, 0) ?>
+                <span class="text-muted fw-normal" style="font-size:.7rem"><?= $cycleLabel ?></span>
               </div>
-              <div class="text-muted" style="font-size:.68rem">≈ $ <?= number_format($planPriceUsd, 2) ?></div>
+              <?php if ($planPriceUsd > 0): ?>
+              <div class="text-muted" style="font-size:.68rem;white-space:nowrap">
+                ≈ USD <?= number_format($planPriceUsd, 2) ?>
+              </div>
+              <?php endif; ?>
             </div>
           </div>
         </div>
@@ -538,22 +557,26 @@ if ($usersNear || $modulesNear):
         <?php
           $taxEst       = round($planPrice * 0.16, 2);
           $planTotal    = $planPrice + $taxEst;
-          $planTotalUsd = $planTotal > 0 ? round($planTotal / $usdRate, 2) : 0;
+          $planTotalUsd = ($planTotal > 0 && $usdRate > 0) ? round($planTotal / $usdRate, 2) : 0;
         ?>
         <div class="px-3 py-3 bg-light">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <span class="small text-muted">Plan subtotal</span>
-            <span class="small fw-semibold"><?= formatCurrency($planPrice) ?><?= $cycleLabel ?></span>
+            <span class="small fw-semibold" style="white-space:nowrap">
+              KES <?= number_format($planPrice, 0) ?><?= $cycleLabel ?>
+            </span>
           </div>
           <div class="d-flex justify-content-between align-items-center mb-2">
             <span class="small text-muted">VAT est. (16%)</span>
-            <span class="small text-muted"><?= formatCurrency($taxEst) ?></span>
+            <span class="small text-muted" style="white-space:nowrap">KES <?= number_format($taxEst, 0) ?></span>
           </div>
           <div class="d-flex justify-content-between align-items-center border-top pt-2">
-            <span class="fw-bold small">Plan total<?= $cycleLabel ?></span>
+            <span class="fw-bold small">Total<?= $cycleLabel ?></span>
             <div class="text-end">
-              <span class="fw-bold text-green"><?= formatCurrency($planTotal) ?></span>
-              <div class="text-muted" style="font-size:.68rem">≈ $ <?= number_format($planTotalUsd, 2) ?></div>
+              <span class="fw-bold text-green" style="white-space:nowrap">KES <?= number_format($planTotal, 0) ?></span>
+              <?php if ($planTotalUsd > 0): ?>
+              <div class="text-muted" style="font-size:.68rem;white-space:nowrap">≈ USD <?= number_format($planTotalUsd, 2) ?></div>
+              <?php endif; ?>
             </div>
           </div>
           <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
