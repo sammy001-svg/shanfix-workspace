@@ -21,12 +21,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$id || !$name) {
             setFlash('danger', 'Module ID and name are required.');
         } else {
-            $pdo->prepare("
-                UPDATE modules
-                SET name=?,description=?,monthly_price=?,annual_price=?,
-                    icon=?,color=?,sort_order=?,status=?
-                WHERE id=?
-            ")->execute([$name,$description,$priceMonthly,$priceAnnual,$icon,$color,$sortOrder,$status,$id]);
+            $featureLines = array_filter(array_map('trim', explode("\n", $_POST['features'] ?? '')));
+            $featuresJson = !empty($featureLines) ? json_encode(array_values($featureLines)) : null;
+            try {
+                $pdo->prepare("
+                    UPDATE modules
+                    SET name=?,description=?,monthly_price=?,annual_price=?,
+                        icon=?,color=?,sort_order=?,status=?,features=?
+                    WHERE id=?
+                ")->execute([$name,$description,$priceMonthly,$priceAnnual,$icon,$color,$sortOrder,$status,$featuresJson,$id]);
+            } catch (Throwable $e) {
+                // features column may not exist yet — save without it
+                $pdo->prepare("
+                    UPDATE modules
+                    SET name=?,description=?,monthly_price=?,annual_price=?,
+                        icon=?,color=?,sort_order=?,status=?
+                    WHERE id=?
+                ")->execute([$name,$description,$priceMonthly,$priceAnnual,$icon,$color,$sortOrder,$status,$id]);
+            }
             logActivity('edit_module', 'admin', "Updated module: $name");
             setFlash('success', "Module '{$name}' updated.");
         }
@@ -37,6 +49,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ── Page ──────────────────────────────────────────────────────────
 $pageTitle = 'Module Management';
 require_once __DIR__ . '/../includes/header-admin.php';
+
+// ── Ensure features column exists + seed from hardcoded map ──────
+try {
+    $pdo->exec("ALTER TABLE modules ADD COLUMN features JSON NULL");
+} catch (Throwable $e) { /* already exists */ }
 
 $modules = $pdo->query("
     SELECT m.*, COUNT(sm.id) AS subscriber_count
@@ -132,7 +149,17 @@ $previewData = [
     $usdMo  = $kesMo  > 0 ? round($kesMo  / $usdRate, 2) : 0;
     $usdAnn = $kesAnn > 0 ? round($kesAnn / $usdRate, 2) : 0;
     $slug   = $m['slug'] ?? '';
-    $feats  = $previewData[$slug] ?? [];
+    // Use DB features if set; otherwise fall back to hardcoded map and seed DB
+    if (!empty($m['features'])) {
+        $feats = json_decode($m['features'], true) ?: [];
+    } else {
+        $feats = $previewData[$slug] ?? [];
+        if ($feats) {
+            try {
+                $pdo->prepare("UPDATE modules SET features=? WHERE slug=?")->execute([json_encode($feats), $slug]);
+            } catch (Throwable $e) {}
+        }
+    }
   ?>
   <div class="col-md-6 col-lg-4" id="modCard<?= $m['id'] ?>">
     <div class="card h-100 <?= $m['status'] === 'inactive' ? 'opacity-75' : '' ?>"
@@ -388,6 +415,11 @@ $previewData = [
                 <input type="text" id="editModColorText" class="form-control" readonly>
               </div>
             </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Feature List <span class="text-muted fw-normal small">— one feature per line</span></label>
+              <textarea name="features" id="editModFeatures" class="form-control" rows="6" placeholder="e.g.&#10;Invoice & receipt management&#10;Bank reconciliation&#10;Expense tracking"></textarea>
+              <div class="form-text">These bullet points appear in the module preview card shown to admins and clients.</div>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -461,6 +493,9 @@ function openEditModal(m) {
   document.getElementById('editModColorText').value      = m.color || '#1A8A4E';
   document.getElementById('editPriceUsdHintM').textContent = '';
   document.getElementById('editPriceUsdHintA').textContent = '';
+  // Populate features — m.features comes from the openPreview data which has the DB array
+  var feats = (m.features && Array.isArray(m.features)) ? m.features : [];
+  document.getElementById('editModFeatures').value = feats.join('\n');
   new bootstrap.Modal(document.getElementById('editModuleModal')).show();
 }
 
@@ -496,7 +531,7 @@ function openPreview(m) {
       fHtml += '<div class="preview-feature"><i class="fas fa-check text-success me-2 small"></i>' + f + '</div>';
     });
   } else {
-    fHtml = '<div class="text-muted small">Feature list coming soon.</div>';
+    fHtml = '<div class="text-muted small fst-italic">No features listed — click Edit Module to add them.</div>';
   }
   document.getElementById('previewFeatures').innerHTML = fHtml;
 

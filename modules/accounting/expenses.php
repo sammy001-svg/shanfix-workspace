@@ -40,14 +40,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $method   = sanitize($_POST['payment_method'] ?? '');
         $ref      = sanitize($_POST['reference'] ?? '');
 
+        // Receipt file upload
+        $receiptPath = null;
+        if (!empty($_FILES['receipt']['tmp_name']) && $_FILES['receipt']['error'] === UPLOAD_ERR_OK) {
+            $ext = strtolower(pathinfo($_FILES['receipt']['name'] ?? '', PATHINFO_EXTENSION));
+            $allowed = ['jpg','jpeg','png','gif','webp','pdf'];
+            if (in_array($ext, $allowed)) {
+                $dir = __DIR__ . '/../../assets/uploads/receipts/';
+                if (!is_dir($dir)) mkdir($dir, 0755, true);
+                $fname = 'receipt-' . $orgId . '-' . time() . '-' . bin2hex(random_bytes(4)) . '.' . $ext;
+                if (move_uploaded_file($_FILES['receipt']['tmp_name'], $dir . $fname)) {
+                    $receiptPath = 'assets/uploads/receipts/' . $fname;
+                }
+            }
+        }
+
         if ($id > 0) {
-            $stmt = $pdo->prepare("UPDATE acc_expenses SET account_id=?, category=?, description=?, amount=?, date=?, payment_method=?, reference=? WHERE id=? AND org_id=?");
-            $stmt->execute([$accId ?: null, $category, $desc, $amount, $date, $method, $ref, $id, $orgId]);
+            if ($receiptPath) {
+                $stmt = $pdo->prepare("UPDATE acc_expenses SET account_id=?, category=?, description=?, amount=?, date=?, payment_method=?, reference=?, receipt=? WHERE id=? AND org_id=?");
+                $stmt->execute([$accId ?: null, $category, $desc, $amount, $date, $method, $ref, $receiptPath, $id, $orgId]);
+            } else {
+                $stmt = $pdo->prepare("UPDATE acc_expenses SET account_id=?, category=?, description=?, amount=?, date=?, payment_method=?, reference=? WHERE id=? AND org_id=?");
+                $stmt->execute([$accId ?: null, $category, $desc, $amount, $date, $method, $ref, $id, $orgId]);
+            }
             setFlash('success', 'Expense updated.');
             logActivity('update', 'accounting', "Updated expense #$id");
         } else {
-            $stmt = $pdo->prepare("INSERT INTO acc_expenses (org_id, account_id, category, description, amount, date, payment_method, reference, created_by) VALUES (?,?,?,?,?,?,?,?,?)");
-            $stmt->execute([$orgId, $accId ?: null, $category, $desc, $amount, $date, $method, $ref, $user['id']]);
+            $stmt = $pdo->prepare("INSERT INTO acc_expenses (org_id, account_id, category, description, amount, date, payment_method, reference, receipt, created_by) VALUES (?,?,?,?,?,?,?,?,?,?)");
+            $stmt->execute([$orgId, $accId ?: null, $category, $desc, $amount, $date, $method, $ref, $receiptPath, $user['id']]);
             setFlash('success', 'Expense recorded.');
             logActivity('create', 'accounting', "Recorded expense: $category — " . number_format($amount, 2));
         }
@@ -250,6 +270,7 @@ if (isset($_GET['edit'])) {
             <th class="text-end">Amount</th>
             <th>Method</th>
             <th>Account</th>
+            <th class="text-center">Receipt</th>
             <th class="text-center">Actions</th>
           </tr>
         </thead>
@@ -267,6 +288,15 @@ if (isset($_GET['edit'])) {
             <td class="small"><?= e($exp['payment_method'] ?? '—') ?></td>
             <td class="small text-muted"><?= e($exp['account_name'] ?? '—') ?></td>
             <td class="text-center">
+              <?php if (!empty($exp['receipt'])): ?>
+                <a href="<?= APP_URL ?>/<?= e($exp['receipt']) ?>" target="_blank" class="btn btn-sm btn-outline-success" title="View Receipt">
+                  <i class="fas <?= str_ends_with($exp['receipt'], '.pdf') ? 'fa-file-pdf' : 'fa-image' ?>"></i>
+                </a>
+              <?php else: ?>
+                <span class="text-muted small">—</span>
+              <?php endif; ?>
+            </td>
+            <td class="text-center">
               <button class="btn btn-sm btn-outline-primary" onclick='openEditModal(<?= htmlspecialchars(json_encode($exp), ENT_QUOTES) ?>)' title="Edit">
                 <i class="fas fa-edit"></i>
               </button>
@@ -282,7 +312,7 @@ if (isset($_GET['edit'])) {
           <tr>
             <td colspan="3" class="fw-bold text-end">Total:</td>
             <td class="text-end fw-bold text-danger"><?= formatCurrency($totalExpenses) ?></td>
-            <td colspan="3"></td>
+            <td colspan="4"></td>
           </tr>
         </tfoot>
         <?php endif; ?>
@@ -295,7 +325,7 @@ if (isset($_GET['edit'])) {
 <div class="modal fade" id="expenseModal" tabindex="-1">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
-      <form method="POST">
+      <form method="POST" enctype="multipart/form-data">
         <?= csrfField() ?>
         <input type="hidden" name="action" value="save">
         <input type="hidden" name="id" id="expId" value="0">
@@ -350,10 +380,13 @@ if (isset($_GET['edit'])) {
               <input type="text" name="reference" id="expRef" class="form-control" placeholder="e.g. receipt number" maxlength="100">
             </div>
             <div class="col-md-6">
-              <label class="form-label fw-semibold">Receipt Upload</label>
-              <div class="form-control bg-light d-flex align-items-center gap-2 text-muted" style="cursor:not-allowed">
-                <i class="fas fa-paperclip"></i>
-                <span class="small">Upload coming soon (use reference number above)</span>
+              <label class="form-label fw-semibold">Receipt / Attachment</label>
+              <input type="file" name="receipt" id="expReceipt" class="form-control" accept="image/*,.pdf">
+              <div class="form-text">JPG, PNG, PDF · Max 5 MB. Leave blank to keep existing.</div>
+              <div id="existingReceipt" class="mt-1" style="display:none">
+                <a href="#" id="existingReceiptLink" target="_blank" class="small text-success">
+                  <i class="fas fa-paperclip me-1"></i><span id="existingReceiptName">View current receipt</span>
+                </a>
               </div>
             </div>
           </div>
@@ -377,6 +410,15 @@ if (isset($_GET['edit'])) {
 <?php
 $extraJs = <<<'JS'
 <script>
+const APP_URL = <?= json_encode(APP_URL) ?>;
+
+function clearReceiptField() {
+  document.getElementById('expReceipt').value = '';
+  document.getElementById('existingReceipt').style.display = 'none';
+  document.getElementById('existingReceiptLink').href = '#';
+  document.getElementById('existingReceiptName').textContent = 'View current receipt';
+}
+
 function openAddModal() {
   document.getElementById('expModalTitle').innerHTML = '<i class="fas fa-receipt me-2"></i>Record Expense';
   document.getElementById('expId').value = 0;
@@ -387,6 +429,7 @@ function openAddModal() {
   document.getElementById('expDate').value     = new Date().toISOString().split('T')[0];
   document.getElementById('expMethod').value   = '';
   document.getElementById('expRef').value      = '';
+  clearReceiptField();
 }
 
 function openEditModal(exp) {
@@ -399,6 +442,14 @@ function openEditModal(exp) {
   document.getElementById('expDate').value     = exp.date        || '';
   document.getElementById('expMethod').value   = exp.payment_method || '';
   document.getElementById('expRef').value      = exp.reference   || '';
+  clearReceiptField();
+  if (exp.receipt) {
+    const link = document.getElementById('existingReceiptLink');
+    link.href  = APP_URL + '/' + exp.receipt;
+    const isPdf = exp.receipt.endsWith('.pdf');
+    document.getElementById('existingReceiptName').textContent = isPdf ? 'View current PDF receipt' : 'View current image receipt';
+    document.getElementById('existingReceipt').style.display = 'block';
+  }
   var modal = new bootstrap.Modal(document.getElementById('expenseModal'));
   modal.show();
 }

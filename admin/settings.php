@@ -11,6 +11,7 @@ $cfg = getSettings([
     'invoice_prefix','invoice_tax_rate','invoice_footer','invoice_notes',
     'mpesa_paybill','mpesa_account_ref','bank_name','bank_account','bank_branch',
     'session_timeout','max_login_attempts',
+    'sms_enabled','at_username','at_api_key','at_shortcode','at_env',
 ]);
 $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTES);
 ?>
@@ -40,6 +41,7 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
       <a href="#billing"  class="list-group-item list-group-item-action d-flex align-items-center gap-2"><i class="fas fa-file-invoice-dollar"></i> Billing</a>
       <a href="#email"    class="list-group-item list-group-item-action d-flex align-items-center gap-2"><i class="fas fa-envelope"></i> Email / SMTP</a>
       <a href="#kopokopo" class="list-group-item list-group-item-action d-flex align-items-center gap-2"><i class="fas fa-mobile-alt"></i> KopoKopo (M-Pesa)</a>
+      <a href="#sms"      class="list-group-item list-group-item-action d-flex align-items-center gap-2"><i class="fas fa-sms"></i> SMS Notifications</a>
       <a href="#security" class="list-group-item list-group-item-action d-flex align-items-center gap-2"><i class="fas fa-shield-alt"></i> Security</a>
     </div>
   </div>
@@ -245,6 +247,54 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
       </div>
     </div>
 
+    <!-- SMS Notifications -->
+    <div class="card mb-4" id="sms">
+      <div class="card-header"><i class="fas fa-sms text-green me-2"></i>SMS Notifications (Africa's Talking)</div>
+      <div class="card-body">
+        <div class="alert alert-info small">
+          <i class="fas fa-info-circle me-2"></i>
+          Configure <strong>Africa's Talking</strong> credentials to send SMS alerts for leave approvals, payroll runs, appointment reminders, and more. Get API keys at
+          <a href="https://africastalking.com" target="_blank" rel="noopener">africastalking.com</a>.
+        </div>
+        <div class="row g-3">
+          <div class="col-12">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="sms_enabled" <?= ($cfg['sms_enabled'] ?? '') === '1' ? 'checked' : '' ?>>
+              <label class="form-check-label fw-semibold" for="sms_enabled">Enable SMS Notifications</label>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">AT Username</label>
+            <input type="text" class="form-control" id="at_username" value="<?= $s('at_username') ?>" placeholder="sandbox or your username">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">AT API Key</label>
+            <input type="password" class="form-control" id="at_api_key" placeholder="<?= !empty($cfg['at_api_key']) ? '••••••••' : 'Enter API key' ?>">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Short Code / Sender ID <span class="text-muted small">(optional)</span></label>
+            <input type="text" class="form-control" id="at_shortcode" value="<?= $s('at_shortcode') ?>" placeholder="e.g. OrbitDesk">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Environment</label>
+            <select class="form-select" id="at_env">
+              <option value="sandbox"    <?= ($cfg['at_env'] ?? 'sandbox') === 'sandbox'    ? 'selected' : '' ?>>Sandbox (Testing)</option>
+              <option value="live"       <?= ($cfg['at_env'] ?? '') === 'live'              ? 'selected' : '' ?>>Live (Production)</option>
+            </select>
+          </div>
+          <div class="col-12 d-flex gap-2 flex-wrap">
+            <button class="btn btn-primary" onclick="saveSms(this)">
+              <i class="fas fa-save me-2"></i>Save SMS Settings
+            </button>
+            <button class="btn btn-outline-success" type="button" onclick="testSms(this)">
+              <i class="fas fa-paper-plane me-2"></i>Send Test SMS
+            </button>
+          </div>
+          <div class="col-12" id="smsTestResult" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Security -->
     <div class="card" id="security">
       <div class="card-header"><i class="fas fa-shield-alt text-green me-2"></i>Security Settings</div>
@@ -309,7 +359,7 @@ function saveSection(section, keys, btn) {
 
   const data = gatherData(keys);
   // Skip empty password fields so we don't overwrite saved values with blank
-  ['smtp_pass','kopokopo_client_secret','kopokopo_api_secret'].forEach(k => {
+  ['smtp_pass','kopokopo_client_secret','kopokopo_api_secret','at_api_key'].forEach(k => {
     if (k in data && data[k] === '') delete data[k];
   });
 
@@ -385,6 +435,52 @@ function sendTestEmail() {
     if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
     showAlert('danger', 'Network error — test email could not be sent.');
   });
+}
+
+// ── SMS save + test ───────────────────────────────────────────────────────────
+function saveSms(btn) {
+  const keys = ['sms_enabled','at_username','at_api_key','at_shortcode','at_env'];
+  const origHTML = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving…';
+  const data = gatherData(keys);
+  data.sms_enabled = document.getElementById('sms_enabled').checked ? '1' : '0';
+  if (!data.at_api_key) delete data.at_api_key; // keep existing if blank
+  fetch('<?= APP_URL ?>/admin/ajax.php', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({action: 'save_settings', section: 'sms', data})
+  })
+  .then(r => r.json())
+  .then(res => {
+    btn.disabled = false; btn.innerHTML = origHTML;
+    if (res.success) showAlert('success', 'SMS settings saved.');
+    else             showAlert('danger',  res.error ?? 'Save failed.');
+  })
+  .catch(() => { btn.disabled = false; btn.innerHTML = origHTML; showAlert('danger','Network error.'); });
+}
+
+function testSms(btn) {
+  const origHTML = btn.innerHTML;
+  const result   = document.getElementById('smsTestResult');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sending…';
+  result.style.display = 'none';
+  fetch('<?= APP_URL ?>/admin/ajax.php', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({action: 'test_sms'})
+  })
+  .then(r => r.json())
+  .then(res => {
+    btn.disabled = false; btn.innerHTML = origHTML;
+    const cls  = res.success ? 'success' : 'danger';
+    const icon = res.success ? 'fa-check-circle' : 'fa-times-circle';
+    result.style.display = '';
+    result.innerHTML = `<div class="alert alert-${cls} small mb-0 py-2"><i class="fas ${icon} me-2"></i>${res.message ?? res.error ?? 'Unknown result'}</div>`;
+    showAlert(cls, res.success ? 'Test SMS sent successfully.' : 'SMS test failed.');
+  })
+  .catch(() => { btn.disabled = false; btn.innerHTML = origHTML; showAlert('danger','Network error.'); });
 }
 </script>
 

@@ -5,17 +5,18 @@ $moduleName  = 'HRM System';
 $moduleIcon  = 'fas fa-users-cog';
 $moduleColor = '#2c3e50';
 $moduleNav   = [
-    ['url' => 'index.php',        'icon' => 'fas fa-tachometer-alt',       'label' => 'Dashboard'],
-    ['url' => 'employees.php',    'icon' => 'fas fa-id-badge',             'label' => 'Employees'],
-    ['url' => 'departments.php',  'icon' => 'fas fa-sitemap',              'label' => 'Departments'],
-    ['url' => 'payroll.php',      'icon' => 'fas fa-money-check',          'label' => 'Payroll'],
-    ['url' => 'leave.php',        'icon' => 'fas fa-calendar-minus',       'label' => 'Leave'],
-    ['url' => 'attendance.php',   'icon' => 'fas fa-fingerprint',          'label' => 'Attendance'],
-    ['url' => 'recruitment.php',  'icon' => 'fas fa-user-plus',            'label' => 'Recruitment'],
-    ['url' => 'performance.php',  'icon' => 'fas fa-star',                 'label' => 'Performance'],
-    ['url' => 'training.php',     'icon' => 'fas fa-chalkboard-teacher',   'label' => 'Training'],
-    ['url' => 'reports.php',      'icon' => 'fas fa-chart-bar',            'label' => 'Reports'],
-];
+    ['url' => 'index.php',        'icon' => 'fas fa-tachometer-alt',     'label' => 'Dashboard'],
+    ['url' => 'employees.php',    'icon' => 'fas fa-id-badge',           'label' => 'Employees'],
+    ['url' => 'departments.php',  'icon' => 'fas fa-sitemap',            'label' => 'Departments'],
+    ['url' => 'payroll.php',      'icon' => 'fas fa-money-check',        'label' => 'Payroll'],
+    ['url' => 'leave.php',        'icon' => 'fas fa-calendar-minus',     'label' => 'Leave'],
+    ['url' => 'attendance.php',   'icon' => 'fas fa-fingerprint',        'label' => 'Attendance'],
+    ['url' => 'benefits.php',     'icon' => 'fas fa-gift',               'label' => 'Benefits'],
+    ['url' => 'disciplinary.php', 'icon' => 'fas fa-gavel',              'label' => 'Disciplinary'],
+    ['url' => 'recruitment.php',  'icon' => 'fas fa-user-plus',          'label' => 'Recruitment'],
+    ['url' => 'performance.php',  'icon' => 'fas fa-star',               'label' => 'Performance'],
+    ['url' => 'training.php',     'icon' => 'fas fa-chalkboard-teacher', 'label' => 'Training'],
+    ['url' => 'reports.php',      'icon' => 'fas fa-chart-bar',          'label' => 'Reports'],];
 
 // ── Action Handling ────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -72,6 +73,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         logActivity('delete', 'hrm', "Terminated employee #$id");
         redirect('employees.php');
     }
+}
+
+// ── CSV Export (GET) ───────────────────────────────────────────
+if (($_GET['export'] ?? '') === 'csv') {
+    if (session_status() === PHP_SESSION_NONE) session_start();
+    require_once __DIR__ . '/../../config/database.php';
+    require_once __DIR__ . '/../../includes/functions.php';
+    requireLogin();
+    $user  = currentUser();
+    $orgId = (int)$user['org_id'];
+
+    $rows = [];
+    try {
+        $stmt = $pdo->prepare("
+            SELECT e.employee_no, e.first_name, e.last_name, e.email, e.phone,
+                   e.id_number, e.gender, e.dob, d.name AS department,
+                   e.position, e.employment_type, e.salary,
+                   e.bank_name, e.bank_account, e.date_hired, e.status
+            FROM hrm_employees e
+            LEFT JOIN hrm_departments d ON e.department_id = d.id
+            WHERE e.org_id = ?
+            ORDER BY e.employee_no
+        ");
+        $stmt->execute([$orgId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Exception $e) {}
+
+    $filename = 'employees-' . date('Ymd') . '.csv';
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Cache-Control: no-cache, no-store');
+    echo "\xEF\xBB\xBF"; // UTF-8 BOM for Excel compatibility
+
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['Emp No','First Name','Last Name','Email','Phone','ID Number','Gender','Date of Birth','Department','Position','Employment Type','Basic Salary','Bank Name','Bank Account','Date Hired','Status']);
+    foreach ($rows as $r) {
+        fputcsv($out, [
+            $r['employee_no'], $r['first_name'], $r['last_name'],
+            $r['email'], $r['phone'], $r['id_number'],
+            ucfirst($r['gender'] ?? ''),
+            $r['dob'] ?? '',
+            $r['department'] ?? '',
+            $r['position'],
+            ucwords(str_replace('_', ' ', $r['employment_type'] ?? '')),
+            number_format((float)$r['salary'], 2),
+            $r['bank_name'], $r['bank_account'],
+            $r['date_hired'] ?? '',
+            ucfirst($r['status'] ?? ''),
+        ]);
+    }
+    fclose($out);
+    logActivity('export', 'hrm', 'Exported employee list to CSV');
+    exit;
 }
 
 require_once __DIR__ . '/../../includes/header-module.php';
@@ -137,7 +191,7 @@ if (isset($_GET['view'])) {
     <p class="text-muted mb-0">Manage your workforce</p>
   </div>
   <div class="d-flex gap-2">
-    <button class="btn btn-outline-secondary" disabled title="Export coming soon"><i class="fas fa-download me-1"></i>Export</button>
+    <a href="employees.php?export=csv" class="btn btn-outline-secondary"><i class="fas fa-download me-1"></i>Export CSV</a>
     <button class="btn" style="background:<?= $moduleColor ?>;color:#fff" data-bs-toggle="modal" data-bs-target="#empModal" onclick="openAddModal()">
       <i class="fas fa-plus me-2"></i>Add Employee
     </button>
