@@ -220,14 +220,12 @@ if ($sub && !empty($sub['plan_id'])) {
     $currentPlan = $cpStmt->fetch() ?: null;
 }
 
-// ── Active modules with their live prices ─────────────────────────
+// ── All active modules (name + icon only — for display list) ──────
 $activeModules = [];
-$totalModulesMonthly = 0.0;
 if ($sub) {
     try {
         $amStmt = $pdo->prepare("
-            SELECT m.name, m.icon, m.color, m.slug,
-                   m.monthly_price, m.annual_price
+            SELECT m.name, m.icon, m.color, m.slug
             FROM modules m
             INNER JOIN subscription_modules sm ON m.id = sm.module_id
             WHERE sm.subscription_id = ? AND sm.status = 'active'
@@ -235,9 +233,26 @@ if ($sub) {
         ");
         $amStmt->execute([$sub['id']]);
         $activeModules = $amStmt->fetchAll();
-        $totalModulesMonthly = array_sum(array_column($activeModules, 'monthly_price'));
     } catch (Exception $e) {}
 }
+
+// ── Add-on modules: individually purchased (have a paid invoice) ──
+// These are the ACTUAL additional charges on top of the plan price.
+$addonModules = [];
+$totalAddonsPaid = 0.0;
+try {
+    $addStmt = $pdo->prepare("
+        SELECT m.name, m.icon, m.color, i.amount, i.total,
+               i.created_at, i.invoice_number, i.status
+        FROM invoices i
+        INNER JOIN modules m ON i.module_id = m.id
+        WHERE i.org_id = ? AND i.status = 'paid'
+        ORDER BY i.created_at DESC
+    ");
+    $addStmt->execute([$orgId]);
+    $addonModules    = $addStmt->fetchAll();
+    $totalAddonsPaid = array_sum(array_column($addonModules, 'total'));
+} catch (Exception $e) {}
 
 // ── Wallet data ───────────────────────────────────────────────────
 $walletBalance = 0.00;
@@ -445,69 +460,104 @@ if ($usersNear || $modulesNear):
           $nextDate    = $sub['ends_at'] ? formatDate($sub['ends_at']) : ($sub['trial_ends_at'] ? formatDate($sub['trial_ends_at']) : '—');
         ?>
 
-        <!-- Plan line -->
+        <!-- ── Plan charge ─────────────────────────────── -->
         <div class="px-3 pt-3 pb-2 border-bottom">
-          <div class="d-flex align-items-center justify-content-between mb-1">
+          <div class="d-flex align-items-start justify-content-between gap-2">
             <div>
-              <div class="fw-bold text-navy"><?= e($currentPlan['name']) ?> Plan</div>
-              <div class="text-muted small text-capitalize"><?= e($sub['billing_cycle'] ?? 'monthly') ?> billing · <?= $currentPlan['max_users'] ?> users · <?= $currentPlan['max_modules'] ?> modules</div>
+              <div class="fw-bold text-navy" style="font-size:.9rem"><?= e($currentPlan['name']) ?> Plan</div>
+              <div class="text-muted" style="font-size:.72rem">
+                <?= ucfirst($sub['billing_cycle'] ?? 'monthly') ?> ·
+                <?= $currentPlan['max_users'] ?> users ·
+                up to <?= $currentPlan['max_modules'] ?> modules
+              </div>
             </div>
-            <div class="text-end">
-              <div class="fw-bold text-green"><?= formatCurrency($planPrice) ?><span class="text-muted fw-normal" style="font-size:.75rem"><?= $cycleLabel ?></span></div>
-              <div class="text-muted" style="font-size:.7rem">≈ $ <?= number_format($planPriceUsd, 2) ?></div>
+            <div class="text-end flex-shrink-0">
+              <div class="fw-bold text-green" style="font-size:.9rem">
+                <?= formatCurrency($planPrice) ?><span class="text-muted fw-normal" style="font-size:.7rem"><?= $cycleLabel ?></span>
+              </div>
+              <div class="text-muted" style="font-size:.68rem">≈ $ <?= number_format($planPriceUsd, 2) ?></div>
             </div>
           </div>
         </div>
 
-        <!-- Active modules breakdown -->
+        <!-- ── Active modules: names only (covered by plan fee) ─── -->
         <?php if (!empty($activeModules)): ?>
         <div class="px-3 py-2 border-bottom">
-          <div class="text-muted small fw-semibold mb-2" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em">Active Modules (<?= count($activeModules) ?>)</div>
-          <?php foreach ($activeModules as $am):
-            $amPrice    = (float)$am['monthly_price'];
-            $amPriceUsd = $amPrice > 0 ? round($amPrice / $usdRate, 2) : 0;
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span class="text-muted fw-semibold" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em">
+              Active Modules
+            </span>
+            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">
+              <?= count($activeModules) ?> active
+            </span>
+          </div>
+          <div class="d-flex flex-wrap gap-1">
+            <?php foreach ($activeModules as $am): ?>
+            <span class="d-inline-flex align-items-center gap-1 px-2 py-1 rounded-pill"
+                  style="background:<?= e($am['color']) ?>15;border:1px solid <?= e($am['color']) ?>40;font-size:.68rem;color:<?= e($am['color']) ?>">
+              <i class="<?= e($am['icon']) ?>" style="font-size:.6rem"></i>
+              <?= e($am['name']) ?>
+            </span>
+            <?php endforeach; ?>
+          </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- ── Add-on modules actually paid ────────────────────── -->
+        <?php if (!empty($addonModules)): ?>
+        <div class="px-3 py-2 border-bottom">
+          <div class="text-muted fw-semibold mb-2" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em">
+            Paid Add-Ons
+          </div>
+          <?php foreach ($addonModules as $ad):
+            $adTotal    = (float)$ad['total'];
+            $adTotalUsd = $adTotal > 0 ? round($adTotal / $usdRate, 2) : 0;
           ?>
           <div class="d-flex align-items-center justify-content-between py-1">
             <div class="d-flex align-items-center gap-2">
-              <div style="width:22px;height:22px;border-radius:6px;background:<?= e($am['color']) ?>1a;
-                          color:<?= e($am['color']) ?>;display:flex;align-items:center;justify-content:center;font-size:.7rem;flex-shrink:0">
-                <i class="<?= e($am['icon']) ?>"></i>
+              <div style="width:20px;height:20px;border-radius:5px;background:<?= e($ad['color']) ?>1a;
+                          color:<?= e($ad['color']) ?>;display:flex;align-items:center;justify-content:center;
+                          font-size:.6rem;flex-shrink:0">
+                <i class="<?= e($ad['icon']) ?>"></i>
               </div>
-              <span class="small"><?= e($am['name']) ?></span>
+              <div>
+                <span class="small"><?= e($ad['name']) ?></span>
+                <div class="text-muted" style="font-size:.67rem"><?= formatDate($ad['created_at']) ?> · <?= e($ad['invoice_number']) ?></div>
+              </div>
             </div>
             <div class="text-end">
-              <span class="fw-semibold small"><?= formatCurrency($amPrice) ?><span class="text-muted fw-normal">/mo</span></span>
-              <div class="text-muted" style="font-size:.68rem">≈ $ <?= number_format($amPriceUsd, 2) ?></div>
+              <span class="fw-semibold small text-success"><?= formatCurrency($adTotal) ?></span>
+              <div class="text-muted" style="font-size:.67rem">≈ $ <?= number_format($adTotalUsd, 2) ?></div>
             </div>
           </div>
           <?php endforeach; ?>
         </div>
         <?php endif; ?>
 
-        <!-- Total & next billing -->
+        <!-- ── Next billing / renewal ───────────────────────────── -->
         <?php
-          $grandTotal    = $planPrice + ($isAnnual ? 0 : $totalModulesMonthly);
-          $grandTotalUsd = $grandTotal > 0 ? round($grandTotal / $usdRate, 2) : 0;
-          $taxEst        = round($grandTotal * 0.16, 2);
+          $taxEst       = round($planPrice * 0.16, 2);
+          $planTotal    = $planPrice + $taxEst;
+          $planTotalUsd = $planTotal > 0 ? round($planTotal / $usdRate, 2) : 0;
         ?>
         <div class="px-3 py-3 bg-light">
           <div class="d-flex justify-content-between align-items-center mb-1">
-            <span class="small text-muted">Subtotal</span>
-            <span class="fw-semibold small"><?= formatCurrency($grandTotal) ?><?= $cycleLabel ?></span>
+            <span class="small text-muted">Plan subtotal</span>
+            <span class="small fw-semibold"><?= formatCurrency($planPrice) ?><?= $cycleLabel ?></span>
           </div>
           <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="small text-muted">VAT (16%)</span>
+            <span class="small text-muted">VAT est. (16%)</span>
             <span class="small text-muted"><?= formatCurrency($taxEst) ?></span>
           </div>
           <div class="d-flex justify-content-between align-items-center border-top pt-2">
-            <span class="fw-bold">Total<?= $cycleLabel ?></span>
+            <span class="fw-bold small">Plan total<?= $cycleLabel ?></span>
             <div class="text-end">
-              <span class="fw-bold text-green"><?= formatCurrency($grandTotal + $taxEst) ?></span>
-              <div class="text-muted" style="font-size:.7rem">≈ $ <?= number_format(round(($grandTotal + $taxEst) / $usdRate, 2), 2) ?></div>
+              <span class="fw-bold text-green"><?= formatCurrency($planTotal) ?></span>
+              <div class="text-muted" style="font-size:.68rem">≈ $ <?= number_format($planTotalUsd, 2) ?></div>
             </div>
           </div>
           <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
-            <span class="small text-muted"><i class="fas fa-calendar-alt me-1"></i>Next billing</span>
+            <span class="small text-muted"><i class="fas fa-calendar-alt me-1"></i>Next renewal</span>
             <span class="small fw-semibold"><?= $nextDate ?></span>
           </div>
         </div>
