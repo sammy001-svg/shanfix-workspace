@@ -1,4 +1,7 @@
 <?php
+// Output buffer prevents any stray output from corrupting redirects or JSON
+ob_start();
+
 // ── Bootstrap ────────────────────────────────────────────────────
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../config/database.php';
@@ -37,71 +40,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'deact
     redirect(APP_URL . '/client/modules.php');
 }
 
-// ── POST: Add module — supports both AJAX (ajax=1) and regular POST
+// ── POST: Add module ─────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_module') {
-    $isAjax = ($_POST['ajax'] ?? '') === '1';
-
-    // Set JSON content-type immediately for all AJAX paths
-    if ($isAjax) {
-        header('Content-Type: application/json');
-        if (!hash_equals($_SESSION['csrf_token'], $_POST['_token'] ?? '')) {
-            echo json_encode(['success' => false, 'error' => 'Session expired. Please refresh the page and try again.']);
-            exit;
-        }
-    } else {
-        verifyCsrf();
-    }
-
-    $jsonError = function(string $msg) use ($isAjax): void {
-        if ($isAjax) {
-            echo json_encode(['success' => false, 'error' => $msg]);
-            exit;
-        }
-        setFlash('error', $msg);
-        redirect(APP_URL . '/client/modules.php');
-    };
+    verifyCsrf();
 
     $slug = sanitize($_POST['module_slug'] ?? '');
     $sub  = getOrgSubscription($orgId);
 
     if (!$sub) {
-        $jsonError('You need an active subscription before adding modules.');
+        setFlash('danger', 'You need an active subscription before adding modules.');
+        redirect(APP_URL . '/client/modules.php');
     }
 
     // Load module
-    $stmtMod = $pdo->prepare("SELECT * FROM modules WHERE slug = ? AND status = 'active'");
-    $stmtMod->execute([$slug]);
-    $mod = $stmtMod->fetch();
-    if (!$mod) { $jsonError('Module not found.'); }
+    $mod = null;
+    try {
+        $s = $pdo->prepare("SELECT * FROM modules WHERE slug = ? AND status = 'active'");
+        $s->execute([$slug]);
+        $mod = $s->fetch() ?: null;
+    } catch (Throwable $e) {
+        error_log('[add_module mod] ' . $e->getMessage());
+    }
+    if (!$mod) {
+        setFlash('danger', 'Module not found. Please refresh and try again.');
+        redirect(APP_URL . '/client/modules.php');
+    }
 
     // Already active?
-    $stmtChk = $pdo->prepare("
-        SELECT sm.id FROM subscription_modules sm
-        INNER JOIN subscriptions s ON sm.subscription_id = s.id
-        WHERE s.org_id = ? AND sm.module_id = ? AND sm.status = 'active'
-          AND s.status IN ('active','trial')
-    ");
-    $stmtChk->execute([$orgId, $mod['id']]);
-    if ($stmtChk->fetch()) {
-        $jsonError('This module is already active on your workspace.');
+    try {
+        $chk = $pdo->prepare("
+            SELECT sm.id FROM subscription_modules sm
+            INNER JOIN subscriptions s ON sm.subscription_id = s.id
+            WHERE s.org_id = ? AND sm.module_id = ? AND sm.status = 'active'
+              AND s.status IN ('active','trial')
+        ");
+        $chk->execute([$orgId, $mod['id']]);
+        if ($chk->fetch()) {
+            setFlash('info', 'This module is already active on your workspace.');
+            redirect(APP_URL . '/client/modules.php');
+        }
+    } catch (Throwable $e) {
+        error_log('[add_module active_check] ' . $e->getMessage());
     }
 
     // Already has an unpaid invoice for this module?
-    $stmtDup = $pdo->prepare("
-        SELECT id FROM invoices
-        WHERE org_id = ? AND module_id = ? AND status IN ('draft','sent','overdue')
-    ");
-    $stmtDup->execute([$orgId, $mod['id']]);
-    if ($dup = $stmtDup->fetch()) {
-        if ($isAjax) {
-            echo json_encode(['success' => false, 'error' => 'Pending invoice exists.', 'invoice_id' => (int)$dup['id']]);
-            exit;
+    try {
+        $dup = $pdo->prepare("
+            SELECT id FROM invoices
+            WHERE org_id = ? AND module_id = ? AND status IN ('draft','sent','overdue')
+        ");
+        $dup->execute([$orgId, $mod['id']]);
+        if ($existing = $dup->fetch()) {
+            setFlash('warning', 'You already have a pending invoice for this module. Complete that payment to activate it.');
+            redirect(APP_URL . '/client/billing.php?tab=pay&inv=' . (int)$existing['id']);
         }
-        setFlash('warning', 'You already have a pending invoice for this module. Please complete that payment first.');
-        redirect(APP_URL . '/client/billing.php?tab=invoices');
+    } catch (Throwable $e) {
+        // module_id column may not exist in this deployment — skip the duplicate check
+        error_log('[add_module dup_check] ' . $e->getMessage());
     }
 
-    // Build invoice
+    // Build and insert invoice
     $cfgTax    = (float)(getSettings(['invoice_tax_rate'])['invoice_tax_rate'] ?? 16);
     $prefix    = getSettings(['invoice_prefix'])['invoice_prefix'] ?? 'INV';
     $price     = (float)$mod['monthly_price'];
@@ -109,6 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     $total     = $price + $tax;
     $invoiceNo = $prefix . '-' . strtoupper(substr(md5(uniqid($orgId, true)), 0, 8));
     $dueDate   = date('Y-m-d', strtotime('+7 days'));
+    $invoiceId = 0;
 
     try {
         $pdo->prepare("
@@ -120,46 +119,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
             $invoiceNo, $price, $tax, $total, $dueDate,
             "Module activation: {$mod['name']}"
         ]);
+        $invoiceId = (int)$pdo->lastInsertId();
     } catch (Throwable $e) {
-        error_log('[add_module invoice] ' . $e->getMessage());
-        $jsonError('Failed to create invoice. Please try again.');
+        error_log('[add_module insert1] ' . $e->getMessage());
+        // Fallback: try without module_id (older schema)
+        try {
+            $pdo->prepare("
+                INSERT INTO invoices
+                    (org_id, subscription_id, invoice_number, amount, tax, total, status, due_date, notes)
+                VALUES (?, ?, ?, ?, ?, ?, 'sent', ?, ?)
+            ")->execute([
+                $orgId, $sub['id'],
+                $invoiceNo, $price, $tax, $total, $dueDate,
+                "Module activation: {$mod['name']}"
+            ]);
+            $invoiceId = (int)$pdo->lastInsertId();
+        } catch (Throwable $e2) {
+            error_log('[add_module insert2] ' . $e2->getMessage());
+            setFlash('danger', 'Could not create invoice: ' . htmlspecialchars($e2->getMessage()));
+            redirect(APP_URL . '/client/modules.php');
+        }
     }
-    $invoiceId = (int)$pdo->lastInsertId();
+
     try { logActivity('create', 'billing', "Invoice {$invoiceNo} — {$mod['name']}"); } catch (Throwable $e) {}
 
-    if ($isAjax) {
-        echo json_encode([
-            'success'     => true,
-            'invoice_id'  => $invoiceId,
-            'invoice_no'  => $invoiceNo,
-            'amount'      => $total,
-            'module_name' => $mod['name'],
-        ]);
-        exit;
-    }
-    setFlash('success', "Invoice <strong>{$invoiceNo}</strong> generated for <strong>{$mod['name']}</strong>. Complete payment to activate it.");
+    setFlash('success', "Invoice <strong>{$invoiceNo}</strong> created for <strong>" . htmlspecialchars($mod['name']) . "</strong>. Choose a payment method below.");
     redirect(APP_URL . '/client/billing.php?tab=pay&inv=' . $invoiceId);
 }
 
 // ── Render page ──────────────────────────────────────────────────
+ob_end_clean(); // discard any stray bootstrap output before HTML starts
 $pageTitle = 'Module Marketplace';
 require_once __DIR__ . '/../includes/header-client.php';
 
 $sub = getOrgSubscription($orgId);
 
 // Active module slugs
-$stmtAct = $pdo->prepare("
-    SELECT m.slug FROM modules m
-    INNER JOIN subscription_modules sm ON m.id = sm.module_id
-    INNER JOIN subscriptions s ON sm.subscription_id = s.id
-    WHERE s.org_id = ? AND s.status IN ('active','trial')
-      AND sm.status = 'active' AND m.status = 'active'
-");
-$stmtAct->execute([$orgId]);
-$activeSlug = array_column($stmtAct->fetchAll(), 'slug');
+$activeSlug = [];
+try {
+    $stmtAct = $pdo->prepare("
+        SELECT m.slug FROM modules m
+        INNER JOIN subscription_modules sm ON m.id = sm.module_id
+        INNER JOIN subscriptions s ON sm.subscription_id = s.id
+        WHERE s.org_id = ? AND s.status IN ('active','trial')
+          AND sm.status = 'active' AND m.status = 'active'
+    ");
+    $stmtAct->execute([$orgId]);
+    $activeSlug = array_column($stmtAct->fetchAll(), 'slug');
+} catch (Throwable $e) { error_log('[modules active] ' . $e->getMessage()); }
 
 // Pending-invoice module IDs / slugs
-$pendingBySlug = []; // slug → invoice_id
+$pendingBySlug = [];
 try {
     $stmtPend = $pdo->prepare("
         SELECT m.slug, i.id AS invoice_id FROM modules m
@@ -170,9 +180,12 @@ try {
     foreach ($stmtPend->fetchAll() as $row) {
         $pendingBySlug[$row['slug']] = (int)$row['invoice_id'];
     }
-} catch (Exception $e) {}
+} catch (Throwable $e) { error_log('[modules pending] ' . $e->getMessage()); }
 
-$allModules   = $pdo->query("SELECT * FROM modules WHERE status='active' ORDER BY sort_order, name")->fetchAll();
+$allModules = [];
+try {
+    $allModules = $pdo->query("SELECT * FROM modules WHERE status='active' ORDER BY sort_order, name")->fetchAll();
+} catch (Throwable $e) { error_log('[modules list] ' . $e->getMessage()); }
 $categories   = array_unique(array_filter(array_column($allModules, 'category')));
 $activeCount  = count($activeSlug);
 $pendingCount = count($pendingBySlug);
