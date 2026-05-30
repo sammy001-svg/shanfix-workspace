@@ -15,7 +15,10 @@ if (!str_ends_with($_SERVER['PHP_SELF'], '/onboarding.php')) {
     }
 }
 
-$modules = getOrgModules((int)$user['org_id']);
+// Staff see only their granted modules; admins see all
+$modules = ($user['role'] === 'staff')
+    ? getUserAccessibleModules((int)$user['id'], (int)$user['org_id'])
+    : getOrgModules((int)$user['org_id']);
 $pageTitle = $pageTitle ?? APP_NAME;
 
 // ── SEO / OG defaults (pages can override before including this header) ──────

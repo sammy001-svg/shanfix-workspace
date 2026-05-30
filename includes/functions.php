@@ -299,6 +299,108 @@ function getOrgModules(int $orgId): array {
     return $stmt->fetchAll();
 }
 
+/**
+ * Return only the modules a specific staff user has been granted access to.
+ * Falls back to all org modules if user_module_access table doesn't exist yet.
+ */
+function getUserAccessibleModules(int $userId, int $orgId): array {
+    global $pdo;
+    try {
+        $stmt = $pdo->prepare("
+            SELECT m.* FROM modules m
+            JOIN subscription_modules sm ON m.id = sm.module_id
+            JOIN subscriptions s        ON sm.subscription_id = s.id
+            JOIN user_module_access uma ON m.slug = uma.module_slug
+                                       AND uma.user_id = ?
+                                       AND uma.org_id  = ?
+            WHERE s.org_id = ? AND s.status IN ('active','trial')
+              AND sm.status = 'active' AND m.status = 'active'
+            ORDER BY m.sort_order
+        ");
+        $stmt->execute([$userId, $orgId, $orgId]);
+        return $stmt->fetchAll();
+    } catch (Throwable $e) {
+        return getOrgModules($orgId); // table missing — degrade gracefully
+    }
+}
+
+/**
+ * Render a role-context banner for staff users on module index pages.
+ * Shows role name, description, permissions summary, and read-only notice.
+ */
+function renderStaffRoleBanner(string $moduleSlug, array $user, array $moduleNav = []): string {
+    $roleKey  = getUserModuleRole((int)$user['id'], $moduleSlug);
+    $roleDefs = getModuleRoles($moduleSlug);
+    $roleDef  = $roleDefs[$roleKey] ?? [
+        'name' => ucfirst($roleKey), 'desc' => '', 'color' => '#0B2D4E',
+        'icon' => 'fa-user', 'pages' => '*',
+    ];
+    $isReadOnly   = !empty($roleDef['readonly']);
+    $color        = $roleDef['color']  ?? '#0B2D4E';
+    $icon         = $roleDef['icon']   ?? 'fa-user';
+    $name         = htmlspecialchars($roleDef['name'] ?? ucfirst($roleKey), ENT_QUOTES);
+    $desc         = htmlspecialchars($roleDef['desc'] ?? '', ENT_QUOTES);
+    $allowedPages = $roleDef['pages']  ?? '*';
+
+    // Build quick-links from nav items the user can actually access
+    $quickLinks = '';
+    if (!empty($moduleNav)) {
+        $links = [];
+        foreach ($moduleNav as $nav) {
+            $pageSlug = pathinfo($nav['url'], PATHINFO_FILENAME);
+            if ($pageSlug === 'index') continue;
+            if ($allowedPages !== '*' && !in_array($pageSlug, (array)$allowedPages, true)) continue;
+            $links[] = sprintf(
+                '<a href="%s" class="btn btn-sm" style="background:%s18;color:%s;border:1px solid %s35;font-size:.75rem">
+                    <i class="%s me-1"></i>%s</a>',
+                htmlspecialchars($nav['url'], ENT_QUOTES),
+                $color, $color, $color,
+                htmlspecialchars($nav['icon'], ENT_QUOTES),
+                htmlspecialchars($nav['label'], ENT_QUOTES)
+            );
+        }
+        if ($links) {
+            $quickLinks = '<div class="d-flex flex-wrap gap-2 mt-3 pt-3 border-top">'
+                . '<span class="small text-muted fw-semibold align-self-center" style="white-space:nowrap">Quick access:</span>'
+                . implode('', $links)
+                . '</div>';
+        }
+    }
+
+    $readOnlyNotice = $isReadOnly
+        ? '<div class="alert alert-warning d-flex align-items-center gap-2 mb-0 mt-3 py-2" style="font-size:.82rem">
+               <i class="fas fa-eye-slash flex-shrink-0"></i>
+               <span>Your role is <strong>read-only</strong> — you can view data but cannot create, edit, or delete records.</span>
+           </div>'
+        : '';
+
+    return "
+    <div class='card border-0 shadow-sm mb-4'
+         style='border-left:4px solid {$color}!important;background:linear-gradient(135deg,{$color}10,{$color}04)'>
+      <div class='card-body py-3 px-4'>
+        <div class='d-flex align-items-center gap-3'>
+          <div class='d-flex align-items-center justify-content-center rounded-3 flex-shrink-0 text-white'
+               style='width:46px;height:46px;background:{$color};font-size:1.15rem'>
+            <i class='fas {$icon}'></i>
+          </div>
+          <div class='flex-fill'>
+            <div class='d-flex align-items-center gap-2 flex-wrap'>
+              <span class='fw-700' style='color:{$color};font-size:1rem'>{$name}</span>
+              " . ($isReadOnly ? "<span class='badge bg-warning text-dark' style='font-size:.65rem'><i class='fas fa-eye me-1'></i>Read-only</span>" : '') . "
+            </div>
+            <div class='text-muted small mt-1'>{$desc}</div>
+          </div>
+          <div class='text-end flex-shrink-0 d-none d-md-block'>
+            <div class='small text-muted'>Signed in as</div>
+            <div class='fw-600 small'>" . htmlspecialchars($user['name'] ?? '', ENT_QUOTES) . "</div>
+          </div>
+        </div>
+        {$quickLinks}
+        {$readOnlyNotice}
+      </div>
+    </div>";
+}
+
 function getOrgSubscription(int $orgId): ?array {
     global $pdo;
     $stmt = $pdo->prepare("SELECT s.*, p.name as plan_name FROM subscriptions s LEFT JOIN subscription_plans p ON s.plan_id = p.id WHERE s.org_id = ? ORDER BY s.created_at DESC LIMIT 1");

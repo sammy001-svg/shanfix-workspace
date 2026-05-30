@@ -7,7 +7,10 @@ require_once __DIR__ . '/functions.php';
 sendSecurityHeaders();
 requireModuleAccess($moduleSlug ?? '');
 $user    = currentUser();
-$modules = getOrgModules((int)$user['org_id']);
+// Staff see only their granted modules; admins/super_admin see all
+$modules = ($user['role'] === 'staff')
+    ? getUserAccessibleModules((int)$user['id'], (int)$user['org_id'])
+    : getOrgModules((int)$user['org_id']);
 $pageTitle = ($moduleName ?? 'Module') . ' — ' . APP_NAME;
 
 // ── Page-level RBAC guard ─────────────────────────────────────────────────
@@ -265,6 +268,12 @@ document.addEventListener('DOMContentLoaded', function() {
   </header>
   <main class="main-content">
     <?= flashAlert() ?>
+    <?php
+    // Show role-context banner for staff on module index pages
+    if (($user['role'] ?? '') === 'staff' && $_currentPageSlug === 'index'):
+        echo renderStaffRoleBanner($moduleSlug ?? '', $user, $moduleNav ?? []);
+    endif;
+    ?>
     <?php require_once __DIR__ . '/_org-login-banner.php'; ?>
     <?php if ($_isReadOnly): ?>
     <div class="alert alert-warning alert-dismissible fade show d-flex align-items-center gap-2 py-2 mb-3" role="alert">
