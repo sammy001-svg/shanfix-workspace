@@ -1,6 +1,12 @@
 <?php
+// ── Bootstrap (no HTML yet — POST handlers must redirect before any output) ──
+if (session_status() === PHP_SESSION_NONE) session_start();
+require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/functions.php';
+sendSecurityHeaders();
+requireSuperAdmin();
+$user      = currentUser();
 $pageTitle = 'Support Tickets';
-require_once __DIR__ . '/../includes/header-admin.php';
 
 // ── Attachment helpers ────────────────────────────────────────────
 function adminAttachmentChip(array $att): string {
@@ -53,11 +59,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
     $status   = $_POST['status'] ?? '';
     $valid    = ['open','in_progress','resolved','closed'];
     if (in_array($status, $valid)) {
-        $closedAt = in_array($status, ['resolved','closed']) ? 'NOW()' : 'NULL';
-        $adminId  = (int)$user['id'];
-        $pdo->prepare("UPDATE support_tickets SET status=?, admin_id=?, closed_at=" . ($closedAt === 'NULL' ? 'NULL' : 'NOW()') . ", updated_at=NOW() WHERE id=?")
-            ->execute([$status, $adminId, $ticketId]);
-        setFlash('success', 'Ticket status updated.');
+        try {
+            $adminId  = (int)$user['id'];
+            $pdo->prepare("UPDATE support_tickets SET status=?, admin_id=?, closed_at=" . (in_array($status, ['resolved','closed']) ? 'NOW()' : 'NULL') . ", updated_at=NOW() WHERE id=?")
+                ->execute([$status, $adminId, $ticketId]);
+            setFlash('success', 'Ticket status updated.');
+        } catch (Exception $e) {
+            error_log('[support status] ' . $e->getMessage());
+            setFlash('danger', 'Status update failed.');
+        }
     }
     redirect(APP_URL . '/admin/support.php?view=' . $ticketId);
 }
@@ -70,8 +80,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reply
     $newStatus = $_POST['new_status'] ?? '';
     if ($ticketId && $message) {
         $isInternal = isset($_POST['is_internal']) ? 1 : 0;
-        $pdo->prepare("INSERT INTO ticket_replies (ticket_id, user_id, is_admin, is_internal, message) VALUES (?,?,1,?,?)")
-            ->execute([$ticketId, (int)$user['id'], $isInternal, $message]);
+        try {
+            $pdo->prepare("INSERT INTO ticket_replies (ticket_id, user_id, is_admin, is_internal, message) VALUES (?,?,1,?,?)")
+                ->execute([$ticketId, (int)$user['id'], $isInternal, $message]);
+        } catch (Exception $e) {
+            error_log('[admin reply insert] ' . $e->getMessage());
+            setFlash('danger', 'Reply failed — support tables may need migration. Check error log.');
+            redirect(APP_URL . '/admin/support.php?view=' . $ticketId);
+        }
         $replyId = (int)$pdo->lastInsertId();
         try {
             $tkOrg = $pdo->prepare("SELECT org_id FROM support_tickets WHERE id=?");
@@ -139,9 +155,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reply
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_ticket') {
     verifyCsrf();
     $ticketId = (int)$_POST['ticket_id'];
-    $pdo->prepare("DELETE FROM ticket_replies WHERE ticket_id=?")->execute([$ticketId]);
-    $pdo->prepare("DELETE FROM support_tickets WHERE id=?")->execute([$ticketId]);
-    setFlash('success', 'Ticket deleted.');
+    try {
+        $pdo->prepare("DELETE FROM ticket_replies WHERE ticket_id=?")->execute([$ticketId]);
+        $pdo->prepare("DELETE FROM support_tickets WHERE id=?")->execute([$ticketId]);
+        setFlash('success', 'Ticket deleted.');
+    } catch (Exception $e) {
+        error_log('[delete ticket] ' . $e->getMessage());
+        setFlash('danger', 'Delete failed.');
+    }
     redirect(APP_URL . '/admin/support.php');
 }
 
@@ -240,6 +261,9 @@ $totalResolved = ($counts['resolved'] ?? 0) + ($counts['closed'] ?? 0);
 $priorityColors = ['low'=>'secondary','normal'=>'info','high'=>'warning','urgent'=>'danger'];
 $statusColors   = ['open'=>'primary','in_progress'=>'warning','resolved'=>'success','closed'=>'secondary'];
 $categoryIcons  = ['billing'=>'fa-file-invoice-dollar','technical'=>'fa-wrench','general'=>'fa-comment','feature_request'=>'fa-lightbulb','module_request'=>'fa-puzzle-piece'];
+
+// ── HTML output starts here ───────────────────────────────────────
+require_once __DIR__ . '/../includes/header-admin.php';
 ?>
 
 <?php if ($ticket): ?>
