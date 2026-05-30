@@ -13,6 +13,9 @@ $modules = $stmt->fetchAll();
 $stmt  = $pdo->query("SELECT * FROM subscription_plans WHERE status='active' ORDER BY price_monthly");
 $plans = $stmt->fetchAll();
 
+// USD exchange rate for pricing display (configurable in admin settings)
+$usdRate = max(1, (float)(getSetting('usd_rate', '130') ?: 130));
+
 // ── Module feature lists (shown in popup) ─────────────────────
 $moduleFeatures = [
     'accounting'    => ['General ledger & chart of accounts','Invoice & receipt generation','Expense tracking & categorisation','VAT & tax computation reports','Bank reconciliation','Profit & loss and balance sheet'],
@@ -541,6 +544,19 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
 }
 .billing-toggle-wrap span { font-size: .875rem; font-weight: 600; color: #64748b; }
 .billing-toggle-wrap span.active { color: #0B2D4E; }
+.currency-pill {
+  display: inline-flex; align-items: center; gap: 0;
+  background: #f1f5f9; border: 1.5px solid #e2e8f0;
+  border-radius: 999px; overflow: hidden; margin-left: .5rem;
+}
+.currency-pill button {
+  border: none; background: transparent; padding: .32rem .9rem;
+  font-size: .8rem; font-weight: 700; color: #64748b;
+  cursor: pointer; transition: background .18s, color .18s; line-height: 1;
+}
+.currency-pill button.active {
+  background: var(--od-green, #00d084); color: #fff; border-radius: 999px;
+}
 
 .od-plan-card {
   background: white; border-radius: 20px; padding: 2.25rem 2rem;
@@ -1061,54 +1077,95 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
     <div class="text-center mb-5 reveal">
       <span class="od-section-eyebrow">Transparent Pricing</span>
       <h2 class="od-section-title">Plans Built for<br>Every Business Size</h2>
-      <p class="od-section-sub">All prices in Kenyan Shillings. Start free, scale as you grow. No hidden fees.</p>
+      <p class="od-section-sub" id="pricingSubtitle">All prices in USD. Start free, scale as you grow. No hidden fees.</p>
     </div>
 
-    <!-- Billing toggle -->
-    <div class="text-center mb-4">
-      <div class="billing-toggle-wrap">
+    <!-- Billing cycle + currency controls -->
+    <div class="text-center mb-4 d-flex flex-wrap align-items-center justify-content-center gap-3">
+
+      <!-- Billing cycle toggle -->
+      <div class="billing-toggle-wrap" style="margin-bottom:0">
         <span id="lblMonthly" class="active">Monthly</span>
         <div class="form-check form-switch mb-0" style="padding-left:2.5em">
           <input class="form-check-input" type="checkbox" id="billingToggle" style="width:44px;height:22px;cursor:pointer">
         </div>
         <span id="lblAnnual">Annual &nbsp;<span class="badge" style="background:#dcfce7;color:#16a34a;font-size:.7rem;font-weight:700">Save 20%</span></span>
       </div>
+
+      <!-- Currency pill -->
+      <div class="currency-pill" role="group" aria-label="Currency">
+        <button id="btnUSD" class="active" onclick="setCurrency('USD')" aria-pressed="true">
+          $ USD
+        </button>
+        <button id="btnKES" onclick="setCurrency('KES')" aria-pressed="false">
+          KES
+        </button>
+      </div>
     </div>
 
+    <!-- Plan cards -->
     <div class="row g-4 justify-content-center align-items-start">
-      <?php foreach($plans as $plan): $pop=(bool)$plan['is_popular']; ?>
+      <?php foreach ($plans as $plan):
+        $pop       = (bool)$plan['is_popular'];
+        $kesMo     = (float)$plan['price_monthly'];
+        $kesAnnMo  = $plan['price_annual'] > 0 ? round($plan['price_annual'] / 12, 2) : 0;
+        $kesAnnTot = (float)$plan['price_annual'];
+        $usdMo     = $kesMo    > 0 ? round($kesMo    / $usdRate, 2) : 0;
+        $usdAnnMo  = $kesAnnMo > 0 ? round($kesAnnMo / $usdRate, 2) : 0;
+        $usdAnnTot = $kesAnnTot> 0 ? round($kesAnnTot/ $usdRate, 2) : 0;
+        $savePct   = ($kesMo > 0 && $kesAnnMo > 0) ? max(0, round((1 - $kesAnnMo / $kesMo) * 100)) : 0;
+      ?>
       <div class="col-md-6 col-lg-4 reveal">
-        <div class="od-plan-card <?=$pop?'popular':''?>">
-          <?php if($pop):?><div class="pop-label"><i class="fas fa-fire me-1"></i> Most Popular</div><?php endif;?>
-          <div class="plan-name"><?=e($plan['name'])?></div>
-          <p class="text-muted small mb-3" style="font-size:.82rem"><?=e($plan['description'])?></p>
+        <div class="od-plan-card <?= $pop ? 'popular' : '' ?>">
+          <?php if ($pop): ?>
+          <div class="pop-label"><i class="fas fa-fire me-1"></i> Most Popular</div>
+          <?php endif; ?>
+
+          <div class="plan-name"><?= e($plan['name']) ?></div>
+          <p class="text-muted small mb-3" style="font-size:.82rem"><?= e($plan['description']) ?></p>
+
+          <!-- Price display — data-* attrs hold all four values; JS picks the right one -->
           <div class="d-flex align-items-end gap-1 mb-1">
             <div class="plan-price">
-              <sup>KES</sup><span class="price-monthly"><?=number_format((float)$plan['price_monthly'])?></span><span class="price-annual d-none"><?=number_format((float)$plan['price_annual']/12)?></span><span class="per">/mo</span>
+              <sup class="plan-cur">$</sup><!-- JS updates to $ or KES -->
+              <span class="plan-price-val"
+                    data-usd-mo="<?= number_format($usdMo, 2) ?>"
+                    data-usd-ann-mo="<?= number_format($usdAnnMo, 2) ?>"
+                    data-kes-mo="<?= number_format($kesMo, 0, '.', ',') ?>"
+                    data-kes-ann-mo="<?= number_format($kesAnnMo, 0, '.', ',') ?>">
+                <?= number_format($usdMo, 2) ?>
+              </span>
+              <span class="per">/mo</span>
             </div>
           </div>
-          <p class="text-muted mb-0" style="font-size:.78rem;min-height:1.2rem">
-            <span class="annual-note d-none">Billed annually — KES <?=number_format((float)$plan['price_annual'])?>/yr</span>
-            <span class="monthly-note">No long-term commitment</span>
+
+          <!-- Billing note — JS fills text depending on cycle + currency -->
+          <p class="plan-note text-muted mb-0" style="font-size:.78rem;min-height:1.4rem"
+             data-usd-ann-total="<?= number_format($usdAnnTot, 2) ?>"
+             data-kes-ann-total="<?= number_format($kesAnnTot, 0, '.', ',') ?>"
+             data-save-pct="<?= $savePct ?>">
           </p>
+
           <ul class="plan-features">
-            <li><i class="fas fa-check"></i> Up to <strong><?=$plan['max_users']?> users</strong></li>
-            <li><i class="fas fa-check"></i> <strong><?=$plan['max_modules']?> modules</strong> included</li>
-            <li><i class="fas fa-check"></i> Real-time analytics & reports</li>
+            <li><i class="fas fa-check"></i> Up to <strong><?= $plan['max_users'] ?> users</strong></li>
+            <li><i class="fas fa-check"></i> <strong><?= $plan['max_modules'] ?> modules</strong> included</li>
+            <li><i class="fas fa-check"></i> Real-time analytics &amp; reports</li>
             <li><i class="fas fa-check"></i> M-Pesa payment integration</li>
             <li><i class="fas fa-check"></i> 14-day free trial included</li>
-            <li><i class="fas fa-check"></i> Email & WhatsApp support</li>
-            <?php if($plan['max_users']>=25):?>
+            <li><i class="fas fa-check"></i> Email &amp; WhatsApp support</li>
+            <?php if ($plan['max_users'] >= 25): ?>
             <li><i class="fas fa-check"></i> Priority support queue</li>
-            <li><i class="fas fa-check"></i> Custom branding & logo</li>
-            <?php endif;?>
-            <?php if($plan['max_users']>=100):?>
+            <li><i class="fas fa-check"></i> Custom branding &amp; logo</li>
+            <?php endif; ?>
+            <?php if ($plan['max_users'] >= 100): ?>
             <li><i class="fas fa-check"></i> Dedicated account manager</li>
-            <li><i class="fas fa-check"></i> API access & webhooks</li>
+            <li><i class="fas fa-check"></i> API access &amp; webhooks</li>
             <li><i class="fas fa-check"></i> On-premise deployment option</li>
-            <?php endif;?>
+            <?php endif; ?>
           </ul>
-          <a href="<?=APP_URL?>/auth/register.php?plan=<?=$plan['id']?>" class="<?=$pop?'btn-plan-primary':'btn-plan-outline'?>">
+
+          <a href="<?= APP_URL ?>/auth/register.php?plan=<?= $plan['id'] ?>"
+             class="<?= $pop ? 'btn-plan-primary' : 'btn-plan-outline' ?>">
             Start Free Trial <i class="fas fa-arrow-right ms-1" style="font-size:.8rem"></i>
           </a>
         </div>
@@ -1117,7 +1174,11 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
     </div>
 
     <div class="text-center mt-4 reveal">
-      <p class="text-muted small">Need a custom enterprise plan? <a href="#contact" class="fw-700" style="color:var(--od-green)">Talk to our sales team</a> — we'll build a package for your exact needs.</p>
+      <p class="text-muted small">
+        Need a custom enterprise plan?
+        <a href="#contact" class="fw-700" style="color:var(--od-green)">Talk to our sales team</a>
+        — we'll build a package for your exact needs.
+      </p>
     </div>
   </div>
 </section>
@@ -1472,19 +1533,64 @@ const counterObserver = new IntersectionObserver((entries) => {
 }, { threshold: .5 });
 document.querySelectorAll('[data-counter]').forEach(el => counterObserver.observe(el));
 
-// ── Billing toggle ────────────────────────────────────────────
-const toggle = document.getElementById('billingToggle');
-if (toggle) {
-  toggle.addEventListener('change', () => {
-    const annual = toggle.checked;
-    document.querySelectorAll('.price-monthly').forEach(el => el.classList.toggle('d-none', annual));
-    document.querySelectorAll('.price-annual').forEach(el => el.classList.toggle('d-none', !annual));
-    document.querySelectorAll('.annual-note').forEach(el => el.classList.toggle('d-none', !annual));
-    document.querySelectorAll('.monthly-note').forEach(el => el.classList.toggle('d-none', annual));
-    document.getElementById('lblMonthly').className = annual ? '' : 'active';
-    document.getElementById('lblAnnual').className  = annual ? 'active' : '';
+// ── Pricing: billing cycle + currency toggle ──────────────────
+const USD_RATE = <?= (float)$usdRate ?>;
+let activeCur  = localStorage.getItem('landingCurrency') || 'USD';
+
+function updatePricing() {
+  const annual   = document.getElementById('billingToggle').checked;
+  const isUSD    = (activeCur === 'USD');
+  const curSym   = isUSD ? '$' : 'KES ';
+  const subtitle = isUSD
+    ? 'All prices in USD. Start free, scale as you grow. No hidden fees.'
+    : 'All prices in KES. Start free, scale as you grow. No hidden fees.';
+
+  document.getElementById('pricingSubtitle').textContent = subtitle;
+
+  // Billing cycle labels
+  document.getElementById('lblMonthly').className = annual ? '' : 'active';
+  document.getElementById('lblAnnual').className  = annual ? 'active' : '';
+
+  // Currency pill buttons
+  document.getElementById('btnUSD').classList.toggle('active', isUSD);
+  document.getElementById('btnKES').classList.toggle('active', !isUSD);
+  document.getElementById('btnUSD').setAttribute('aria-pressed', isUSD);
+  document.getElementById('btnKES').setAttribute('aria-pressed', !isUSD);
+
+  // Update currency symbol on each card
+  document.querySelectorAll('.plan-cur').forEach(function(el) {
+    el.textContent = curSym;
+  });
+
+  // Update each plan card's price and note
+  document.querySelectorAll('.plan-price-val').forEach(function(el) {
+    var val = annual
+      ? (isUSD ? el.dataset.usdAnnMo : el.dataset.kesAnnMo)
+      : (isUSD ? el.dataset.usdMo    : el.dataset.kesMo);
+    el.textContent = val || '0';
+  });
+
+  document.querySelectorAll('.plan-note').forEach(function(el) {
+    var annTot  = isUSD ? el.dataset.usdAnnTotal : el.dataset.kesAnnTotal;
+    var save    = el.dataset.savePct;
+    var curFull = isUSD ? 'USD' : 'KES';
+    el.textContent = annual
+      ? 'Billed annually — ' + curFull + ' ' + annTot + '/yr' + (save > 0 ? ' · Save ' + save + '%' : '')
+      : 'No long-term commitment';
   });
 }
+
+function setCurrency(cur) {
+  activeCur = cur;
+  localStorage.setItem('landingCurrency', cur);
+  updatePricing();
+}
+
+// Wire billing toggle
+document.getElementById('billingToggle').addEventListener('change', updatePricing);
+
+// Apply saved/default preference on page load
+updatePricing();
 
 // ── Module detail modal ────────────────────────────────────────
 const MOD_INFO = <?= json_encode($moduleMap, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
