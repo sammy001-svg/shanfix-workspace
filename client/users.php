@@ -1,7 +1,12 @@
 <?php
-$pageTitle = 'Team Management';
-require_once __DIR__ . '/../includes/header-client.php';
+// ── Bootstrap (no HTML yet — POST handlers must redirect before output) ──
+if (session_status() === PHP_SESSION_NONE) session_start();
+require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/mailer.php';
+sendSecurityHeaders();
+requireClientAdmin();
+$user = currentUser();
 
 // Only client_admin can manage team
 if ($user['role'] !== 'client_admin') {
@@ -64,7 +69,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $newId = (int)$pdo->lastInsertId();
                 // Grant module access + roles for staff members
                 if ($role === 'staff' && $newId) {
-                    saveModuleGrants($pdo, $newId, $orgId, $myId, $modules, $moduleRoles);
+                    try {
+                        saveModuleGrants($pdo, $newId, $orgId, $myId, $modules, $moduleRoles);
+                    } catch (Throwable $e) {
+                        error_log('[users add grants] ' . $e->getMessage());
+                        setFlash('warning', "Team member created but module permissions could not be saved — please run the staff/module-roles migrations on your database.");
+                    }
                 }
                 logActivity('add_team_member', 'client', "Added: $name ($role)");
                 $modCount = $role === 'staff' ? count($modules) : 'all';
@@ -128,12 +138,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare("UPDATE users SET name=?,phone=?,role=? WHERE id=? AND org_id=? AND role!='super_admin'")
             ->execute([$name, $phone, $role, $uid, $orgId]);
         // Update module grants + roles (always re-sync; clear for admins, set for staff)
-        if ($role === 'staff') {
-            saveModuleGrants($pdo, $uid, $orgId, $myId, $modules, $moduleRoles);
-        } else {
-            // Admins don't need explicit grants — clear any old ones
-            $pdo->prepare("DELETE FROM user_module_access WHERE user_id=? AND org_id=?")->execute([$uid, $orgId]);
-            saveUserModuleRoles($pdo, $uid, $orgId, $myId, []);
+        try {
+            if ($role === 'staff') {
+                saveModuleGrants($pdo, $uid, $orgId, $myId, $modules, $moduleRoles);
+            } else {
+                // Admins don't need explicit grants — clear any old ones
+                $pdo->prepare("DELETE FROM user_module_access WHERE user_id=? AND org_id=?")->execute([$uid, $orgId]);
+                saveUserModuleRoles($pdo, $uid, $orgId, $myId, []);
+            }
+        } catch (Throwable $e) {
+            error_log('[users edit grants] ' . $e->getMessage());
+            setFlash('warning', "Profile updated but module permissions could not be saved — please run the staff/module-roles migrations on your database.");
         }
         logActivity('edit_team_member', 'client', "Edited user #$uid");
         setFlash('success', 'Team member updated successfully.');
@@ -196,6 +211,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect(APP_URL . '/client/users.php');
     }
 }
+
+// ── Render page (HTML starts here) ──────────────────────────────
+$pageTitle = 'Team Management';
+require_once __DIR__ . '/../includes/header-client.php';
 
 // ── Page Data ──────────────────────────────────────────────────────────────
 $members = $pdo->prepare("SELECT * FROM users WHERE org_id=? AND role!='super_admin' ORDER BY role, name");
