@@ -72,14 +72,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
             $pdo->prepare("INSERT INTO support_tickets (org_id, user_id, ticket_number, subject, category, priority, message)
                 VALUES (?,?,?,?,?,?,?)")->execute([$orgId, $uid, $ticketNo, $subject, $category, $priority, $message]);
             $newId = (int)$pdo->lastInsertId();
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             error_log('[create_ticket] ' . $e->getMessage());
             setFlash('danger', 'Could not create ticket. Please contact support or try again later.');
             redirect(APP_URL . '/client/support.php');
         }
 
-        try { saveTicketFiles($pdo, $newId, null, $orgId, $uid); } catch (Exception $e) {}
-        try { logActivity('create', 'support', "Ticket {$ticketNo}: {$subject}"); } catch (Exception $e) {}
+        try { saveTicketFiles($pdo, $newId, null, $orgId, $uid); } catch (Throwable $e) {}
+        try { logActivity('create', 'support', "Ticket {$ticketNo}: {$subject}"); } catch (Throwable $e) {}
 
         // Notify super_admin of new ticket via email
         try {
@@ -100,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
                     APP_URL . '/admin/support.php?view=' . $newId
                 );
             }
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             error_log('[new ticket notify] ' . $e->getMessage());
         }
 
@@ -126,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reply
             ->execute([$ticketId, $uid, $message]);
         $replyId = (int)$pdo->lastInsertId();
         $pdo->prepare("UPDATE support_tickets SET status='open', updated_at=NOW() WHERE id=? AND org_id=?")->execute([$ticketId, $orgId]);
-        try { saveTicketFiles($pdo, $ticketId, $replyId, $orgId, $uid); } catch (Exception $e) {}
+        try { saveTicketFiles($pdo, $ticketId, $replyId, $orgId, $uid); } catch (Throwable $e) {}
 
         // Notify super_admin of client reply via email
         try {
@@ -143,7 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reply
                     APP_URL . '/admin/support.php?view=' . $ticketId
                 );
             }
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             error_log('[client reply notify] ' . $e->getMessage());
         }
 
@@ -200,7 +200,7 @@ if ($viewId) {
                 $key = $att['reply_id'] ? 'r' . $att['reply_id'] : 'ticket';
                 $attachments[$key][] = $att;
             }
-        } catch (Exception $e) {}
+        } catch (Throwable $e) {}
     }
 }
 
@@ -219,7 +219,7 @@ try {
     $s = $pdo->prepare("SELECT * FROM support_tickets WHERE {$whereClause} ORDER BY updated_at DESC");
     $s->execute($params);
     $tickets = $s->fetchAll();
-} catch (Exception $e) { $tickets = []; }
+} catch (Throwable $e) { $tickets = []; }
 
 // Counts per status
 $counts = [];
@@ -227,7 +227,7 @@ try {
     $c = $pdo->prepare("SELECT status, COUNT(*) as cnt FROM support_tickets WHERE org_id=? GROUP BY status");
     $c->execute([$orgId]);
     foreach ($c->fetchAll() as $row) $counts[$row['status']] = $row['cnt'];
-} catch (Exception $e) {}
+} catch (Throwable $e) {}
 $totalOpen = ($counts['open'] ?? 0) + ($counts['in_progress'] ?? 0);
 
 require_once __DIR__ . '/../includes/header-client.php';

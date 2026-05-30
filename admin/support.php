@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
             $pdo->prepare("UPDATE support_tickets SET status=?, admin_id=?, closed_at=" . (in_array($status, ['resolved','closed']) ? 'NOW()' : 'NULL') . ", updated_at=NOW() WHERE id=?")
                 ->execute([$status, $adminId, $ticketId]);
             setFlash('success', 'Ticket status updated.');
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             error_log('[support status] ' . $e->getMessage());
             setFlash('danger', 'Status update failed.');
         }
@@ -83,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reply
         try {
             $pdo->prepare("INSERT INTO ticket_replies (ticket_id, user_id, is_admin, is_internal, message) VALUES (?,?,1,?,?)")
                 ->execute([$ticketId, (int)$user['id'], $isInternal, $message]);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             error_log('[admin reply insert] ' . $e->getMessage());
             setFlash('danger', 'Reply failed — support tables may need migration. Check error log.');
             redirect(APP_URL . '/admin/support.php?view=' . $ticketId);
@@ -94,21 +94,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reply
             $tkOrg->execute([$ticketId]);
             $tkOrgId = (int)($tkOrg->fetchColumn() ?: 0);
             saveAdminTicketFiles($pdo, $ticketId, $replyId, $tkOrgId, (int)$user['id']);
-        } catch (Exception $e) {}
+        } catch (Throwable $e) {}
         // Only update ticket status/timestamp for non-internal replies
         if (!$isInternal) {
-            $update = "UPDATE support_tickets SET updated_at=NOW(), admin_id=?";
-            $params = [(int)$user['id']];
-            if (in_array($newStatus, ['open','in_progress','resolved','closed'])) {
-                $update .= ", status=?";
-                $params[] = $newStatus;
-                if (in_array($newStatus, ['resolved','closed'])) $update .= ", closed_at=NOW()";
-            } else {
-                $update .= ", status='in_progress'";
+            try {
+                $update = "UPDATE support_tickets SET updated_at=NOW(), admin_id=?";
+                $params = [(int)$user['id']];
+                if (in_array($newStatus, ['open','in_progress','resolved','closed'])) {
+                    $update .= ", status=?";
+                    $params[] = $newStatus;
+                    if (in_array($newStatus, ['resolved','closed'])) $update .= ", closed_at=NOW()";
+                } else {
+                    $update .= ", status='in_progress'";
+                }
+                $update .= " WHERE id=?";
+                $params[] = $ticketId;
+                $pdo->prepare($update)->execute($params);
+            } catch (Throwable $e) {
+                error_log('[admin reply update] ' . $e->getMessage());
             }
-            $update .= " WHERE id=?";
-            $params[] = $ticketId;
-            $pdo->prepare($update)->execute($params);
         }
         setFlash('success', $isInternal ? 'Internal note saved.' : 'Reply sent.');
 
@@ -143,7 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reply
                         APP_URL . '/client/support.php?view=' . $ticketId
                     );
                 }
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 error_log('[support reply notify] ' . $e->getMessage());
             }
         }
