@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$fid, $orgId]);
             $f = $stmt->fetch();
             if ($f) {
-                $pdo->prepare("UPDATE sales_fulfillments SET status='delivered', actual_delivery_date=NOW() WHERE id=?")->execute([$fid]);
+                $pdo->prepare("UPDATE sales_fulfillments SET status='delivered', actual_delivery_date=NOW() WHERE id=? AND org_id=?")->execute([$fid, $orgId]);
                 $pdo->prepare("UPDATE sales_orders SET status='delivered' WHERE id=? AND org_id=?")->execute([$f['order_id'], $orgId]);
                 setFlash('success', 'Order marked as delivered.');
             }

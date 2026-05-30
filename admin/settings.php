@@ -302,6 +302,35 @@ function saveSection(section, keys) {
   .catch(() => showAlert('danger', 'Network error. Please try again.'));
 }
 
+function testKopokopo() {
+  const btn    = document.getElementById('kkTestBtn');
+  const result = document.getElementById('kkTestResult');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Testing…';
+  result.style.display = 'none';
+
+  fetch('<?= APP_URL ?>/admin/ajax.php', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({action: 'test_kopokopo'})
+  })
+  .then(r => r.json())
+  .then(res => {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-plug me-2"></i>Test Connection';
+    const cls  = res.success ? 'success' : 'danger';
+    const icon = res.success ? 'fa-check-circle' : 'fa-times-circle';
+    result.style.display = '';
+    result.innerHTML = `<div class="alert alert-${cls} small mb-0 py-2"><i class="fas ${icon} me-2"></i>${res.message ?? (res.error ?? 'Unknown error')}</div>`;
+  })
+  .catch(() => {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-plug me-2"></i>Test Connection';
+    result.style.display = '';
+    result.innerHTML = '<div class="alert alert-danger small mb-0 py-2"><i class="fas fa-times-circle me-2"></i>Network error — could not reach server.</div>';
+  });
+}
+
 function sendTestEmail() {
   const addr = document.getElementById('testEmailAddr').value.trim();
   if (!addr) { showAlert('warning', 'Enter an email address to send the test to.'); return; }

@@ -20,13 +20,39 @@ if (!canAccessModulePage($moduleSlug ?? '', $_currentPageSlug)) {
     exit;
 }
 $_isReadOnly = isModuleRoleReadOnly($moduleSlug ?? '');
+
+$_modName      = $moduleName ?? 'Module';
+$_accentHex    = ltrim($moduleColor ?? '1A8A4E', '#');
+$ogTitle       ??= $_modName . ' — ' . APP_NAME;
+$ogDescription ??= $_modName . ' — Manage your ' . strtolower($_modName) . ' operations with ' . APP_NAME;
+$ogImage       ??= APP_URL . '/api/og-image.php'
+                   . '?t=' . urlencode($_modName)
+                   . '&s=' . urlencode($user['org_name'] . ' · ' . APP_NAME)
+                   . '&c=' . urlencode($_accentHex);
+$ogUrl         = APP_URL . ($_SERVER['REQUEST_URI'] ?? '/');
 ?>
 <!DOCTYPE html>
 <html lang="en" id="htmlRoot">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= e($moduleName ?? 'Module') ?> — <?= APP_NAME ?></title>
+<title><?= e($ogTitle) ?></title>
+<meta name="description" content="<?= e($ogDescription) ?>">
+<meta name="robots" content="noindex, nofollow">
+<!-- Open Graph -->
+<meta property="og:type"        content="website">
+<meta property="og:site_name"   content="<?= e(APP_NAME) ?>">
+<meta property="og:title"       content="<?= e($ogTitle) ?>">
+<meta property="og:description" content="<?= e($ogDescription) ?>">
+<meta property="og:image"       content="<?= e($ogImage) ?>">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height"content="630">
+<meta property="og:url"         content="<?= e($ogUrl) ?>">
+<!-- Twitter Card -->
+<meta name="twitter:card"       content="summary_large_image">
+<meta name="twitter:title"      content="<?= e($ogTitle) ?>">
+<meta name="twitter:description"content="<?= e($ogDescription) ?>">
+<meta name="twitter:image"      content="<?= e($ogImage) ?>">
 <script>/* Prevent dark mode FOUC */(function(){const t=localStorage.getItem('odTheme');if(t)document.getElementById('htmlRoot')?.setAttribute('data-theme',t);})();</script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">

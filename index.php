@@ -63,8 +63,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['contact_submit'])) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="OrbitDesk Workspace — The all-in-one business management platform. Manage accounting, CRM, HRM, POS, hotel, school, SACCO, and 20+ modules in one place.">
-<title><?= APP_NAME ?> — <?= APP_TAGLINE ?></title>
+<?php
+$_ogTitle = APP_NAME . ' — ' . APP_TAGLINE;
+$_ogDesc  = 'The all-in-one business management platform for African businesses. Manage accounting, CRM, HRM, POS, hotel, school, SACCO, health clinic and 20+ modules in one place. M-Pesa integrated.';
+$_ogImg   = APP_URL . '/assets/images/og-banner-1200.png';
+$_ogUrl   = APP_URL . '/';
+?>
+<title><?= e($_ogTitle) ?></title>
+<meta name="description"       content="<?= e($_ogDesc) ?>">
+<meta name="keywords"          content="business management software Kenya, ERP Kenya, accounting software, CRM Kenya, school management, SACCO software, hotel management, M-Pesa integration, OrbitDesk">
+<meta name="author"            content="<?= APP_NAME ?>">
+<link rel="canonical"          href="<?= e($_ogUrl) ?>">
+<!-- Open Graph (Facebook, WhatsApp, LinkedIn) -->
+<meta property="og:type"        content="website">
+<meta property="og:site_name"   content="<?= e(APP_NAME) ?>">
+<meta property="og:title"       content="<?= e($_ogTitle) ?>">
+<meta property="og:description" content="<?= e($_ogDesc) ?>">
+<meta property="og:image"       content="<?= e($_ogImg) ?>">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height"content="630">
+<meta property="og:image:alt"   content="<?= e(APP_NAME) ?> — Business Management Platform">
+<meta property="og:url"         content="<?= e($_ogUrl) ?>">
+<meta property="og:locale"      content="en_KE">
+<!-- Twitter Card -->
+<meta name="twitter:card"       content="summary_large_image">
+<meta name="twitter:title"      content="<?= e($_ogTitle) ?>">
+<meta name="twitter:description"content="<?= e($_ogDesc) ?>">
+<meta name="twitter:image"      content="<?= e($_ogImg) ?>">
+<meta name="twitter:image:alt"  content="<?= e(APP_NAME) ?> preview">
 <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/assets/images/favicon.svg">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">

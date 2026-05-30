@@ -63,15 +63,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$orgId, $ref, $date, $desc, $totalDebit, $totalCredit, $status, $user['id']]);
         $txId = (int)$pdo->lastInsertId();
 
+        // Pre-validate all submitted account IDs belong to this org (prevents cross-tenant balance corruption)
+        $validAccIds = [];
+        if (!empty($accounts)) {
+            $placeholders = implode(',', array_fill(0, count($accounts), '?'));
+            $chk = $pdo->prepare("SELECT id FROM acc_accounts WHERE id IN ($placeholders) AND org_id=?");
+            $chk->execute([...array_map('intval', $accounts), $orgId]);
+            $validAccIds = array_column($chk->fetchAll(), 'id');
+        }
+
         $lineStmt = $pdo->prepare("INSERT INTO acc_transaction_items (transaction_id, account_id, description, debit, credit) VALUES (?,?,?,?,?)");
         foreach ($accounts as $i => $accId) {
             $accId  = (int)$accId;
             $debit  = (float)($debits[$i]  ?? 0);
             $credit = (float)($credits[$i] ?? 0);
             if ($accId < 1 && $debit == 0 && $credit == 0) continue;
+            // Skip accounts not belonging to this org
+            if (!in_array($accId, $validAccIds)) continue;
             $lineStmt->execute([$txId, $accId, sanitize($lineDescs[$i] ?? ''), $debit, $credit]);
-            // Update account balance
-            $pdo->prepare("UPDATE acc_accounts SET balance = balance + ? - ? WHERE id=?")->execute([$debit, $credit, $accId]);
+            $pdo->prepare("UPDATE acc_accounts SET balance = balance + ? - ? WHERE id=? AND org_id=?")->execute([$debit, $credit, $accId, $orgId]);
         }
 
         setFlash('success', "Transaction $ref recorded successfully.");

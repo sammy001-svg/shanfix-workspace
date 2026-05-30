@@ -79,8 +79,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$orgId, $eventId, $ticketId, $name, $email, $phone, $ticketNo, $paymentStatus]);
 
             // Increment sold count
-            $stmt = $pdo->prepare("UPDATE event_tickets SET sold = sold + 1 WHERE id=?");
-            $stmt->execute([$ticketId]);
+            $stmt = $pdo->prepare("UPDATE event_tickets SET sold = sold + 1 WHERE id=? AND org_id=?");
+            $stmt->execute([$ticketId, $orgId]);
 
             $pdo->commit();
             setFlash('success', 'Attendee successfully registered! Ticket Code: ' . $ticketNo);
@@ -122,8 +122,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->beginTransaction();
 
                 // Decrement sold count
-                $stmt = $pdo->prepare("UPDATE event_tickets SET sold = GREATEST(0, sold - 1) WHERE id=?");
-                $stmt->execute([$attendee['ticket_id']]);
+                $stmt = $pdo->prepare("UPDATE event_tickets SET sold = GREATEST(0, sold - 1) WHERE id=? AND org_id=?");
+                $stmt->execute([$attendee['ticket_id'], $orgId]);
 
                 // Delete attendee
                 $stmt = $pdo->prepare("DELETE FROM event_attendees WHERE id=? AND org_id=?");

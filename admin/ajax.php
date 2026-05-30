@@ -158,6 +158,25 @@ switch ($action) {
         ]);
         break;
 
+    // ── Test KopoKopo connection ─────────────────────────────────
+    case 'test_kopokopo':
+        require_once __DIR__ . '/../includes/kopokopo.php';
+        try {
+            $kk    = kopokopo();
+            $token = $kk->getToken();
+            if (!$token) throw new Exception('Empty token returned.');
+            echo json_encode([
+                'success' => true,
+                'message' => 'KopoKopo OAuth token obtained successfully — credentials are valid. Till: ' . ($kk->getTillNumber() ?: 'not set'),
+            ]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Connection failed: ' . $e->getMessage(),
+            ]);
+        }
+        break;
+
     // ── Mark invoice paid ────────────────────────────────────────
     case 'mark_invoice_paid':
         $id = (int)($input['id'] ?? 0);

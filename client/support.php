@@ -118,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reply
         $pdo->prepare("INSERT INTO ticket_replies (ticket_id, user_id, is_admin, message) VALUES (?,?,0,?)")
             ->execute([$ticketId, $uid, $message]);
         $replyId = (int)$pdo->lastInsertId();
-        $pdo->prepare("UPDATE support_tickets SET status='open', updated_at=NOW() WHERE id=?")->execute([$ticketId]);
+        $pdo->prepare("UPDATE support_tickets SET status='open', updated_at=NOW() WHERE id=? AND org_id=?")->execute([$ticketId, $orgId]);
         try { saveTicketFiles($pdo, $ticketId, $replyId, $orgId, $uid); } catch (Exception $e) {}
 
         // Notify super_admin of client reply via email

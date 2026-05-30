@@ -33,8 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$id, $orgId]);
         $b = $stmt->fetch();
         if ($b) {
-            $pdo->prepare("UPDATE hotel_bookings SET status='checked_in' WHERE id=?")->execute([$id]);
-            $pdo->prepare("UPDATE hotel_rooms SET status='occupied' WHERE id=?")->execute([$b['room_id']]);
+            $pdo->prepare("UPDATE hotel_bookings SET status='checked_in' WHERE id=? AND org_id=?")->execute([$id, $orgId]);
+            $pdo->prepare("UPDATE hotel_rooms SET status='occupied' WHERE id=? AND org_id=?")->execute([$b['room_id'], $orgId]);
             logActivity('update', 'hotel', "Checked in booking: {$b['booking_no']}");
             setFlash('success', "Guest checked in successfully.");
         }
@@ -49,8 +49,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $b = $stmt->fetch();
         if ($b) {
             $newPaid = (float)$b['paid_amount'] + $payment;
-            $pdo->prepare("UPDATE hotel_bookings SET status='checked_out', paid_amount=? WHERE id=?")->execute([$newPaid, $id]);
-            $pdo->prepare("UPDATE hotel_rooms SET status='available' WHERE id=?")->execute([$b['room_id']]);
+            $pdo->prepare("UPDATE hotel_bookings SET status='checked_out', paid_amount=? WHERE id=? AND org_id=?")->execute([$newPaid, $id, $orgId]);
+            $pdo->prepare("UPDATE hotel_rooms SET status='available' WHERE id=? AND org_id=?")->execute([$b['room_id'], $orgId]);
             
             // Log payment inside acc_transactions if available
             try {

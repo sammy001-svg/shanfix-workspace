@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                WHERE mm.id = ? AND m.org_id = ?");
         $stmt->execute([$id, $orgId]);
         if ($stmt->fetch()) {
-            $pdo->prepare("DELETE FROM meeting_minutes WHERE id = ?")->execute([$id]);
+            $pdo->prepare("DELETE FROM meeting_minutes WHERE id = ? AND meeting_id IN (SELECT id FROM meetings WHERE org_id = ?)")->execute([$id, $orgId]);
             setFlash('success', 'Minutes record deleted successfully.');
         }
         redirect('minutes.php');
