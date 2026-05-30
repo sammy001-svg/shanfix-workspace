@@ -6,6 +6,13 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/mailer.php';
 requireClientAdmin();
 
+// Staff members have no access to billing
+$__billingUser = currentUser();
+if (($__billingUser['role'] ?? '') === 'staff') {
+    setFlash('danger', 'Access denied. Billing is managed by your organisation administrator.');
+    redirect(APP_URL . '/client/index.php');
+}
+
 // ── Payment confirmation email helper ────────────────────────────
 function sendPaymentConfirmation(PDO $pdo, int $orgId, array $inv, string $method = '', string $reference = ''): void {
     try {

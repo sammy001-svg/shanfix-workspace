@@ -2,7 +2,71 @@
 $pageTitle = 'Dashboard';
 require_once __DIR__ . '/../includes/header-client.php';
 
-$orgId         = (int)$user['org_id'];
+$orgId = (int)$user['org_id'];
+
+// ── Staff members get their own focused dashboard, not the admin one ──────────
+if (($user['role'] ?? '') === 'staff') {
+    $staffModules = getUserAccessibleModules((int)$user['id'], $orgId);
+    $orgName      = e($user['org_name'] ?: APP_NAME);
+    $userName     = e($user['name'] ?? '');
+    ?>
+    <div class="page-header mb-4">
+      <h4><i class="fas fa-th-large me-2 text-green"></i>My Workspace</h4>
+      <p class="text-muted mb-0">Welcome back, <strong><?= $userName ?></strong> — <?= $orgName ?></p>
+    </div>
+
+    <?php if (empty($staffModules)): ?>
+    <div class="card text-center py-5">
+      <div class="card-body text-muted">
+        <i class="fas fa-lock fa-3x mb-3 d-block opacity-25"></i>
+        <h5>No modules assigned yet</h5>
+        <p class="small">Your administrator hasn't assigned any modules to your account. Contact your admin to get access.</p>
+      </div>
+    </div>
+    <?php else: ?>
+    <div class="row g-3">
+      <?php foreach ($staffModules as $mod):
+        $roleKey  = getUserModuleRole((int)$user['id'], $mod['slug']);
+        $roleDefs = getModuleRoles($mod['slug']);
+        $roleDef  = $roleDefs[$roleKey] ?? ['name' => ucfirst($roleKey), 'icon' => 'fa-user', 'color' => $mod['color']];
+        $roleName = $roleDef['name'] ?? ucfirst($roleKey);
+        $roleIcon = $roleDef['icon'] ?? 'fa-user';
+        $isRO     = !empty($roleDef['readonly']);
+      ?>
+      <div class="col-sm-6 col-lg-4 col-xl-3">
+        <div class="card h-100 border-0 shadow-sm" style="border-left:4px solid <?= e($mod['color']) ?>!important">
+          <div class="card-body d-flex flex-column">
+            <div class="d-flex align-items-center gap-3 mb-3">
+              <div class="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0 text-white"
+                   style="width:44px;height:44px;background:<?= e($mod['color']) ?>;font-size:1.1rem">
+                <i class="<?= e($mod['icon']) ?>"></i>
+              </div>
+              <div class="overflow-hidden">
+                <div class="fw-700 text-truncate"><?= e($mod['name']) ?></div>
+                <div class="small" style="color:<?= e($roleDef['color'] ?? $mod['color']) ?>">
+                  <i class="fas <?= e($roleIcon) ?> me-1"></i><?= e($roleName) ?>
+                  <?php if ($isRO): ?><span class="badge bg-warning text-dark ms-1" style="font-size:.6rem">Read-only</span><?php endif; ?>
+                </div>
+              </div>
+            </div>
+            <a href="<?= APP_URL ?>/modules/<?= e($mod['slug']) ?>/index.php"
+               class="btn btn-sm w-100 mt-auto text-white fw-600"
+               style="background:<?= e($mod['color']) ?>">
+              <i class="fas fa-arrow-right me-1"></i>Open <?= e($mod['name']) ?>
+            </a>
+          </div>
+        </div>
+      </div>
+      <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php
+    require_once __DIR__ . '/../includes/footer.php';
+    exit;
+}
+
+// ── Admin dashboard continues below ──────────────────────────────────────────
 $sub           = getOrgSubscription($orgId);
 $activeModules = getOrgModules($orgId);
 $activeSlugs   = array_column($activeModules, 'slug');

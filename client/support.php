@@ -209,8 +209,10 @@ $statusFilter = $_GET['status'] ?? 'all';
 $validStatuses = ['all','open','in_progress','resolved','closed'];
 if (!in_array($statusFilter, $validStatuses)) $statusFilter = 'all';
 
-$whereClause = 'org_id = ?';
-$params = [$orgId];
+// Staff see only their own tickets; admins see all org tickets
+$isStaff      = ($user['role'] ?? '') === 'staff';
+$whereClause  = $isStaff ? 'org_id = ? AND user_id = ?' : 'org_id = ?';
+$params       = $isStaff ? [$orgId, $uid] : [$orgId];
 if ($statusFilter !== 'all') {
     $whereClause .= ' AND status = ?';
     $params[] = $statusFilter;
@@ -221,11 +223,13 @@ try {
     $tickets = $s->fetchAll();
 } catch (Throwable $e) { $tickets = []; }
 
-// Counts per status
+// Counts per status (scoped to user for staff)
 $counts = [];
 try {
-    $c = $pdo->prepare("SELECT status, COUNT(*) as cnt FROM support_tickets WHERE org_id=? GROUP BY status");
-    $c->execute([$orgId]);
+    $cWhere  = $isStaff ? 'org_id=? AND user_id=?' : 'org_id=?';
+    $cParams = $isStaff ? [$orgId, $uid] : [$orgId];
+    $c = $pdo->prepare("SELECT status, COUNT(*) as cnt FROM support_tickets WHERE {$cWhere} GROUP BY status");
+    $c->execute($cParams);
     foreach ($c->fetchAll() as $row) $counts[$row['status']] = $row['cnt'];
 } catch (Throwable $e) {}
 $totalOpen = ($counts['open'] ?? 0) + ($counts['in_progress'] ?? 0);

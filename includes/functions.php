@@ -277,6 +277,18 @@ function hasModuleAccess(int $orgId, string $moduleSlug): bool {
     return true; // client_admin gets all org modules
 }
 
+/**
+ * Redirect staff members away from admin-only pages.
+ * Call immediately after requireClientAdmin() on admin-only pages.
+ */
+function requireAdminRole(string $reason = 'This page requires administrator privileges.'): void {
+    $user = currentUser();
+    if (($user['role'] ?? '') === 'staff') {
+        setFlash('danger', 'Access denied — ' . $reason);
+        redirect(APP_URL . '/client/index.php');
+    }
+}
+
 function requireModuleAccess(string $slug): void {
     requireLogin();
     $user = currentUser();

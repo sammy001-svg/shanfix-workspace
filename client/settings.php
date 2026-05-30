@@ -4,6 +4,7 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
 requireClientAdmin();
+requireAdminRole('Organisation settings are managed by administrators only.');
 
 $user  = currentUser();
 $orgId = (int)$user['org_id'];

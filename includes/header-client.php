@@ -192,20 +192,25 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 
   <div class="sidebar-nav">
+    <?php $__isStaff = ($user['role'] ?? '') === 'staff'; ?>
+
     <div class="nav-label">OVERVIEW</div>
     <a href="<?= APP_URL ?>/client/index.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'index.php' && strpos($_SERVER['REQUEST_URI'],'/client/') !== false ? 'active' : '' ?>">
       <i class="fas fa-home"></i><span>Dashboard</span></a>
+    <?php if (!$__isStaff): ?>
     <a href="<?= APP_URL ?>/client/modules.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'modules.php' ? 'active' : '' ?>">
-      <i class="fas fa-th"></i><span>My Modules</span></a>
+      <i class="fas fa-store"></i><span>Module Marketplace</span></a>
+    <?php endif; ?>
 
     <?php if (!empty($modules)): ?>
-    <div class="nav-label">ACTIVE MODULES</div>
+    <div class="nav-label"><?= $__isStaff ? 'MY MODULES' : 'ACTIVE MODULES' ?></div>
     <?php foreach ($modules as $mod): ?>
     <a href="<?= APP_URL ?>/modules/<?= $mod['slug'] ?>/index.php" class="nav-item">
-      <i class="<?= e($mod['icon']) ?>"></i><span><?= e($mod['name']) ?></span></a>
+      <i class="<?= e($mod['icon']) ?>" style="color:<?= e($mod['color']) ?>"></i><span><?= e($mod['name']) ?></span></a>
     <?php endforeach; ?>
     <?php endif; ?>
 
+    <?php if (!$__isStaff): ?>
     <div class="nav-label">TOOLS</div>
     <a href="<?= APP_URL ?>/client/analytics.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'analytics.php' ? 'active' : '' ?>">
       <i class="fas fa-chart-line"></i><span>Analytics</span></a>
@@ -213,14 +218,15 @@ document.addEventListener('DOMContentLoaded', function() {
       <i class="fas fa-bell"></i><span>Reminders</span></a>
     <a href="<?= APP_URL ?>/client/reports.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'reports.php' ? 'active' : '' ?>">
       <i class="fas fa-file-chart-bar"></i><span>Reports</span></a>
-    <?php if (($user['role'] ?? '') === 'client_admin'): ?>
     <a href="<?= APP_URL ?>/client/audit-trail.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'audit-trail.php' ? 'active' : '' ?>">
       <i class="fas fa-history"></i><span>Audit Trail</span></a>
     <?php endif; ?>
 
     <div class="nav-label">ACCOUNT</div>
+    <?php if (!$__isStaff): ?>
     <a href="<?= APP_URL ?>/client/billing.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'billing.php' ? 'active' : '' ?>">
       <i class="fas fa-file-invoice-dollar"></i><span>Billing</span></a>
+    <?php endif; ?>
     <a href="<?= APP_URL ?>/client/chat.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'chat.php' ? 'active' : '' ?>">
       <i class="fas fa-comments"></i><span>Team Chat</span>
       <?php
@@ -240,17 +246,18 @@ document.addEventListener('DOMContentLoaded', function() {
       <i class="fas fa-headset"></i><span>Support</span>
       <?php
       try {
-        $__openTk = $pdo->prepare("SELECT COUNT(*) FROM support_tickets WHERE org_id=? AND status IN ('open','in_progress')");
-        $__openTk->execute([(int)$user['org_id']]);
-        $__tkCount = (int)$__openTk->fetchColumn();
+        $__tkWhere  = $__isStaff ? 'org_id=? AND user_id=? AND status IN (\'open\',\'in_progress\')' : 'org_id=? AND status IN (\'open\',\'in_progress\')';
+        $__tkParams = $__isStaff ? [(int)$user['org_id'], (int)$user['id']] : [(int)$user['org_id']];
+        $__openTk   = $pdo->prepare("SELECT COUNT(*) FROM support_tickets WHERE {$__tkWhere}");
+        $__openTk->execute($__tkParams);
+        $__tkCount  = (int)$__openTk->fetchColumn();
         if ($__tkCount > 0) echo '<span class="badge bg-warning text-dark ms-auto" style="font-size:.6rem">' . $__tkCount . '</span>';
       } catch(Exception $e) {}
       ?>
     </a>
-
     <a href="<?= APP_URL ?>/client/profile.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'profile.php' ? 'active' : '' ?>">
       <i class="fas fa-user-circle"></i><span>Profile</span></a>
-    <?php if (($user['role'] ?? '') === 'client_admin'): ?>
+    <?php if (!$__isStaff): ?>
     <a href="<?= APP_URL ?>/client/users.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'users.php' ? 'active' : '' ?>">
       <i class="fas fa-users-cog"></i><span>Team</span></a>
     <?php endif; ?>

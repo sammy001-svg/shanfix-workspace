@@ -2,12 +2,16 @@
 $pageTitle = 'My Profile';
 require_once __DIR__ . '/../includes/header-client.php';
 
-$orgId = (int)$user['org_id'];
+$orgId    = (int)$user['org_id'];
+$isStaff  = ($user['role'] ?? '') === 'staff';
 
-// Fetch organization info
-$orgRow = $pdo->prepare("SELECT * FROM organizations WHERE id=?");
-$orgRow->execute([$orgId]);
-$org = $orgRow->fetch();
+// Fetch organization info (only needed for admins)
+$org = [];
+if (!$isStaff) {
+    $orgRow = $pdo->prepare("SELECT * FROM organizations WHERE id=?");
+    $orgRow->execute([$orgId]);
+    $org = $orgRow->fetch() ?: [];
+}
 
 // Handle profile update
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -19,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user_name'] = $name;
             setFlash('success', 'Profile updated successfully.');
         }
-    } elseif (isset($_POST['update_org'])) {
+    } elseif (isset($_POST['update_org']) && !$isStaff) {
         $orgName = sanitize($_POST['org_name'] ?? '');
         $orgEmail= trim($_POST['org_email'] ?? '');
         $orgPhone= sanitize($_POST['org_phone'] ?? '');
@@ -68,17 +72,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
     </div>
 
+    <?php if (!$isStaff): ?>
     <div class="card">
       <div class="card-header"><i class="fas fa-building text-green me-2"></i>Organization</div>
       <div class="card-body">
         <div class="mb-2">
           <div class="fw-600 text-navy"><?= e($org['name'] ?? '') ?></div>
-          <div class="text-muted small"><?= e($org['city'] ?? '') ?><?= $org['city'] ? ', ' : '' ?><?= e($org['country'] ?? 'Kenya') ?></div>
+          <div class="text-muted small"><?= e($org['city'] ?? '') ?><?= !empty($org['city']) ? ', ' : '' ?><?= e($org['country'] ?? 'Kenya') ?></div>
         </div>
         <div class="text-muted small"><?= e($org['email'] ?? '') ?></div>
         <div class="text-muted small"><?= e($org['phone'] ?? '') ?></div>
       </div>
     </div>
+    <?php else: ?>
+    <div class="card">
+      <div class="card-header"><i class="fas fa-puzzle-piece text-green me-2"></i>My Modules</div>
+      <div class="card-body p-0">
+        <?php
+        $staffMods = getUserAccessibleModules((int)$user['id'], $orgId);
+        if (empty($staffMods)): ?>
+        <div class="p-3 text-muted small text-center">No modules assigned yet.</div>
+        <?php else: foreach ($staffMods as $sm):
+          $rk  = getUserModuleRole((int)$user['id'], $sm['slug']);
+          $rd  = getModuleRoles($sm['slug'])[$rk] ?? ['name' => ucfirst($rk), 'color' => $sm['color']];
+        ?>
+        <div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom">
+          <i class="<?= e($sm['icon']) ?>" style="color:<?= e($sm['color']) ?>;width:18px;text-align:center"></i>
+          <div class="flex-fill small fw-600"><?= e($sm['name']) ?></div>
+          <span class="badge" style="background:<?= e($rd['color'] ?? $sm['color']) ?>20;color:<?= e($rd['color'] ?? $sm['color']) ?>;border:1px solid <?= e($rd['color'] ?? $sm['color']) ?>40;font-size:.65rem">
+            <?= e($rd['name'] ?? ucfirst($rk)) ?>
+          </span>
+        </div>
+        <?php endforeach; endif; ?>
+      </div>
+    </div>
+    <?php endif; ?>
   </div>
 
   <div class="col-lg-8">
@@ -108,7 +136,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
     </div>
 
-    <!-- Organization Info -->
+    <?php if (!$isStaff): ?>
+    <!-- Organization Info — admin only -->
     <div class="card mb-3">
       <div class="card-header"><i class="fas fa-building text-green me-2"></i>Organization Information</div>
       <div class="card-body">
@@ -137,6 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </form>
       </div>
     </div>
+    <?php endif; ?>
 
     <!-- Two-Factor Authentication -->
     <?php

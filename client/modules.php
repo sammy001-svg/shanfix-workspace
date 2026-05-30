@@ -10,6 +10,13 @@ requireClientAdmin();
 
 $user  = currentUser();
 $orgId = (int)$user['org_id'];
+
+// Staff members cannot access the module marketplace
+if (($user['role'] ?? '') === 'staff') {
+    ob_end_clean();
+    setFlash('danger', 'Access denied. Module management is handled by your organisation administrator.');
+    redirect(APP_URL . '/client/index.php');
+}
 $sub   = getOrgSubscription($orgId);
 
 // Ensure CSRF token is initialised before any POST handler reads it
