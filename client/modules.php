@@ -392,7 +392,7 @@ $csrfToken  = $_SESSION['csrf_token']; // guaranteed set above
               <i class="fas fa-lock me-1"></i>Subscribe First
             </a>
           <?php else: ?>
-            <form method="POST" action="<?= APP_URL ?>/client/modules.php">
+            <form method="POST" action="">
               <?= csrfField() ?>
               <input type="hidden" name="action" value="add_module">
               <input type="hidden" name="module_slug" value="<?= e($m['slug']) ?>">
@@ -444,13 +444,13 @@ $csrfToken  = $_SESSION['csrf_token']; // guaranteed set above
   </div>
 </div>
 
-<!-- Hidden forms submitted by JS -->
-<form method="POST" action="<?= APP_URL ?>/client/modules.php" id="deactivateForm">
+<!-- Hidden forms submitted by JS — action="" posts to current URL, avoids http/https mismatch -->
+<form method="POST" action="" id="deactivateForm">
   <?= csrfField() ?>
   <input type="hidden" name="action" value="deactivate">
   <input type="hidden" name="module_slug" id="deactivateSlug">
 </form>
-<form method="POST" action="<?= APP_URL ?>/client/modules.php" id="addModuleForm">
+<form method="POST" action="" id="addModuleForm">
   <?= csrfField() ?>
   <input type="hidden" name="action" value="add_module">
   <input type="hidden" name="module_slug" id="addModuleSlug">

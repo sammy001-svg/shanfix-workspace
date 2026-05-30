@@ -16,7 +16,11 @@ header('Content-Type: text/plain; charset=utf-8');
 echo "=== OrbitDesk Module Diagnostic ===\n\n";
 echo "PHP version   : " . PHP_VERSION . "\n";
 echo "Org ID        : {$orgId}\n";
-echo "User          : " . ($user['name'] ?? '?') . "\n\n";
+echo "User          : " . ($user['name'] ?? '?') . "\n";
+echo "APP_URL       : " . APP_URL . "\n";
+echo "HTTPS detect  : " . ($_SERVER['HTTPS'] ?? 'not set') . "\n";
+echo "Request URI   : " . ($_SERVER['REQUEST_URI'] ?? '?') . "\n";
+echo "Request method: " . $_SERVER['REQUEST_METHOD'] . "\n\n";
 
 // ── 1. Test POST receipt ──────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
