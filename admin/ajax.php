@@ -154,8 +154,28 @@ switch ($action) {
         );
         echo json_encode([
             'success' => $ok,
-            'message' => $ok ? 'Test email sent to ' . $toEmail : 'Failed to send. Check your SMTP credentials and host.',
+            'message' => $ok ? "Test email sent to {$toEmail}" : 'Failed to send. Check your SMTP credentials and host.',
         ]);
+        break;
+
+    // ── Delete subscription plan ─────────────────────────────────
+    case 'delete_plan':
+        $id = (int)($input['id'] ?? 0);
+        if (!$id) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid plan ID.']);
+            break;
+        }
+        // Block delete if any active/trial subscriptions use this plan
+        $inUse = $pdo->prepare("SELECT COUNT(*) FROM subscriptions WHERE plan_id=? AND status IN ('active','trial')");
+        $inUse->execute([$id]);
+        if ((int)$inUse->fetchColumn() > 0) {
+            echo json_encode(['success' => false, 'error' => 'Cannot delete — plan has active subscribers. Deactivate it instead.']);
+            break;
+        }
+        $pdo->prepare("DELETE FROM subscription_plans WHERE id=?")->execute([$id]);
+        logActivity('delete_plan', 'admin', "Deleted subscription plan #$id");
+        echo json_encode(['success' => true]);
         break;
 
     // ── Test KopoKopo connection ─────────────────────────────────
