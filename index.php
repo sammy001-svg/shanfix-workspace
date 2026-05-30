@@ -45,14 +45,19 @@ $moduleFeatures = [
 // Build JS-ready module map
 $moduleMap = [];
 foreach ($modules as $m) {
+    $kesMo  = (float)$m['monthly_price'];
+    $kesAnn = (float)$m['annual_price'];
     $moduleMap[$m['slug']] = [
-        'name'     => $m['name'],
-        'desc'     => $m['description'],
-        'icon'     => $m['icon'],
-        'color'    => $m['color'],
-        'category' => $m['category'],
-        'price'    => (float)$m['monthly_price'],
-        'features' => $moduleFeatures[$m['slug']] ?? [],
+        'name'        => $m['name'],
+        'desc'        => $m['description'],
+        'icon'        => $m['icon'],
+        'color'       => $m['color'],
+        'category'    => $m['category'],
+        'price'       => $kesMo,                                          // KES monthly (legacy)
+        'price_ann'   => $kesAnn,                                         // KES annual
+        'price_usd'   => $kesMo  > 0 ? round($kesMo  / $usdRate, 2) : 0, // USD monthly
+        'price_ann_usd'=> $kesAnn > 0 ? round($kesAnn / $usdRate, 2) : 0, // USD annual
+        'features'    => $moduleFeatures[$m['slug']] ?? [],
     ];
 }
 
@@ -971,11 +976,27 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
     <div class="text-center mb-4 reveal">
       <span class="od-section-eyebrow"><?=count($modules)?> Modules Available</span>
       <h2 class="od-section-title">Choose the Right Modules<br>for Your Business</h2>
-      <p class="od-section-sub">Each module is a complete, production-ready solution. Combine multiple for a full ERP experience.</p>
+      <p class="od-section-sub" id="modulesSub">Each module is a complete, production-ready solution. Combine multiple for a full ERP experience.</p>
+
+      <!-- Currency toggle — synced with the pricing section toggle -->
+      <div class="d-flex align-items-center justify-content-center gap-2 mt-3">
+        <span style="font-size:.8rem;color:#94a3b8;font-weight:600">Prices in:</span>
+        <div style="display:inline-flex;background:#f1f5f9;border:1.5px solid #e2e8f0;border-radius:999px;overflow:hidden">
+          <button id="modBtnUSD" class="mod-cur-btn active" onclick="setCurrency('USD')" style="border:none;background:transparent;padding:.28rem .9rem;font-size:.78rem;font-weight:700;color:#64748b;cursor:pointer;transition:all .18s;border-radius:999px">
+            $ USD
+          </button>
+          <button id="modBtnKES" class="mod-cur-btn" onclick="setCurrency('KES')" style="border:none;background:transparent;padding:.28rem .9rem;font-size:.78rem;font-weight:700;color:#64748b;cursor:pointer;transition:all .18s;border-radius:999px">
+            KES
+          </button>
+        </div>
+      </div>
     </div>
 
     <div class="row g-3">
-      <?php foreach($modules as $m): ?>
+      <?php foreach($modules as $m):
+        $kesMo = (float)$m['monthly_price'];
+        $usdMo = $kesMo > 0 ? round($kesMo / $usdRate, 2) : 0;
+      ?>
       <div class="col-6 col-md-4 col-lg-3 reveal">
         <div class="mod-tile" role="button" tabindex="0"
              onclick="openModuleModal('<?=e($m['slug'])?>')"
@@ -986,7 +1007,11 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
           </div>
           <h6><?=e($m['name'])?></h6>
           <p><?=e(mb_substr($m['description'],0,68))?>…</p>
-          <span class="price-pill">From <?=formatCurrency((float)$m['monthly_price'])?>/mo</span>
+          <span class="price-pill mod-price-pill"
+                data-usd="<?= number_format($usdMo, 2) ?>"
+                data-kes="<?= number_format($kesMo, 0, '.', ',') ?>">
+            From $ <?= number_format($usdMo, 2) ?>/mo
+          </span>
         </div>
       </div>
       <?php endforeach; ?>
@@ -1578,6 +1603,23 @@ function updatePricing() {
       ? 'Billed annually — ' + curFull + ' ' + annTot + '/yr' + (save > 0 ? ' · Save ' + save + '%' : '')
       : 'No long-term commitment';
   });
+
+  // ── Module tiles: update price pills ──────────────────────────
+  document.querySelectorAll('.mod-price-pill').forEach(function(el) {
+    el.textContent = isUSD
+      ? 'From $ '   + el.dataset.usd + '/mo'
+      : 'From KES ' + el.dataset.kes + '/mo';
+  });
+
+  // Keep both currency toggles in sync (modules section + plans section)
+  var modUSD = document.getElementById('modBtnUSD');
+  var modKES = document.getElementById('modBtnKES');
+  if (modUSD && modKES) {
+    var activeStyle   = 'background:#0B2D4E;color:#fff;border-radius:999px';
+    var inactiveStyle = 'background:transparent;color:#64748b;border-radius:999px';
+    modUSD.style.cssText = (isUSD  ? activeStyle : inactiveStyle) + ';border:none;padding:.28rem .9rem;font-size:.78rem;font-weight:700;cursor:pointer;transition:all .18s';
+    modKES.style.cssText = (!isUSD ? activeStyle : inactiveStyle) + ';border:none;padding:.28rem .9rem;font-size:.78rem;font-weight:700;cursor:pointer;transition:all .18s';
+  }
 }
 
 function setCurrency(cur) {
@@ -1607,8 +1649,23 @@ function openModuleModal(slug) {
   document.getElementById('mmCat').textContent  = m.category;
   document.getElementById('mmName').textContent = m.name;
   document.getElementById('mmDesc').textContent = m.desc;
-  document.getElementById('mmPrice').textContent =
-    'KES ' + Number(m.price).toLocaleString('en-KE', {minimumFractionDigits: 0});
+  // Show primary price in active currency, secondary below
+  var isUSD    = (activeCur === 'USD');
+  var primary  = isUSD
+    ? '$ '   + Number(m.price_usd).toFixed(2)    + '/mo'
+    : 'KES ' + Number(m.price).toLocaleString('en-KE') + '/mo';
+  var secondary = isUSD
+    ? '≈ KES ' + Number(m.price).toLocaleString('en-KE') + '/mo'
+    : '≈ $ '  + Number(m.price_usd).toFixed(2) + '/mo';
+  var annLine = (m.price_ann > 0)
+    ? (isUSD
+        ? ' · $ ' + Number(m.price_ann_usd).toFixed(2) + '/yr (≈ KES ' + Number(m.price_ann).toLocaleString('en-KE') + ')'
+        : ' · KES ' + Number(m.price_ann).toLocaleString('en-KE') + '/yr (≈ $ ' + Number(m.price_ann_usd).toFixed(2) + ')')
+    : '';
+  document.getElementById('mmPrice').innerHTML =
+    '<span class="fw-bold">' + primary + '</span>' +
+    '<span class="text-muted small ms-2">' + secondary + '</span>' +
+    (annLine ? '<div class="text-muted small mt-1" style="font-size:.75rem">' + annLine + '</div>' : '');
 
   // Feature list — 2-column grid
   document.getElementById('mmFeatures').innerHTML = (m.features || []).map(f => `
