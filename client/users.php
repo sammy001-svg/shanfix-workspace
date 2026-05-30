@@ -746,6 +746,26 @@ $allModuleRoleDefs = getModuleRoleDefinitions();
   font-size: .9rem;
 }
 .cursor-pointer { cursor: pointer; }
+
+/*
+ * Fix: <form> wraps modal-body + modal-footer, breaking Bootstrap's
+ * modal-dialog-scrollable flex layout. Make the form a proper flex
+ * child of modal-content so body scrolls and footer stays visible.
+ */
+#addModal  .modal-content > form,
+#editModal .modal-content > form {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#addModal  .modal-content > form > .modal-body,
+#editModal .modal-content > form > .modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
 </style>
 
 <?php $extraJs = <<<'JS'
