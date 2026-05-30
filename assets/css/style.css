@@ -312,6 +312,7 @@ a:hover { color: var(--green-dark); }
   background: linear-gradient(135deg, rgba(26,138,78,.05), transparent);
   opacity: 0;
   transition: var(--transition);
+  pointer-events: none;
 }
 
 .module-card:hover {
