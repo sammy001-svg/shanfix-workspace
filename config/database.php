@@ -8,8 +8,40 @@ define('DB_CHARSET', 'utf8mb4');
 
 define('APP_NAME',    'OrbitDesk Workspace');
 define('APP_TAGLINE', 'All-in-One Business Management Platform');
-define('APP_URL',     'http://localhost/shanfix-workspace');   // Change for production
 define('APP_VERSION', '1.0.0');
+
+// ── APP_URL: auto-detected from the HTTP request + filesystem ──────
+// Works on localhost (with or without subdirectory) AND any cPanel domain.
+// No manual change needed when deploying — just upload files and go.
+if (!defined('APP_URL')) {
+    // 1. Protocol — check multiple headers that cPanel load-balancers use
+    $_proto = 'http';
+    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+        $_proto = 'https';
+    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https') {
+        $_proto = 'https';
+    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_SSL']) && strtolower($_SERVER['HTTP_X_FORWARDED_SSL']) === 'on') {
+        $_proto = 'https';
+    } elseif (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443) {
+        $_proto = 'https';
+    }
+
+    // 2. Hostname (e.g. "orbitdesk.net" or "localhost")
+    $_host = rtrim($_SERVER['HTTP_HOST'] ?? 'localhost', '/');
+
+    // 3. Base path — compares the app root directory to DOCUMENT_ROOT.
+    //    config/database.php lives in /config/, so app root = one level up.
+    $_docRoot = rtrim((string)realpath($_SERVER['DOCUMENT_ROOT'] ?? ''), '/\\');
+    $_appRoot = rtrim((string)realpath(__DIR__ . '/..'),                   '/\\');
+    $_base    = '';
+    if ($_docRoot !== '' && str_starts_with($_appRoot, $_docRoot)) {
+        $_base = str_replace('\\', '/', substr($_appRoot, strlen($_docRoot)));
+    }
+    if ($_base === '/') $_base = '';
+
+    define('APP_URL', rtrim($_proto . '://' . $_host . $_base, '/'));
+    unset($_proto, $_host, $_docRoot, $_appRoot, $_base);
+}
 define('APP_YEAR',    date('Y'));
 define('CURRENCY',    'KES');
 define('CURRENCY_SYMBOL', 'KES ');
