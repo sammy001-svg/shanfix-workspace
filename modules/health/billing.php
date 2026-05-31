@@ -8,6 +8,7 @@ $moduleNav   = [
     ['url'=>'patients.php',      'icon'=>'fas fa-procedures',          'label'=>'Patients'],
     ['url'=>'appointments.php',  'icon'=>'fas fa-calendar-check',      'label'=>'Appointments'],
     ['url'=>'doctors.php',       'icon'=>'fas fa-user-md',             'label'=>'Doctors'],
+    ['url'=>'staff.php',         'icon'=>'fas fa-id-badge',            'label'=>'Clinical Staff'],
     ['url'=>'records.php',       'icon'=>'fas fa-file-medical',        'label'=>'Medical Records'],
     ['url'=>'vitals.php',        'icon'=>'fas fa-heartbeat',           'label'=>'Vital Signs'],
     ['url'=>'lab.php',           'icon'=>'fas fa-flask',               'label'=>'Laboratory'],
