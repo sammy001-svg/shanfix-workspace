@@ -1,4 +1,7 @@
 <?php
+// Force OPCache to reload this file so the CAST fix takes effect immediately
+if (function_exists('opcache_invalidate')) opcache_invalidate(__FILE__, true);
+
 // ── Bootstrap (no HTML yet) ──────────────────────────────────────
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../config/database.php';
