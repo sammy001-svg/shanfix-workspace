@@ -21,7 +21,7 @@ $expiringSoon = $pdo->query("
 $totalClients   = (int)countRows('organizations');
 $totalUsers     = (int)countRows('users', "role != 'super_admin'");
 $activeSubsRow  = (int)$pdo->query("SELECT COUNT(*) FROM subscriptions WHERE status IN ('active','trial')")->fetchColumn();
-$totalRevenue   = (float)$pdo->query("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status='paid'")->fetchColumn();
+$totalRevenue   = (float)$pdo->query("SELECT COALESCE(SUM(CAST(total AS DECIMAL(12,2))),0) FROM invoices WHERE status='paid'")->fetchColumn();
 $newClients30   = (int)$pdo->query("SELECT COUNT(*) FROM organizations WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetchColumn();
 $newClients60   = (int)$pdo->query("SELECT COUNT(*) FROM organizations WHERE created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) AND created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetchColumn();
 $clientGrowthPct = $newClients60 > 0 ? round(($newClients30 - $newClients60) / $newClients60 * 100, 1) : ($newClients30 > 0 ? 100 : 0);
@@ -33,8 +33,8 @@ $mrr = (float)$pdo->query("
 ")->fetchColumn();
 
 // This month vs last month revenue
-$thisMonthRev = (float)$pdo->query("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status='paid' AND YEAR(created_at)=YEAR(NOW()) AND MONTH(created_at)=MONTH(NOW())")->fetchColumn();
-$lastMonthRev = (float)$pdo->query("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status='paid' AND YEAR(created_at)=YEAR(DATE_SUB(NOW(),INTERVAL 1 MONTH)) AND MONTH(created_at)=MONTH(DATE_SUB(NOW(),INTERVAL 1 MONTH))")->fetchColumn();
+$thisMonthRev = (float)$pdo->query("SELECT COALESCE(SUM(CAST(total AS DECIMAL(12,2))),0) FROM invoices WHERE status='paid' AND YEAR(created_at)=YEAR(NOW()) AND MONTH(created_at)=MONTH(NOW())")->fetchColumn();
+$lastMonthRev = (float)$pdo->query("SELECT COALESCE(SUM(CAST(total AS DECIMAL(12,2))),0) FROM invoices WHERE status='paid' AND YEAR(created_at)=YEAR(DATE_SUB(NOW(),INTERVAL 1 MONTH)) AND MONTH(created_at)=MONTH(DATE_SUB(NOW(),INTERVAL 1 MONTH))")->fetchColumn();
 $revChangePct = $lastMonthRev > 0 ? round(($thisMonthRev - $lastMonthRev) / $lastMonthRev * 100, 1) : ($thisMonthRev > 0 ? 100 : 0);
 
 // Open support tickets
@@ -55,7 +55,7 @@ try {
 $invPipeline = ['paid' => 0, 'sent' => 0, 'pending' => 0, 'overdue' => 0];
 $invAmounts  = ['paid' => 0, 'sent' => 0, 'pending' => 0, 'overdue' => 0];
 try {
-    foreach ($pdo->query("SELECT status, COUNT(*) as cnt, COALESCE(SUM(total),0) as amt FROM invoices GROUP BY status")->fetchAll() as $r) {
+    foreach ($pdo->query("SELECT status, COUNT(*) as cnt, COALESCE(SUM(CAST(total AS DECIMAL(12,2))),0) as amt FROM invoices GROUP BY status")->fetchAll() as $r) {
         if (isset($invPipeline[$r['status']])) {
             $invPipeline[$r['status']] = (int)$r['cnt'];
             $invAmounts[$r['status']]  = (float)$r['amt'];

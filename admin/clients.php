@@ -75,7 +75,7 @@ if ($viewId) {
     $orgUsers = $orgUsers->fetchAll();
 
     // Recent invoices
-    $orgInvoices = $pdo->prepare("SELECT * FROM invoices WHERE org_id=? ORDER BY created_at DESC LIMIT 8");
+    $orgInvoices = $pdo->prepare("SELECT id, invoice_number, CAST(amount AS DECIMAL(12,2)) AS amount, CAST(tax AS DECIMAL(12,2)) AS tax, CAST(total AS DECIMAL(12,2)) AS total, status, due_date, paid_at, notes, created_at FROM invoices WHERE org_id=? ORDER BY created_at DESC LIMIT 8");
     $orgInvoices->execute([$viewId]);
     $orgInvoices = $orgInvoices->fetchAll();
 

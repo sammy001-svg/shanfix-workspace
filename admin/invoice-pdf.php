@@ -14,7 +14,12 @@ if (!$id) { http_response_code(404); die('<p style="font-family:sans-serif;paddi
 
 // Fetch invoice — admin can view any org's invoice
 $stmt = $pdo->prepare("
-    SELECT i.*,
+    SELECT i.id, i.org_id, i.subscription_id, i.module_id,
+           i.invoice_number, i.status,
+           CAST(i.amount AS DECIMAL(12,2)) AS amount,
+           CAST(i.tax    AS DECIMAL(12,2)) AS tax,
+           CAST(i.total  AS DECIMAL(12,2)) AS total,
+           i.due_date, i.paid_at, i.notes, i.created_at,
            o.name    AS org_name,
            o.email   AS org_email,
            o.phone   AS org_phone,

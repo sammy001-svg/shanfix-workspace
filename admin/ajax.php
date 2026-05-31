@@ -313,7 +313,12 @@ switch ($action) {
             break;
         }
         $invRow = $pdo->prepare("
-            SELECT i.*, o.name AS org_name, o.email AS org_email
+            SELECT i.id, i.invoice_number,
+                   CAST(i.amount AS DECIMAL(12,2)) AS amount,
+                   CAST(i.tax    AS DECIMAL(12,2)) AS tax,
+                   CAST(i.total  AS DECIMAL(12,2)) AS total,
+                   i.status, i.due_date, i.notes,
+                   o.name AS org_name, o.email AS org_email
             FROM invoices i JOIN organizations o ON i.org_id = o.id
             WHERE i.id = ?
         ");
@@ -381,7 +386,12 @@ switch ($action) {
         require_once __DIR__ . '/../includes/mailer.php';
         $ph       = implode(',', array_fill(0, count($ids), '?'));
         $bulkStmt = $pdo->prepare("
-            SELECT i.*, o.name AS org_name, o.email AS org_email
+            SELECT i.id, i.invoice_number,
+                   CAST(i.amount AS DECIMAL(12,2)) AS amount,
+                   CAST(i.tax    AS DECIMAL(12,2)) AS tax,
+                   CAST(i.total  AS DECIMAL(12,2)) AS total,
+                   i.status, i.due_date, i.notes,
+                   o.name AS org_name, o.email AS org_email
             FROM invoices i JOIN organizations o ON i.org_id = o.id
             WHERE i.id IN ($ph) AND i.status != 'paid'
         ");

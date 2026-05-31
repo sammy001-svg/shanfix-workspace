@@ -84,12 +84,12 @@ $mrr = (float)$pdo->query("
 $arr = $mrr * 12;
 
 $revenueThisMonth = (float)$pdo->query("
-    SELECT COALESCE(SUM(total),0) FROM invoices
+    SELECT COALESCE(SUM(CAST(total AS DECIMAL(12,2))),0) FROM invoices
     WHERE status='paid' AND YEAR(paid_at)=YEAR(CURDATE()) AND MONTH(paid_at)=MONTH(CURDATE())
 ")->fetchColumn();
 
 $revenueLastMonth = (float)$pdo->query("
-    SELECT COALESCE(SUM(total),0) FROM invoices
+    SELECT COALESCE(SUM(CAST(total AS DECIMAL(12,2))),0) FROM invoices
     WHERE status='paid' AND YEAR(paid_at)=YEAR(DATE_SUB(CURDATE(),INTERVAL 1 MONTH))
       AND MONTH(paid_at)=MONTH(DATE_SUB(CURDATE(),INTERVAL 1 MONTH))
 ")->fetchColumn();
@@ -98,9 +98,9 @@ $revenueGrowth = $revenueLastMonth > 0
     ? round(($revenueThisMonth - $revenueLastMonth) / $revenueLastMonth * 100, 1)
     : 0;
 
-$totalRevenue   = (float)$pdo->query("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status='paid'")->fetchColumn();
-$outstanding    = (float)$pdo->query("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status IN ('draft','sent')")->fetchColumn();
-$overdue        = (float)$pdo->query("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status='overdue'")->fetchColumn();
+$totalRevenue   = (float)$pdo->query("SELECT COALESCE(SUM(CAST(total AS DECIMAL(12,2))),0) FROM invoices WHERE status='paid'")->fetchColumn();
+$outstanding    = (float)$pdo->query("SELECT COALESCE(SUM(CAST(total AS DECIMAL(12,2))),0) FROM invoices WHERE status IN ('draft','sent')")->fetchColumn();
+$overdue        = (float)$pdo->query("SELECT COALESCE(SUM(CAST(total AS DECIMAL(12,2))),0) FROM invoices WHERE status='overdue'")->fetchColumn();
 $activeClients  = (int)$pdo->query("SELECT COUNT(DISTINCT org_id) FROM subscriptions WHERE status='active'")->fetchColumn();
 $trialClients   = (int)$pdo->query("SELECT COUNT(DISTINCT org_id) FROM subscriptions WHERE status='trial'")->fetchColumn();
 $totalClients   = (int)$pdo->query("SELECT COUNT(*) FROM organizations")->fetchColumn();
