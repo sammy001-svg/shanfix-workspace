@@ -1,12 +1,7 @@
 <?php
 /**
- * DIAGNOSTIC & REPAIR TOOL — delete this file after running.
+ * DIAGNOSTIC & REPAIR TOOL — delete after use.
  * Access: https://orbitdesk.net/admin/fix-invoice-tax.php
- *
- * Fixes:
- *  1. Corrupted invoice_tax_rate system setting
- *  2. Module monthly/annual prices that were accidentally set to huge values
- *  3. Voids unpaid invoices whose total exceeds KES 999,999
  */
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../config/database.php';
@@ -16,111 +11,106 @@ requireSuperAdmin();
 $log     = [];
 $actions = [];
 
-// ── Correct module seed prices (source of truth from schema) ─────────────────
-$correctPrices = [
-    'accounting'    => ['monthly' => 2500,  'annual' => 25000],
-    'crm'           => ['monthly' => 2000,  'annual' => 20000],
-    'sales'         => ['monthly' => 2000,  'annual' => 20000],
-    'meetings'      => ['monthly' => 1500,  'annual' => 15000],
-    'school'        => ['monthly' => 3500,  'annual' => 35000],
-    'health'        => ['monthly' => 3500,  'annual' => 35000],
-    'pos'           => ['monthly' => 2500,  'annual' => 25000],
-    'sacco'         => ['monthly' => 4000,  'annual' => 40000],
-    'rental'        => ['monthly' => 3000,  'annual' => 30000],
-    'church'        => ['monthly' => 2000,  'annual' => 20000],
-    'finance'       => ['monthly' => 2500,  'annual' => 25000],
-    'hotel'         => ['monthly' => 4000,  'annual' => 40000],
-    'salon'         => ['monthly' => 2000,  'annual' => 20000],
-    'retail'        => ['monthly' => 3000,  'annual' => 30000],
-    'tour'          => ['monthly' => 3000,  'annual' => 30000],
-    'events'        => ['monthly' => 2500,  'annual' => 25000],
-    'manufacturing' => ['monthly' => 4500,  'annual' => 45000],
-    'hrm'           => ['monthly' => 3500,  'annual' => 35000],
-    'caryard'       => ['monthly' => 3000,  'annual' => 30000],
-    'shopping-mall' => ['monthly' => 5000,  'annual' => 50000],
-    'courier'       => ['monthly' => 3000,  'annual' => 30000],
-    'driving'       => ['monthly' => 4500,  'annual' => 45000],
+// ── Correct seed prices ───────────────────────────────────────────────────────
+$correctModPrices = [
+    'accounting'=>['mo'=>2500,'an'=>25000],'crm'=>['mo'=>2000,'an'=>20000],
+    'sales'=>['mo'=>2000,'an'=>20000],'meetings'=>['mo'=>1500,'an'=>15000],
+    'school'=>['mo'=>3500,'an'=>35000],'health'=>['mo'=>3500,'an'=>35000],
+    'pos'=>['mo'=>2500,'an'=>25000],'sacco'=>['mo'=>4000,'an'=>40000],
+    'rental'=>['mo'=>3000,'an'=>30000],'church'=>['mo'=>2000,'an'=>20000],
+    'finance'=>['mo'=>2500,'an'=>25000],'hotel'=>['mo'=>4000,'an'=>40000],
+    'salon'=>['mo'=>2000,'an'=>20000],'retail'=>['mo'=>3000,'an'=>30000],
+    'tour'=>['mo'=>3000,'an'=>30000],'events'=>['mo'=>2500,'an'=>25000],
+    'manufacturing'=>['mo'=>4500,'an'=>45000],'hrm'=>['mo'=>3500,'an'=>35000],
+    'caryard'=>['mo'=>3000,'an'=>30000],'shopping-mall'=>['mo'=>5000,'an'=>50000],
+    'courier'=>['mo'=>3000,'an'=>30000],'driving'=>['mo'=>4500,'an'=>45000],
 ];
 
-// ── 1. Check & fix invoice_tax_rate ──────────────────────────────────────────
+// ── 1. Tax rate ───────────────────────────────────────────────────────────────
 $currentRate = getSetting('invoice_tax_rate', '');
 $rateFloat   = ($currentRate === '') ? null : (float)$currentRate;
-
-$log[] = "invoice_tax_rate stored value : \"" . ($currentRate === '' ? '(not set)' : $currentRate) . "\"";
-$log[] = "invoice_tax_rate as float     : " . ($rateFloat === null ? '— using default 16' : $rateFloat);
-
+$log[] = "invoice_tax_rate = \"" . ($currentRate ?: '(not set)') . "\" → " . ($rateFloat ?? 'default 16') . "%";
 if ($rateFloat === null || $rateFloat < 0 || $rateFloat > 100) {
     saveSetting('invoice_tax_rate', '16');
-    $log[] = "⚠️  RESET to 16% (was: " . ($rateFloat ?? 'not set') . "%)";
+    $log[] = "⚠️  RESET to 16%";
 } else {
-    $log[] = "✅  invoice_tax_rate OK ({$rateFloat}%)";
+    $log[] = "✅  Tax rate OK";
 }
 
-// ── 2. Check module prices ───────────────────────────────────────────────────
-$maxAllowed = 999999; // KES — anything above this is clearly wrong
-try {
-    $mods = $pdo->query("SELECT id, slug, name, monthly_price, annual_price FROM modules ORDER BY sort_order")->fetchAll();
-} catch (Throwable $e) { $mods = []; $log[] = "ERROR reading modules: " . $e->getMessage(); }
+// ── 2. Module prices ──────────────────────────────────────────────────────────
+try { $mods = $pdo->query("SELECT id,slug,name,monthly_price,annual_price FROM modules ORDER BY sort_order")->fetchAll(); }
+catch (Throwable $e) { $mods=[]; }
+$badMods = array_filter($mods, fn($m) => (float)$m['monthly_price'] > 999999 || (float)$m['annual_price'] > 11999988);
+$log[] = count($badMods) . " module(s) with abnormal prices";
+if (empty($badMods)) $log[] = "✅  Module prices OK";
 
-$badMods = [];
-foreach ($mods as $m) {
-    $mo = (float)$m['monthly_price'];
-    $an = (float)$m['annual_price'];
-    if ($mo > $maxAllowed || $an > $maxAllowed * 12) {
-        $badMods[] = $m;
-        $log[] = "⚠️  MODULE [{$m['slug']}] '{$m['name']}' has WRONG prices: monthly=KES " . number_format($mo, 2) . "  annual=KES " . number_format($an, 2);
-    }
-}
-if (empty($badMods)) $log[] = "✅  All module prices are within normal range.";
+// ── 3. Subscription plan prices ───────────────────────────────────────────────
+try { $plans = $pdo->query("SELECT id,name,price_monthly,price_annual FROM subscription_plans ORDER BY price_monthly")->fetchAll(); }
+catch (Throwable $e) { $plans=[]; }
+$badPlans = array_filter($plans, fn($p) => (float)$p['price_monthly'] > 999999 || (float)$p['price_annual'] > 11999988);
+$log[] = count($badPlans) . " plan(s) with abnormal prices";
+if (empty($badPlans)) $log[] = "✅  Plan prices OK";
+else foreach ($badPlans as $p) $log[] = "  ⚠️  Plan [{$p['name']}]: monthly=" . number_format((float)$p['price_monthly']) . " annual=" . number_format((float)$p['price_annual']);
 
-// ── 3. Check invoices with total > 999,999 ───────────────────────────────────
+// ── 4. Bad invoices — check amount OR tax OR total ────────────────────────────
 try {
     $badInvoices = $pdo->query("
-        SELECT i.id, i.invoice_number, i.org_id, i.amount, i.tax, i.total, i.status, i.created_at,
-               o.name AS org_name
+        SELECT i.id, i.invoice_number, i.amount, i.tax, i.total,
+               i.status, i.created_at, o.name AS org_name
         FROM invoices i
         LEFT JOIN organizations o ON i.org_id = o.id
-        WHERE i.total > 999999
-        ORDER BY i.total DESC LIMIT 100
+        WHERE i.amount > 999999 OR i.tax > 999999 OR i.total > 999999
+        ORDER BY i.created_at DESC LIMIT 100
     ")->fetchAll();
-} catch (Throwable $e) { $badInvoices = []; $log[] = "ERROR reading invoices: " . $e->getMessage(); }
+} catch (Throwable $e) { $badInvoices=[]; }
+$log[] = count($badInvoices) . " invoice(s) with any column (amount/tax/total) > KES 999,999";
 
-$log[] = count($badInvoices) . " invoice(s) found with total > KES 999,999";
+// ── 5. All recent invoices (last 20) — to see actual values ──────────────────
+try {
+    $recentInvoices = $pdo->query("
+        SELECT i.id, i.invoice_number, i.amount, i.tax, i.total,
+               i.status, i.created_at, o.name AS org_name
+        FROM invoices i
+        LEFT JOIN organizations o ON i.org_id = o.id
+        ORDER BY i.created_at DESC LIMIT 20
+    ")->fetchAll();
+} catch (Throwable $e) { $recentInvoices=[]; }
 
-// ── POST: apply fixes ────────────────────────────────────────────────────────
+// ── POST: apply fixes ─────────────────────────────────────────────────────────
 $fixed = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $do = $_POST['do'] ?? '';
 
-    // Reset bad module prices
-    if ($do === 'fix_prices' && !empty($badMods)) {
+    if ($do === 'fix_mod_prices' && !empty($badMods)) {
         foreach ($badMods as $m) {
-            $slug = $m['slug'];
-            if (isset($correctPrices[$slug])) {
-                $mo = $correctPrices[$slug]['monthly'];
-                $an = $correctPrices[$slug]['annual'];
-            } else {
-                $mo = 2000; $an = 20000; // safe generic default
-            }
-            $pdo->prepare("UPDATE modules SET monthly_price=?, annual_price=? WHERE id=?")
-                ->execute([$mo, $an, $m['id']]);
-            $fixed[] = "Reset [{$m['slug']}] monthly=KES {$mo}  annual=KES {$an}";
-            $log[]   = "✅  FIXED [{$m['slug']}] → monthly=KES {$mo}  annual=KES {$an}";
+            $p = $correctModPrices[$m['slug']] ?? ['mo'=>2000,'an'=>20000];
+            $pdo->prepare("UPDATE modules SET monthly_price=?,annual_price=? WHERE id=?")->execute([$p['mo'],$p['an'],$m['id']]);
+            $fixed[] = "Fixed module [{$m['slug']}]: monthly=KES {$p['mo']} annual=KES {$p['an']}";
         }
     }
-
-    // Void bad invoices
+    if ($do === 'fix_plan_prices' && !empty($badPlans)) {
+        foreach ($badPlans as $p) {
+            // Reset to schema defaults
+            $defaults = [
+                'Starter'      => ['mo'=>4999,  'an'=>49990],
+                'Professional' => ['mo'=>12999, 'an'=>129990],
+                'Enterprise'   => ['mo'=>29999, 'an'=>299990],
+            ];
+            $def = $defaults[$p['name']] ?? ['mo'=>4999,'an'=>49990];
+            $pdo->prepare("UPDATE subscription_plans SET price_monthly=?,price_annual=? WHERE id=?")->execute([$def['mo'],$def['an'],$p['id']]);
+            $fixed[] = "Fixed plan [{$p['name']}]: monthly=KES {$def['mo']} annual=KES {$def['an']}";
+        }
+    }
     if ($do === 'void_invoices' && !empty($badInvoices)) {
-        $voided = 0;
+        $n = 0;
         foreach ($badInvoices as $inv) {
-            if (in_array($inv['status'], ['draft','sent','overdue'])) {
-                $pdo->prepare("UPDATE invoices SET status='cancelled', notes=CONCAT(IFNULL(notes,''),' [VOIDED: abnormal total KES ".number_format((float)$inv['total'],0)."]') WHERE id=?")
-                    ->execute([$inv['id']]);
-                $voided++;
-                $fixed[] = "Voided invoice {$inv['invoice_number']} (was KES " . number_format((float)$inv['total'], 2) . ")";
+            if (in_array($inv['status'],['draft','sent','overdue'])) {
+                $pdo->prepare("UPDATE invoices SET status='cancelled', notes=CONCAT(IFNULL(notes,''),' [AUTO-VOIDED abnormal amount]') WHERE id=?")->execute([$inv['id']]);
+                $fixed[] = "Voided invoice {$inv['invoice_number']}";
+                $n++;
             }
         }
-        $log[] = "Voided {$voided} unpaid invoice(s) with abnormal totals.";
+        $fixed[] = "Total voided: $n";
     }
 }
 ?>
@@ -128,111 +118,166 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Billing Repair Tool — <?= e(APP_NAME) ?></title>
+<title>Billing Repair — <?= e(APP_NAME) ?></title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  .val-bad { color:#dc3545; font-weight:700; }
+  .val-ok  { color:#198754; }
+  pre { font-size:.78rem; }
+</style>
 </head>
-<body class="bg-light p-4">
-<div class="container" style="max-width:960px">
-  <div class="card shadow">
-    <div class="card-header bg-danger text-white d-flex align-items-center justify-content-between">
-      <strong><i class="fas fa-wrench me-2"></i>Billing Repair Tool — <?= e(APP_NAME) ?></strong>
-      <span class="badge bg-warning text-dark">Delete this file when done</span>
-    </div>
-    <div class="card-body">
-
-      <?php if (!empty($fixed)): ?>
-      <div class="alert alert-success">
-        <strong>Actions taken:</strong>
-        <ul class="mb-0 mt-1">
-          <?php foreach ($fixed as $f): ?><li><?= htmlspecialchars($f) ?></li><?php endforeach; ?>
-        </ul>
-      </div>
-      <?php endif; ?>
-
-      <!-- Diagnosis log -->
-      <h6 class="fw-bold">Diagnosis</h6>
-      <pre class="bg-dark text-light p-3 rounded mb-4" style="font-size:.8rem;white-space:pre-wrap"><?= htmlspecialchars(implode("\n", $log)) ?></pre>
-
-      <!-- Module prices -->
-      <div class="row g-3 mb-4">
-        <div class="col-lg-6">
-          <h6 class="fw-bold">All Module Prices (current DB values)</h6>
-          <div class="table-responsive" style="max-height:340px;overflow-y:auto">
-            <table class="table table-sm table-bordered mb-0">
-              <thead class="table-dark sticky-top"><tr><th>Module</th><th>Monthly (KES)</th><th>Annual (KES)</th><th></th></tr></thead>
-              <tbody>
-                <?php foreach ($mods as $m):
-                  $mo = (float)$m['monthly_price'];
-                  $an = (float)$m['annual_price'];
-                  $isWrong = $mo > $maxAllowed || $an > $maxAllowed * 12;
-                ?>
-                <tr class="<?= $isWrong ? 'table-danger fw-bold' : '' ?>">
-                  <td><?= htmlspecialchars($m['name']) ?></td>
-                  <td><?= number_format($mo, 2) ?><?= $isWrong ? ' ⚠️' : '' ?></td>
-                  <td><?= number_format($an, 2) ?><?= $isWrong ? ' ⚠️' : '' ?></td>
-                  <td><?= $isWrong ? '<span class="badge bg-danger">WRONG</span>' : '<span class="badge bg-success">OK</span>' ?></td>
-                </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
-          </div>
-          <?php if (!empty($badMods)): ?>
-          <form method="POST" class="mt-2" onsubmit="return confirm('Reset all highlighted module prices to the correct seed values?')">
-            <input type="hidden" name="do" value="fix_prices">
-            <button type="submit" class="btn btn-danger w-100 fw-bold">
-              Reset <?= count($badMods) ?> Wrong Module Price(s) to Correct Values
-            </button>
-          </form>
-          <?php endif; ?>
-        </div>
-
-        <!-- Bad invoices -->
-        <div class="col-lg-6">
-          <h6 class="fw-bold">Invoices with Abnormal Totals (> KES 999,999)</h6>
-          <?php if (empty($badInvoices)): ?>
-          <div class="alert alert-success py-2">No abnormal invoices found.</div>
-          <?php else: ?>
-          <div class="table-responsive" style="max-height:280px;overflow-y:auto">
-            <table class="table table-sm table-bordered mb-0">
-              <thead class="table-dark sticky-top"><tr><th>Invoice</th><th>Org</th><th>Total</th><th>Status</th></tr></thead>
-              <tbody>
-                <?php foreach ($badInvoices as $inv): ?>
-                <tr class="table-danger">
-                  <td><?= htmlspecialchars($inv['invoice_number']) ?></td>
-                  <td><?= htmlspecialchars($inv['org_name'] ?? '?') ?></td>
-                  <td>KES <?= number_format((float)$inv['total'], 2) ?></td>
-                  <td><?= htmlspecialchars($inv['status']) ?></td>
-                </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
-          </div>
-          <?php
-          $voidable = count(array_filter($badInvoices, fn($i) => in_array($i['status'],['draft','sent','overdue'])));
-          if ($voidable > 0): ?>
-          <form method="POST" class="mt-2" onsubmit="return confirm('Cancel <?= $voidable ?> unpaid invoice(s) with abnormal totals?')">
-            <input type="hidden" name="do" value="void_invoices">
-            <button type="submit" class="btn btn-danger w-100 fw-bold">
-              Void <?= $voidable ?> Unpaid Invoice(s) with Wrong Totals
-            </button>
-          </form>
-          <?php endif; ?>
-          <?php endif; ?>
-        </div>
-      </div>
-
-      <div class="alert alert-warning mb-0">
-        <strong>Step-by-step:</strong>
-        <ol class="mb-0 mt-1">
-          <li>If any module prices show <span class="badge bg-danger">WRONG</span> — click <em>Reset Module Prices</em> first.</li>
-          <li>If any invoices appear above — click <em>Void Invoices</em> to cancel them.</li>
-          <li>After both fixes, go to <strong>Admin → Modules</strong> and verify module prices look correct.</li>
-          <li><strong>Delete this file</strong> from your server: <code>admin/fix-invoice-tax.php</code></li>
-        </ol>
-      </div>
-
-    </div>
+<body class="bg-light p-3">
+<div class="container-fluid" style="max-width:1100px">
+<div class="card shadow">
+  <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+    <strong>Billing Repair Tool — <?= e(APP_NAME) ?></strong>
+    <span class="badge bg-warning text-dark">Delete after use</span>
   </div>
+  <div class="card-body">
+
+  <?php if ($fixed): ?>
+  <div class="alert alert-success"><strong>Done:</strong><ul class="mb-0 mt-1"><?php foreach($fixed as $f): ?><li><?= htmlspecialchars($f) ?></li><?php endforeach; ?></ul></div>
+  <?php endif; ?>
+
+  <div class="row g-3">
+
+    <!-- Diagnosis log -->
+    <div class="col-12">
+      <h6 class="fw-bold">Diagnosis</h6>
+      <pre class="bg-dark text-light p-2 rounded"><?= htmlspecialchars(implode("\n",$log)) ?></pre>
+    </div>
+
+    <!-- Module prices -->
+    <div class="col-md-4">
+      <h6 class="fw-bold">Module Prices</h6>
+      <div style="max-height:300px;overflow-y:auto">
+      <table class="table table-sm table-bordered mb-0">
+        <thead class="table-dark"><tr><th>Module</th><th>Monthly</th><th>Annual</th></tr></thead>
+        <tbody>
+        <?php foreach($mods as $m):
+          $mo=(float)$m['monthly_price']; $an=(float)$m['annual_price'];
+          $bad=$mo>999999||$an>11999988;
+        ?>
+        <?php $cls = $bad ? 'table-danger' : ''; $vcls = $bad ? 'val-bad' : 'val-ok'; ?>
+        <tr class="<?= $cls ?>">
+          <td style="font-size:.78rem"><?= htmlspecialchars($m['slug']) ?></td>
+          <td class="<?= $vcls ?>"><?= number_format($mo, 0) ?></td>
+          <td class="<?= $vcls ?>"><?= number_format($an, 0) ?></td>
+        </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+      </div>
+      <?php if (!empty($badMods)): ?>
+      <form method="POST" class="mt-2" onsubmit="return confirm('Reset module prices?')">
+        <input type="hidden" name="do" value="fix_mod_prices">
+        <button class="btn btn-danger btn-sm w-100">Fix <?=count($badMods)?> Module Price(s)</button>
+      </form>
+      <?php endif; ?>
+    </div>
+
+    <!-- Plan prices -->
+    <div class="col-md-4">
+      <h6 class="fw-bold">Subscription Plan Prices</h6>
+      <table class="table table-sm table-bordered mb-0">
+        <thead class="table-dark"><tr><th>Plan</th><th>Monthly</th><th>Annual</th></tr></thead>
+        <tbody>
+        <?php foreach($plans as $p):
+          $mo=(float)$p['price_monthly']; $an=(float)$p['price_annual'];
+          $bad=$mo>999999||$an>11999988;
+        ?>
+        <?php $cls = $bad ? 'table-danger' : ''; $vcls = $bad ? 'val-bad' : 'val-ok'; ?>
+        <tr class="<?= $cls ?>">
+          <td style="font-size:.78rem"><?= htmlspecialchars($p['name']) ?></td>
+          <td class="<?= $vcls ?>"><?= number_format($mo, 0) ?></td>
+          <td class="<?= $vcls ?>"><?= number_format($an, 0) ?></td>
+        </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+      <?php if (!empty($badPlans)): ?>
+      <form method="POST" class="mt-2" onsubmit="return confirm('Reset plan prices to defaults?')">
+        <input type="hidden" name="do" value="fix_plan_prices">
+        <button class="btn btn-danger btn-sm w-100">Fix <?=count($badPlans)?> Plan Price(s)</button>
+      </form>
+      <?php endif; ?>
+    </div>
+
+    <!-- Invoices with ANY bad column -->
+    <div class="col-md-4">
+      <h6 class="fw-bold">Bad Invoices (amount OR tax OR total &gt; 999,999)</h6>
+      <?php if (empty($badInvoices)): ?>
+      <div class="alert alert-success py-2 small">None found.</div>
+      <?php else: ?>
+      <div style="max-height:200px;overflow-y:auto">
+      <table class="table table-sm table-bordered mb-0">
+        <thead class="table-dark"><tr><th>#</th><th>Amt</th><th>Tax</th><th>Total</th><th>St</th></tr></thead>
+        <tbody>
+        <?php foreach($badInvoices as $inv): ?>
+        <tr class="table-danger">
+          <td style="font-size:.7rem"><?=htmlspecialchars($inv['invoice_number'])?></td>
+          <td class="val-bad" style="font-size:.7rem"><?=number_format((float)$inv['amount'],0)?></td>
+          <td class="val-bad" style="font-size:.7rem"><?=number_format((float)$inv['tax'],0)?></td>
+          <td class="val-bad" style="font-size:.7rem"><?=number_format((float)$inv['total'],0)?></td>
+          <td style="font-size:.7rem"><?=htmlspecialchars($inv['status'])?></td>
+        </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+      </div>
+      <?php
+      $voidable=count(array_filter($badInvoices,fn($i)=>in_array($i['status'],['draft','sent','overdue'])));
+      if($voidable>0): ?>
+      <form method="POST" class="mt-2" onsubmit="return confirm('Void <?=$voidable?> unpaid bad invoice(s)?')">
+        <input type="hidden" name="do" value="void_invoices">
+        <button class="btn btn-danger btn-sm w-100">Void <?=$voidable?> Invoice(s)</button>
+      </form>
+      <?php endif; ?>
+      <?php endif; ?>
+    </div>
+
+    <!-- ALL recent invoices — raw values -->
+    <div class="col-12">
+      <h6 class="fw-bold">Last 20 Invoices — Raw Database Values</h6>
+      <p class="text-muted small mb-2">This shows the ACTUAL numbers stored in the database. If any row has a suspiciously large Amount, Tax, or Total, that is the corrupted invoice.</p>
+      <div class="table-responsive">
+      <table class="table table-sm table-bordered mb-0">
+        <thead class="table-dark">
+          <tr><th>Invoice #</th><th>Organisation</th><th>Amount (raw)</th><th>Tax (raw)</th><th>Total (raw)</th><th>Status</th><th>Created</th></tr>
+        </thead>
+        <tbody>
+        <?php foreach($recentInvoices as $inv):
+          $isBadRow = (float)$inv['amount']>999999 || (float)$inv['tax']>999999 || (float)$inv['total']>999999;
+        ?>
+        <tr class="<?=$isBadRow?'table-danger fw-bold':''?>">
+          <td><?=htmlspecialchars($inv['invoice_number'])?></td>
+          <td><?=htmlspecialchars($inv['org_name']??'?')?></td>
+          <td class="<?=$isBadRow?'val-bad':''?>"><?=number_format((float)$inv['amount'],2)?></td>
+          <td class="<?=$isBadRow?'val-bad':''?>"><?=number_format((float)$inv['tax'],2)?></td>
+          <td class="<?=$isBadRow?'val-bad':''?>"><?=number_format((float)$inv['total'],2)?></td>
+          <td><?=htmlspecialchars($inv['status'])?></td>
+          <td style="font-size:.75rem"><?=htmlspecialchars($inv['created_at'])?></td>
+        </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+      </div>
+    </div>
+
+  </div><!-- /row -->
+
+  <div class="alert alert-warning mt-3 mb-0">
+    <strong>What to do:</strong>
+    <ol class="mb-0 mt-1 small">
+      <li>Check the "Last 20 Invoices" table — any row highlighted red is a problem invoice.</li>
+      <li>Check Plan Prices — if any plan shows a huge number, click <em>Fix Plan Prices</em>.</li>
+      <li>Click <em>Void Invoices</em> to cancel all bad unpaid invoices.</li>
+      <li><strong>Delete this file</strong> from your server when done.</li>
+    </ol>
+  </div>
+
+  </div><!-- /card-body -->
+</div>
 </div>
 </body>
 </html>
