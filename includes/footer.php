@@ -139,64 +139,38 @@ function toggleDarkMode() {
 })();
 </script>
 
-<!-- PWA: Service Worker registration + install prompt ───────────────────── -->
-<div id="pwaInstallBanner" style="display:none;position:fixed;bottom:16px;right:16px;z-index:9999;
-     background:#0B2D4E;color:white;border-radius:14px;padding:14px 18px;box-shadow:0 8px 24px rgba(0,0,0,.3);
-     max-width:320px;font-family:Segoe UI,Arial,sans-serif;font-size:.875rem">
-  <div class="d-flex align-items-center gap-2 mb-2">
-    <img src="<?= APP_URL ?>/api/pwa-icon.php?size=192" width="36" height="36" style="border-radius:8px" alt="">
-    <strong><?= APP_NAME ?></strong>
-  </div>
-  <p style="margin:0 0 10px;opacity:.85">Install <?= APP_NAME ?> on your device for faster access and offline support.</p>
-  <div class="d-flex gap-2">
-    <button id="pwaBtnInstall" style="background:#1A8A4E;color:white;border:none;padding:7px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-size:.82rem">
-      Install App
-    </button>
-    <button id="pwaBtnDismiss" style="background:rgba(255,255,255,.15);color:white;border:none;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:.82rem">
-      Not now
-    </button>
-  </div>
-</div>
+<!-- PWA: Service Worker registration (push notifications only — no asset caching) -->
 <script>
 (function () {
-    // Register service worker
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js', { scope: '/' })
-            .catch(e => console.warn('[SW] Registration failed:', e));
-    }
+    if (!('serviceWorker' in navigator)) return;
 
-    // Capture install prompt
-    let _deferredPrompt = null;
-    const banner = document.getElementById('pwaInstallBanner');
-    const btnInstall  = document.getElementById('pwaBtnInstall');
-    const btnDismiss  = document.getElementById('pwaBtnDismiss');
-
-    window.addEventListener('beforeinstallprompt', e => {
-        e.preventDefault();
-        _deferredPrompt = e;
-        // Show banner after 10 s if not already installed
-        if (!localStorage.getItem('pwaInstallDismissed')) {
-            setTimeout(() => { if (banner) banner.style.display = 'block'; }, 10000);
-        }
-    });
-
-    if (btnInstall) btnInstall.addEventListener('click', () => {
-        banner.style.display = 'none';
-        if (_deferredPrompt) {
-            _deferredPrompt.prompt();
-            _deferredPrompt.userChoice.then(() => { _deferredPrompt = null; });
-        }
-    });
-
-    if (btnDismiss) btnDismiss.addEventListener('click', () => {
-        banner.style.display = 'none';
-        localStorage.setItem('pwaInstallDismissed', '1');
-    });
+    // Register the SW. The new sw.js clears all old caches on install,
+    // fixing the layout-breaking stale-CSS bug for every existing user.
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then(reg => {
+            // If there is an existing broken SW, force it to update immediately.
+            if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            reg.addEventListener('updatefound', () => {
+                const newSW = reg.installing;
+                if (newSW) {
+                    newSW.addEventListener('statechange', () => {
+                        if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+                            // New SW installed — reload to get clean layout immediately.
+                            navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+                            window.location.reload();
+                        }
+                    });
+                }
+            });
+        })
+        .catch(e => console.warn('[SW] Registration failed:', e));
 
     // Update theme-color meta to match org branding
     const tmEl = document.getElementById('pwaThemeColor');
-    const rootColor = getComputedStyle(document.documentElement).getPropertyValue('--green').trim();
-    if (tmEl && rootColor) tmEl.setAttribute('content', rootColor);
+    if (tmEl) {
+        const rootColor = getComputedStyle(document.documentElement).getPropertyValue('--green').trim();
+        if (rootColor) tmEl.setAttribute('content', rootColor);
+    }
 })();
 </script>
 </body>
