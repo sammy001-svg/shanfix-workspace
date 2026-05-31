@@ -17,8 +17,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_export_csv'])) {
     if (!empty($ids)) {
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
         $expStmt = $pdo->prepare("
-            SELECT i.*, o.name AS org_name, o.email AS org_email
-            FROM invoices i JOIN organizations o ON i.org_id = o.id
+            SELECT
+                i.id, i.invoice_number,
+                CAST(i.amount AS DECIMAL(12,2)) AS amount,
+                CAST(i.tax    AS DECIMAL(12,2)) AS tax,
+                CAST(i.total  AS DECIMAL(12,2)) AS total,
+                i.status, i.due_date, i.paid_at, i.notes, i.created_at,
+                o.name AS org_name, o.email AS org_email
+            FROM invoices i
+            JOIN organizations o ON i.org_id = o.id
             WHERE i.id IN ($placeholders)
             ORDER BY i.created_at DESC
         ");
@@ -105,8 +112,24 @@ if ($fTo)     { $where[] = 'i.created_at <= ?';  $params[] = $fTo   . ' 23:59:59
 $whereSQL = implode(' AND ', $where);
 
 $invStmt = $pdo->prepare("
-    SELECT i.*, o.name AS org_name, o.email AS org_email
-    FROM invoices i JOIN organizations o ON i.org_id = o.id
+    SELECT
+        i.id,
+        i.org_id,
+        i.subscription_id,
+        i.module_id,
+        i.invoice_number,
+        CAST(i.amount AS DECIMAL(12,2)) AS amount,
+        CAST(i.tax    AS DECIMAL(12,2)) AS tax,
+        CAST(i.total  AS DECIMAL(12,2)) AS total,
+        i.status,
+        i.due_date,
+        i.paid_at,
+        i.notes,
+        i.created_at,
+        o.name  AS org_name,
+        o.email AS org_email
+    FROM invoices i
+    JOIN organizations o ON i.org_id = o.id
     WHERE $whereSQL
     ORDER BY i.created_at DESC
 ");
@@ -138,8 +161,8 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
 }
 
 // ── Stats ─────────────────────────────────────────────────────────
-$totalRevenue = $pdo->query("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status='paid'")->fetchColumn();
-$totalPending = $pdo->query("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status='sent'")->fetchColumn();
+$totalRevenue = $pdo->query("SELECT COALESCE(SUM(CAST(total AS DECIMAL(12,2))),0) FROM invoices WHERE status='paid'")->fetchColumn();
+$totalPending = $pdo->query("SELECT COALESCE(SUM(CAST(total AS DECIMAL(12,2))),0) FROM invoices WHERE status='sent'")->fetchColumn();
 $countPaid    = $pdo->query("SELECT COUNT(*) FROM invoices WHERE status='paid'")->fetchColumn();
 $countOverdue = $pdo->query("SELECT COUNT(*) FROM invoices WHERE status='overdue'")->fetchColumn();
 

@@ -55,7 +55,10 @@ else foreach ($badPlans as $p) $log[] = "  ⚠️  Plan [{$p['name']}]: monthly=
 // ── 4. Bad invoices — check amount OR tax OR total ────────────────────────────
 try {
     $badInvoices = $pdo->query("
-        SELECT i.id, i.invoice_number, i.amount, i.tax, i.total,
+        SELECT i.id, i.invoice_number,
+               CAST(i.amount AS DECIMAL(12,2)) AS amount,
+               CAST(i.tax    AS DECIMAL(12,2)) AS tax,
+               CAST(i.total  AS DECIMAL(12,2)) AS total,
                i.status, i.created_at, o.name AS org_name
         FROM invoices i
         LEFT JOIN organizations o ON i.org_id = o.id
@@ -65,16 +68,35 @@ try {
 } catch (Throwable $e) { $badInvoices=[]; }
 $log[] = count($badInvoices) . " invoice(s) with any column (amount/tax/total) > KES 999,999";
 
-// ── 5. All recent invoices (last 20) — to see actual values ──────────────────
+// ── 5. All recent invoices — explicit columns so SELECT i.* collision can't hide values ──
 try {
     $recentInvoices = $pdo->query("
-        SELECT i.id, i.invoice_number, i.amount, i.tax, i.total,
+        SELECT i.id, i.invoice_number,
+               CAST(i.amount AS DECIMAL(12,2)) AS amount,
+               CAST(i.tax    AS DECIMAL(12,2)) AS tax,
+               CAST(i.total  AS DECIMAL(12,2)) AS total,
                i.status, i.created_at, o.name AS org_name
         FROM invoices i
         LEFT JOIN organizations o ON i.org_id = o.id
         ORDER BY i.created_at DESC LIMIT 20
     ")->fetchAll();
 } catch (Throwable $e) { $recentInvoices=[]; }
+
+// ── 6. Detect SELECT i.* column collision — compare i.* vs explicit ─────────
+$starVsExplicit = '';
+try {
+    $r1 = $pdo->query("SELECT i.*, o.name AS org_name FROM invoices i LEFT JOIN organizations o ON i.org_id = o.id ORDER BY i.created_at DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    $r2 = $pdo->query("SELECT i.id, CAST(i.amount AS DECIMAL(12,2)) AS amount, CAST(i.tax AS DECIMAL(12,2)) AS tax, CAST(i.total AS DECIMAL(12,2)) AS total FROM invoices i ORDER BY i.created_at DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    if ($r1 && $r2) {
+        $diff = abs((float)$r1['amount'] - (float)$r2['amount']);
+        if ($diff > 1) {
+            $starVsExplicit = "⚠️  SELECT i.* returns amount=" . number_format((float)$r1['amount'],2) . " but explicit SELECT returns amount=" . number_format((float)$r2['amount'],2) . " — COLUMN COLLISION CONFIRMED (difference: " . number_format($diff,2) . ")";
+            $log[] = $starVsExplicit;
+        } else {
+            $log[] = "✅  SELECT i.* vs explicit columns match (no collision)";
+        }
+    }
+} catch (Throwable $e) { $log[] = "Could not run collision test: " . $e->getMessage(); }
 
 // ── POST: apply fixes ─────────────────────────────────────────────────────────
 $fixed = [];
