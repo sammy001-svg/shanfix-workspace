@@ -540,7 +540,6 @@ $roleLabels = [
               This doctor has an active portal account: <strong id="existingAccountEmail"></strong>
               &nbsp;— use the <strong>Reset Password</strong> button in the table to issue new credentials.
             </div>
-            <input type="hidden" name="create_account" value="0">
           </div>
         </div>
 
@@ -584,10 +583,11 @@ function openAdd() {
   document.getElementById('docStatus').value  = 'active';
   document.getElementById('docModuleRole').value = 'doctor';
 
-  // Show create-account block, hide existing block
   document.getElementById('createAccountBlock').classList.remove('d-none');
   document.getElementById('existingAccountBlock').classList.add('d-none');
-  document.getElementById('createAccountToggle').checked = true;
+  const toggle = document.getElementById('createAccountToggle');
+  toggle.checked  = true;
+  toggle.disabled = false;
   document.getElementById('accountOptions').style.display = '';
 }
 
@@ -605,17 +605,21 @@ function openEdit(id) {
       document.getElementById('docEmail').value   = d.email       || '';
       document.getElementById('docStatus').value  = d.status      || 'active';
 
+      const toggle = document.getElementById('createAccountToggle');
       if (d.user_id) {
-        // Already has portal account
+        // Already has portal account — disable toggle so it is not submitted
+        toggle.checked  = false;
+        toggle.disabled = true;
         document.getElementById('createAccountBlock').classList.add('d-none');
         document.getElementById('existingAccountBlock').classList.remove('d-none');
         document.getElementById('existingAccountEmail').textContent = d.account_email || d.email || '';
       } else {
         // No account yet — offer to create
+        toggle.checked  = false;
+        toggle.disabled = false;
+        document.getElementById('accountOptions').style.display = 'none';
         document.getElementById('createAccountBlock').classList.remove('d-none');
         document.getElementById('existingAccountBlock').classList.add('d-none');
-        document.getElementById('createAccountToggle').checked = false;
-        document.getElementById('accountOptions').style.display = 'none';
       }
 
       new bootstrap.Modal(document.getElementById('docModal')).show();
