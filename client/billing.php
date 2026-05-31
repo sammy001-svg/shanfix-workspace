@@ -537,14 +537,13 @@ if ($usersNear || $modulesNear):
               </div>
             </div>
             <div class="text-end flex-shrink-0">
-              <!-- KES price on its own line — no inline USD to prevent merging -->
-              <div class="fw-bold text-green" style="font-size:.92rem;white-space:nowrap">
+              <div class="fw-bold text-green" style="font-size:.95rem;white-space:nowrap">
                 KES <?= number_format($planPrice, 0) ?>
                 <span class="text-muted fw-normal" style="font-size:.7rem"><?= $cycleLabel ?></span>
               </div>
-              <?php if ($planPriceUsd > 0): ?>
-              <div class="text-muted" style="font-size:.68rem;white-space:nowrap">
-                ≈ USD <?= number_format($planPriceUsd, 2) ?>
+              <?php if ($planPriceUsd > 0 && $usdRate > 1): ?>
+              <div class="text-muted" style="font-size:.66rem;white-space:nowrap">
+                (≈ $ <?= number_format($planPriceUsd, 2) ?> USD)
               </div>
               <?php endif; ?>
             </div>
@@ -623,10 +622,10 @@ if ($usersNear || $modulesNear):
             <span class="small text-muted" style="white-space:nowrap">KES <?= number_format($taxEst, 0) ?></span>
           </div>
           <div class="d-flex justify-content-between align-items-center border-top pt-2">
-            <span class="fw-bold small">Total<?= $cycleLabel ?></span>
+            <span class="fw-bold small">Total<?= $cycleLabel ?> (incl. VAT)</span>
             <div class="text-end">
-              <span class="fw-bold text-green" style="white-space:nowrap">KES <?= number_format($planTotal, 0) ?></span>
-              <?php if ($planTotalUsd > 0): ?>
+              <span class="fw-bold text-green" style="font-size:1rem;white-space:nowrap">KES <?= number_format($planTotal, 0) ?></span>
+              <?php if ($planTotalUsd > 0 && $usdRate > 1): ?>
               <div class="text-muted" style="font-size:.68rem;white-space:nowrap">≈ USD <?= number_format($planTotalUsd, 2) ?></div>
               <?php endif; ?>
             </div>
@@ -1026,18 +1025,18 @@ if ($usersNear || $modulesNear):
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
   <div>
     <h6 class="fw-bold text-navy mb-0">Available Plans</h6>
-    <div class="text-muted small">All prices are exact as set by our team. VAT (16%) added at checkout.</div>
+    <div class="text-muted small">All prices shown in KES (Kenyan Shillings). VAT (16%) added at checkout.</div>
   </div>
   <div class="d-flex align-items-center gap-2">
     <span class="small text-muted">Show prices in:</span>
     <div style="display:inline-flex;background:#f1f5f9;border:1.5px solid #e2e8f0;border-radius:999px;overflow:hidden">
-      <button id="planBtnUSD" onclick="setPlanCurrency('USD')"
-              style="border:none;padding:.3rem .85rem;font-size:.75rem;font-weight:700;cursor:pointer;transition:all .18s;background:#0B2D4E;color:#fff;border-radius:999px">
-        $ USD
-      </button>
       <button id="planBtnKES" onclick="setPlanCurrency('KES')"
-              style="border:none;padding:.3rem .85rem;font-size:.75rem;font-weight:700;cursor:pointer;transition:all .18s;background:transparent;color:#64748b;border-radius:999px">
+              style="border:none;padding:.3rem .85rem;font-size:.75rem;font-weight:700;cursor:pointer;transition:all .18s;background:#0B2D4E;color:#fff;border-radius:999px">
         KES
+      </button>
+      <button id="planBtnUSD" onclick="setPlanCurrency('USD')"
+              style="border:none;padding:.3rem .85rem;font-size:.75rem;font-weight:700;cursor:pointer;transition:all .18s;background:transparent;color:#64748b;border-radius:999px">
+        $ USD
       </button>
     </div>
   </div>
@@ -1069,13 +1068,13 @@ if ($usersNear || $modulesNear):
         <h5 class="fw-bold text-navy mb-1"><?= e($p['name']) ?></h5>
         <p class="text-muted small mb-3"><?= e($p['description']) ?></p>
 
-        <!-- Monthly price — switches via JS -->
+        <!-- Monthly price — defaults to KES, switches via JS toggle -->
         <div class="mb-1">
           <span class="fw-bold text-success" style="font-size:2rem"
                 id="planPriceMo<?= $p['id'] ?>"
                 data-usd="$ <?= number_format($usdMo, 2) ?>"
                 data-kes="KES <?= number_format($kesMo, 0) ?>">
-            $ <?= number_format($usdMo, 2) ?>
+            KES <?= number_format($kesMo, 0) ?>
           </span>
           <span class="text-muted small">/mo</span>
         </div>
@@ -1085,7 +1084,7 @@ if ($usersNear || $modulesNear):
                    id="planPriceAnn<?= $p['id'] ?>"
                    data-usd="$ <?= number_format($usdAnn, 2) ?>"
                    data-kes="KES <?= number_format($kesAnn, 0) ?>">
-               $ <?= number_format($usdAnn, 2) ?>
+               KES <?= number_format($kesAnn, 0) ?>
              </span>/yr
           <?php if ($savePct > 0): ?>
           <span class="badge bg-success ms-1">Save <?= $savePct ?>%</span>
@@ -1299,8 +1298,8 @@ $focusInvTotal = (float)($focusInv['total'] ?? 0);
 $extraJs = '<script>
 const BILLING_USD_RATE = ' . (float)$usdRate . ';
 
-// ── Plans tab: currency toggle ────────────────────────────────────
-let planCur = localStorage.getItem("billingPlanCur") || "USD";
+// ── Plans tab: currency toggle — default KES ─────────────────────
+let planCur = localStorage.getItem("billingPlanCur") || "KES";
 
 function setPlanCurrency(cur) {
   planCur = cur;

@@ -138,24 +138,84 @@ switch ($action) {
         echo json_encode(['success' => true]);
         break;
 
-    // ── Test email ───────────────────────────────────────────────
+    // ── Test email — SMTP-only, no silent fallback, full diagnostics ────────────
     case 'send_test_email':
-        $toEmail = $input['email'] ?? '';
+        $toEmail = trim($input['email'] ?? '');
         if (!$toEmail || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
             http_response_code(400);
-            echo json_encode(['error' => 'Invalid email address']);
+            echo json_encode(['success' => false, 'message' => 'Invalid email address.']);
             break;
         }
         require_once __DIR__ . '/../includes/mailer.php';
-        $ok = mailer()->send(
-            $toEmail,
-            'Test Email — ' . APP_NAME,
-            '<h2 style="color:#0B2D4E">SMTP Test</h2><p>Your SMTP settings are working correctly. This test was sent from <strong>' . APP_NAME . '</strong>.</p>'
-        );
-        echo json_encode([
-            'success' => $ok,
-            'message' => $ok ? "Test email sent to {$toEmail}" : 'Failed to send. Check your SMTP credentials and host.',
-        ]);
+
+        // Pre-flight: are SMTP credentials configured?
+        $smtpHost = getSetting('smtp_host', '');
+        $smtpUser = getSetting('smtp_user', '');
+        $smtpPass = getSetting('smtp_pass', '');
+        if (!$smtpHost) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'SMTP host is not configured. Fill in and save your SMTP settings first.',
+            ]);
+            break;
+        }
+        if (!$smtpUser) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'SMTP username is empty. Enter your email address and save settings.',
+            ]);
+            break;
+        }
+
+        // Build test body
+        $testBody = "<div style='font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#f0f4f8'>
+            <div style='background:#0B2D4E;padding:20px 28px;border-radius:12px 12px 0 0;text-align:center'>
+                <span style='color:white;font-size:1.2rem;font-weight:800'>" . APP_NAME . "</span>
+            </div>
+            <div style='background:white;padding:32px;border-radius:0 0 12px 12px'>
+                <h2 style='color:#1A8A4E;margin-top:0'>✅ SMTP Configuration Test</h2>
+                <p>This email confirms that your SMTP settings are working correctly on <strong>" . APP_NAME . "</strong>.</p>
+                <table style='width:100%;border-collapse:collapse;margin:16px 0'>
+                    <tr><td style='padding:8px;border:1px solid #eee;color:#666'>SMTP Host</td><td style='padding:8px;border:1px solid #eee;font-weight:700'>{$smtpHost}</td></tr>
+                    <tr><td style='padding:8px;border:1px solid #eee;color:#666'>SMTP User</td><td style='padding:8px;border:1px solid #eee'>{$smtpUser}</td></tr>
+                    <tr><td style='padding:8px;border:1px solid #eee;color:#666'>Sent at</td><td style='padding:8px;border:1px solid #eee'>" . date('d M Y, H:i:s T') . "</td></tr>
+                </table>
+                <p style='color:#64748b;font-size:.85rem'>If you received this, email notifications are working. You can safely ignore this test message.</p>
+            </div>
+        </div>";
+
+        try {
+            // Force SMTP — bypass the silent php mail() fallback by calling sendSmtp directly
+            // We do this by creating a Mailer and attempting a direct SMTP send
+            $m = mailer();
+            // Use reflection to call sendSmtp directly so we get the real exception
+            $ref = new ReflectionClass($m);
+            $sendSmtp = $ref->getMethod('sendSmtp');
+            $sendSmtp->setAccessible(true);
+            $wrapped = "<!DOCTYPE html><html><head><meta charset='UTF-8'></head><body style='margin:0;padding:0;background:#f0f4f8'>{$testBody}</body></html>";
+            $sendSmtp->invokeArgs($m, [$toEmail, '', 'SMTP Test — ' . APP_NAME, $wrapped, strip_tags($testBody)]);
+            echo json_encode(['success' => true, 'message' => "Test email sent successfully to {$toEmail} via SMTP."]);
+        } catch (Throwable $e) {
+            $errMsg  = $e->getMessage();
+            // Clean up socket error codes for better readability
+            $friendly = $errMsg;
+            if (str_contains($errMsg, 'Connection refused') || str_contains($errMsg, 'connect failed')) {
+                $friendly = "Connection refused — the SMTP host ({$smtpHost}) on the configured port rejected the connection. Check the host address and port number.";
+            } elseif (str_contains($errMsg, '535') || str_contains($errMsg, 'Authentication') || str_contains($errMsg, 'credentials')) {
+                $friendly = "Authentication failed — your SMTP username or password is incorrect.";
+            } elseif (str_contains($errMsg, '530') || str_contains($errMsg, 'STARTTLS')) {
+                $friendly = "Encryption mismatch — try switching between TLS, SSL, and None.";
+            } elseif (str_contains($errMsg, 'SSL') || str_contains($errMsg, 'tls')) {
+                $friendly = "SSL/TLS error — try a different Encryption setting (TLS ↔ SSL) or verify your host supports it.";
+            } elseif (str_contains($errMsg, 'timeout') || str_contains($errMsg, 'timed out')) {
+                $friendly = "Connection timed out — the SMTP host is unreachable. Check your host name and firewall rules.";
+            }
+            echo json_encode([
+                'success' => false,
+                'message' => $friendly,
+                'debug'   => "[{$smtpHost}:" . getSetting('smtp_port','587') . " / " . getSetting('smtp_enc','tls') . "] " . $errMsg,
+            ]);
+        }
         break;
 
     // ── Delete subscription plan ─────────────────────────────────
@@ -329,6 +389,36 @@ switch ($action) {
         } else {
             http_response_code(400);
             echo json_encode(['error' => 'Invalid user ID']);
+        }
+        break;
+
+    // ── Test SMS (Africa's Talking) ──────────────────────────────
+    case 'test_sms':
+        require_once __DIR__ . '/../includes/sms.php';
+        $smsEnabled = getSetting('sms_enabled', '0');
+        if ($smsEnabled !== '1') {
+            echo json_encode(['success' => false, 'message' => 'SMS is disabled. Enable it in SMS settings first.']);
+            break;
+        }
+        $adminPhone = getSetting('support_phone', '');
+        if (!$adminPhone) {
+            // Try the super-admin's phone
+            $row = $pdo->query("SELECT phone FROM users WHERE role='super_admin' AND phone IS NOT NULL AND phone != '' LIMIT 1")->fetch();
+            $adminPhone = $row['phone'] ?? '';
+        }
+        if (!$adminPhone) {
+            echo json_encode(['success' => false, 'message' => 'No phone number found. Add a support phone in General settings.']);
+            break;
+        }
+        try {
+            $result = sms()->send($adminPhone, APP_NAME . ' SMS test message — your SMS integration is working correctly!');
+            if ($result['success']) {
+                echo json_encode(['success' => true, 'message' => 'Test SMS sent to ' . $adminPhone . '. Check your phone.']);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'AT API error: ' . ($result['error'] ?? 'Unknown')]);
+            }
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => 'Exception: ' . $e->getMessage()]);
         }
         break;
 

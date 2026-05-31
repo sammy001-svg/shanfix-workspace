@@ -63,6 +63,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Exception $ex) {}
 
             setFlash('success', 'Rent payment recorded successfully in ledger.');
+            // SMS receipt to tenant
+            try {
+                $tRow = $pdo->prepare("SELECT phone, CONCAT(first_name,' ',last_name) AS name FROM rental_tenants WHERE id=? AND org_id=?");
+                $tRow->execute([$tenantId, $orgId]);
+                $tenant = $tRow->fetch();
+                if ($tenant && !empty($tenant['phone'])) {
+                    $amtFmt = number_format($amount, 2);
+                    $ref2   = $reference ? " Ref: $reference." : '';
+                    notifySms($tenant['phone'], APP_NAME . ": Hi {$tenant['name']}, rent payment of KES $amtFmt for $period received.$ref2 Thank you.", $orgId, 'rent_payment');
+                }
+            } catch (Throwable $e) {}
         }
         logActivity($id > 0 ? 'update' : 'create', 'rental', "Rent Payment Period: $period, Amount: $amount, Method: $paymentMethod");
         redirect('payments.php');

@@ -413,6 +413,43 @@ function renderStaffRoleBanner(string $moduleSlug, array $user, array $moduleNav
     </div>";
 }
 
+/**
+ * Return the org's branding: primary_color, tagline, logo path.
+ * Falls back to platform defaults if not set.
+ */
+function getOrgBranding(int $orgId): array {
+    global $pdo;
+    try {
+        $stmt = $pdo->prepare("SELECT primary_color, brand_tagline, logo FROM organizations WHERE id=?");
+        $stmt->execute([$orgId]);
+        $row = $stmt->fetch() ?: [];
+    } catch (Throwable $e) { $row = []; }
+
+    $color   = (isset($row['primary_color']) && preg_match('/^#[0-9A-Fa-f]{6}$/', $row['primary_color']))
+                ? $row['primary_color'] : '#1A8A4E';
+    $tagline = $row['brand_tagline'] ?? '';
+    $logo    = $row['logo']          ?? '';
+    return ['color' => $color, 'tagline' => $tagline, 'logo' => $logo];
+}
+
+/**
+ * Output a <style> block that overrides --green CSS variables with the org's primary color.
+ * Call inside <head> after style.css is loaded.
+ */
+function orgBrandingStyle(int $orgId): string {
+    $b   = getOrgBranding($orgId);
+    $hex = $b['color'];
+
+    // Derive dark/light shades from the hex (simple brightness scaling)
+    [$r, $g, $bl] = sscanf(ltrim($hex, '#'), '%02x%02x%02x');
+    $dark  = sprintf('#%02x%02x%02x', max(0, (int)($r * .65)), max(0, (int)($g * .65)), max(0, (int)($bl * .65)));
+    $light = sprintf('#%02x%02x%02x', min(255, (int)($r + (255 - $r) * .35)), min(255, (int)($g + (255 - $g) * .35)), min(255, (int)($bl + (255 - $bl) * .35)));
+    // Pale = full rgb at 8% opacity rendered as a hex approximation on white
+    $pale  = sprintf('#%02x%02x%02x', min(255, (int)(255 * .92 + $r * .08)), min(255, (int)(255 * .92 + $g * .08)), min(255, (int)(255 * .92 + $bl * .08)));
+
+    return "<style>:root{--green:{$hex};--green-dark:{$dark};--green-light:{$light};--green-pale:{$pale}}</style>\n";
+}
+
 function getOrgSubscription(int $orgId): ?array {
     global $pdo;
     $stmt = $pdo->prepare("SELECT s.*, p.name as plan_name FROM subscriptions s LEFT JOIN subscription_plans p ON s.plan_id = p.id WHERE s.org_id = ? ORDER BY s.created_at DESC LIMIT 1");
@@ -1214,6 +1251,55 @@ function denyIfReadOnly(string $moduleSlug): void {
     $ref = $_SERVER['HTTP_REFERER'] ?? (APP_URL . '/modules/' . $moduleSlug . '/index.php');
     header('Location: ' . $ref);
     exit;
+}
+
+/**
+ * Send an SMS notification if SMS is enabled in system settings.
+ * Silently swallows all errors so a missing SMS never breaks a page.
+ *
+ * @param string|array $to      Phone number(s) — Kenyan format accepted
+ * @param string       $message SMS body (keep under 160 chars for single SMS)
+ * @param int|null     $orgId   Optional org context for SMS log
+ * @param string       $event   Short event label for the log (e.g. 'leave_approved')
+ */
+function notifySms(string|array $to, string $message, ?int $orgId = null, string $event = ''): void {
+    try {
+        if (getSetting('sms_enabled', '0') !== '1') return;
+        require_once __DIR__ . '/sms.php';
+
+        $numbers = is_array($to) ? $to : [$to];
+        $numbers = array_filter($numbers); // drop empty strings
+        if (empty($numbers)) return;
+
+        $result = sms()->send($numbers, $message);
+
+        // Log to sms_log table (create on first use)
+        global $pdo;
+        try {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS sms_log (
+                id          INT AUTO_INCREMENT PRIMARY KEY,
+                org_id      INT DEFAULT NULL,
+                event       VARCHAR(80),
+                recipient   VARCHAR(500),
+                message     TEXT,
+                status      ENUM('sent','failed') DEFAULT 'sent',
+                error       TEXT,
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB");
+            $pdo->prepare("INSERT INTO sms_log (org_id,event,recipient,message,status,error) VALUES (?,?,?,?,?,?)")
+                ->execute([
+                    $orgId,
+                    $event ?: 'generic',
+                    implode(',', $numbers),
+                    $message,
+                    $result['success'] ? 'sent' : 'failed',
+                    $result['error'] ?? '',
+                ]);
+        } catch (Throwable $e) { /* log table missing — non-fatal */ }
+
+    } catch (Throwable $e) {
+        error_log('[notifySms] ' . $e->getMessage());
+    }
 }
 
 /**

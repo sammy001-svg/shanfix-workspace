@@ -52,6 +52,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$orgId, $shopId, $tenantId, $amount, $period, $paymentDate, $paymentMethod, $reference, $status]);
             setFlash('success', 'Payment recorded successfully.');
             logActivity('create', 'shopping-mall', "Recorded rent payment for shop #$shopId period $period");
+            // SMS receipt to tenant
+            try {
+                $tRow = $pdo->prepare("SELECT t.phone, t.contact_person, s.name AS shop_name FROM mall_tenants t JOIN mall_shops s ON t.shop_id=s.id WHERE t.id=? AND t.org_id=?");
+                $tRow->execute([$tenantId, $orgId]);
+                $tenant = $tRow->fetch();
+                if ($tenant && !empty($tenant['phone'])) {
+                    $amtFmt = number_format($amount, 2);
+                    $ref2   = $reference ? " Ref: $reference." : '';
+                    notifySms($tenant['phone'], APP_NAME . ": Hi {$tenant['contact_person']}, rent of KES $amtFmt for {$tenant['shop_name']} ($period) received.$ref2 Thank you.", $orgId, 'mall_rent_payment');
+                }
+            } catch (Throwable $e) {}
         }
         redirect('payments.php');
     }

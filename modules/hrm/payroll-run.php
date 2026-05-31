@@ -121,6 +121,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $msg = "Payroll run for <strong>$period</strong> complete. $inserted records created" . ($skipped ? ", $skipped skipped (already exist)." : ".");
             setFlash('success', $msg);
             logActivity('process', 'hrm', "Bulk payroll run for $period — $inserted created, $skipped skipped");
+            // SMS payslip-ready notification to each processed employee
+            if ($inserted > 0) {
+                try {
+                    $empPhones = $pdo->prepare("SELECT DISTINCT e.phone, CONCAT(e.first_name,' ',e.last_name) AS name, p.net_salary FROM hrm_payroll p JOIN hrm_employees e ON p.employee_id=e.id WHERE p.org_id=? AND p.period=? AND e.phone IS NOT NULL AND e.phone != ''");
+                    $empPhones->execute([$orgId, $period]);
+                    foreach ($empPhones->fetchAll() as $ep) {
+                        $netFmt = number_format((float)$ep['net_salary'], 2);
+                        notifySms($ep['phone'], APP_NAME . ": Hi {$ep['name']}, your payslip for $period is ready. Net pay: KES $netFmt. Login to view.", $orgId, 'payroll_processed');
+                    }
+                } catch (Throwable $e) {}
+            }
         } catch (Exception $ex) {
             setFlash('danger', 'Payroll run failed: ' . $ex->getMessage());
         }

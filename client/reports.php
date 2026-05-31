@@ -9,6 +9,121 @@ requireAdminRole('Reports are available to organisation administrators only.');
 $user  = currentUser();
 $orgId = (int)$user['org_id'];
 
+// ── Report Builder: whitelisted data sources ─────────────────────
+$REPORT_SOURCES = [
+    'crm_contacts'        => ['label'=>'CRM — Contacts',          'cols'=>['id','first_name','last_name','email','phone','company','type','status','created_at']],
+    'crm_leads'           => ['label'=>'CRM — Leads',             'cols'=>['id','title','contact_name','email','phone','source','status','value','created_at']],
+    'crm_deals'           => ['label'=>'CRM — Deals',             'cols'=>['id','title','contact_name','company','stage','value','close_date','created_at']],
+    'hrm_employees'       => ['label'=>'HRM — Employees',         'cols'=>['id','employee_no','first_name','last_name','email','phone','position','employment_type','salary','status','date_hired']],
+    'hrm_leave_requests'  => ['label'=>'HRM — Leave Requests',    'cols'=>['id','employee_id','leave_type_id','start_date','end_date','days','reason','status','created_at']],
+    'hrm_payroll'         => ['label'=>'HRM — Payroll',           'cols'=>['id','employee_id','period','basic_salary','gross_salary','net_salary','paye','status']],
+    'acc_expenses'        => ['label'=>'Accounting — Expenses',   'cols'=>['id','category','description','amount','date','payment_method','reference','created_at']],
+    'fin_transactions'    => ['label'=>'Finance — Transactions',  'cols'=>['id','type','amount','description','date','reference','created_at']],
+    'pos_sales'           => ['label'=>'POS — Sales',             'cols'=>['id','invoice_no','customer_name','subtotal','discount','total','payment_method','created_at']],
+    'pos_products'        => ['label'=>'POS — Products',          'cols'=>['id','name','sku','category','price','cost','stock_qty','status']],
+    'rental_tenants'      => ['label'=>'Rental — Tenants',        'cols'=>['id','first_name','last_name','phone','email','unit_id','lease_start','lease_end','status']],
+    'rental_payments'     => ['label'=>'Rental — Payments',       'cols'=>['id','tenant_id','amount','period','payment_date','payment_method','reference','status']],
+    'health_patients'     => ['label'=>'Health — Patients',       'cols'=>['id','first_name','last_name','phone','email','gender','dob','blood_group','status']],
+    'health_appointments' => ['label'=>'Health — Appointments',   'cols'=>['id','patient_id','doctor_id','date','time','type','status','created_at']],
+    'sacco_members'       => ['label'=>'SACCO — Members',         'cols'=>['id','member_no','first_name','last_name','phone','email','shares','status','joined_date']],
+    'sacco_loans'         => ['label'=>'SACCO — Loans',           'cols'=>['id','member_id','loan_type','amount','interest_rate','period_months','status','disbursed_date']],
+    'mall_tenants'        => ['label'=>'Shopping Mall — Tenants', 'cols'=>['id','business_name','contact_person','phone','email','shop_id','lease_start','lease_end','status']],
+    'mall_rent_payments'  => ['label'=>'Mall — Rent Payments',    'cols'=>['id','tenant_id','shop_id','amount','period','payment_date','payment_method','status']],
+    'activity_log'        => ['label'=>'System — Activity Log',   'cols'=>['id','user_id','action','module','description','ip_address','created_at']],
+    'users'               => ['label'=>'System — Team Members',   'cols'=>['id','name','email','role','status','created_at']],
+];
+
+// ── AJAX: run custom report ───────────────────────────────────────
+if (($_GET['action'] ?? '') === 'run_report') {
+    header('Content-Type: application/json');
+    $source  = $_GET['source'] ?? '';
+    $cols    = array_filter((array)($_GET['cols'] ?? []));
+    $from    = $_GET['from']   ?? '';
+    $to      = $_GET['to']     ?? '';
+    $limit   = min(500, max(10, (int)($_GET['limit'] ?? 100)));
+
+    if (!isset($REPORT_SOURCES[$source])) {
+        echo json_encode(['error' => 'Invalid data source.']); exit;
+    }
+    $allowed = $REPORT_SOURCES[$source]['cols'];
+    $cols = array_filter($cols, fn($c) => in_array($c, $allowed, true));
+    if (empty($cols)) { echo json_encode(['error' => 'Select at least one column.']); exit; }
+
+    // Build SELECT and WHERE
+    $selects = array_map(fn($c) => "`$c`", $cols);
+    $where   = 'org_id = ?';
+    $params  = [$orgId];
+    $dateCol = in_array('created_at', $allowed) ? 'created_at' : (in_array('date', $allowed) ? 'date' : null);
+    if ($dateCol && $from) { $where .= " AND `$dateCol` >= ?"; $params[] = $from . ' 00:00:00'; }
+    if ($dateCol && $to)   { $where .= " AND `$dateCol` <= ?"; $params[] = $to . ' 23:59:59'; }
+    // special tables without org_id
+    if ($source === 'activity_log') { $where = 'org_id = ?'; }
+    if ($source === 'users') { $where = 'org_id = ?'; }
+
+    try {
+        $sql  = "SELECT " . implode(',', $selects) . " FROM `{$source}` WHERE {$where} ORDER BY id DESC LIMIT {$limit}";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        echo json_encode(['cols' => $cols, 'rows' => $stmt->fetchAll(PDO::FETCH_NUM)]);
+    } catch (Exception $e) {
+        echo json_encode(['error' => 'Query failed: ' . $e->getMessage()]);
+    }
+    exit;
+}
+
+// ── AJAX: save report template ────────────────────────────────────
+if (($_POST['action'] ?? '') === 'save_template' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json');
+    verifyCsrf();
+    $name   = sanitize($_POST['name']   ?? '');
+    $source = $_POST['source']          ?? '';
+    $cols   = json_decode($_POST['cols'] ?? '[]', true);
+    $from   = sanitize($_POST['from']   ?? '');
+    $to     = sanitize($_POST['to']     ?? '');
+    if (!$name || !$source || empty($cols)) { echo json_encode(['error' => 'Name, source and columns required.']); exit; }
+    $existing = json_decode(getOrgSetting($orgId, 'report_templates', '[]'), true) ?: [];
+    $existing = array_values(array_filter($existing, fn($t) => $t['name'] !== $name)); // overwrite same name
+    $existing[] = ['name'=>$name,'source'=>$source,'cols'=>$cols,'from'=>$from,'to'=>$to,'saved'=>date('Y-m-d H:i')];
+    saveOrgSetting($orgId, 'report_templates', json_encode(array_slice($existing, -20))); // cap 20
+    echo json_encode(['success' => true]);
+    exit;
+}
+
+// ── AJAX: delete template ─────────────────────────────────────────
+if (($_POST['action'] ?? '') === 'delete_template' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json');
+    verifyCsrf();
+    $name     = sanitize($_POST['name'] ?? '');
+    $existing = json_decode(getOrgSetting($orgId, 'report_templates', '[]'), true) ?: [];
+    $existing = array_values(array_filter($existing, fn($t) => $t['name'] !== $name));
+    saveOrgSetting($orgId, 'report_templates', json_encode($existing));
+    echo json_encode(['success' => true]);
+    exit;
+}
+
+// Helper: getOrgSetting / saveOrgSetting (inline if not already loaded)
+if (!function_exists('getOrgSetting')) {
+    function getOrgSetting(int $orgId, string $key, string $default = ''): string {
+        global $pdo;
+        try {
+            $s = $pdo->prepare("SELECT `value` FROM org_settings WHERE org_id=? AND `key`=? LIMIT 1");
+            $s->execute([$orgId, $key]);
+            $v = $s->fetchColumn();
+            return ($v !== false) ? (string)$v : $default;
+        } catch (Exception $e) { return $default; }
+    }
+    function saveOrgSetting(int $orgId, string $key, string $value): void {
+        global $pdo;
+        try {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS org_settings (id INT AUTO_INCREMENT PRIMARY KEY, org_id INT NOT NULL, `key` VARCHAR(64) NOT NULL, `value` TEXT NOT NULL, UNIQUE KEY uq_org_key (org_id, `key`))");
+            $pdo->prepare("INSERT INTO org_settings (org_id,`key`,`value`) VALUES (?,?,?) ON DUPLICATE KEY UPDATE `value`=?")->execute([$orgId,$key,$value,$value]);
+        } catch (Exception $e) {}
+    }
+}
+
+// Load saved templates for UI
+$savedTemplates = json_decode(getOrgSetting($orgId, 'report_templates', '[]'), true) ?: [];
+
 // ── CSV Export Handler ────────────────────────────────────────────
 if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     require_once __DIR__ . '/../includes/export.php';
@@ -273,6 +388,25 @@ $dataJson   = json_encode($salesData);
     </div>
   </div>
 
+  <!-- Custom Report Builder -->
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100 shadow-sm border-0" style="border-top:3px solid #8e44ad!important">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-3 mb-3">
+          <div class="rounded-3 p-2" style="background:#f3e5f5"><i class="fas fa-tools fa-lg" style="color:#8e44ad"></i></div>
+          <div><h6 class="mb-0 fw-bold">Custom Report Builder</h6><small class="text-muted">Build, save &amp; export any report</small></div>
+        </div>
+        <p class="text-muted small mb-3">Choose any data source, pick your columns, set a date range and preview results. Save as a named template for quick re-use.</p>
+        <div class="d-flex gap-2">
+          <a href="#section-builder" class="btn btn-sm btn-outline-secondary flex-fill" onclick="showSection('builder')"><i class="fas fa-tools me-1"></i>Open Builder</a>
+          <?php if (!empty($savedTemplates)): ?>
+          <span class="badge rounded-pill align-self-center" style="background:#8e44ad"><?= count($savedTemplates) ?> saved</span>
+          <?php endif; ?>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Subscription Status -->
   <div class="col-md-6 col-xl-4">
     <div class="card h-100 shadow-sm border-0">
@@ -412,9 +546,97 @@ $dataJson   = json_encode($salesData);
     </div>
   </div>
 
+  <!-- Custom Report Builder -->
+  <div id="section-builder" class="report-section card shadow-sm border-0 mb-4 d-none">
+    <div class="card-header d-flex align-items-center justify-content-between" style="background:linear-gradient(135deg,#8e44ad,#6c3483);color:white">
+      <span><i class="fas fa-tools me-2"></i>Custom Report Builder</span>
+      <button class="btn btn-sm btn-light btn-close-builder" onclick="hideSection('builder')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="card-body">
+      <div class="row g-3 mb-3">
+        <!-- Source -->
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Data Source <span class="text-danger">*</span></label>
+          <select id="rbSource" class="form-select" onchange="rbLoadColumns()">
+            <option value="">-- Select source --</option>
+            <?php foreach ($REPORT_SOURCES as $tbl => $meta): ?>
+              <option value="<?= $tbl ?>"><?= e($meta['label']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <!-- Date from / to -->
+        <div class="col-md-2">
+          <label class="form-label fw-semibold">From</label>
+          <input type="date" id="rbFrom" class="form-control" value="<?= date('Y-m-01') ?>">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label fw-semibold">To</label>
+          <input type="date" id="rbTo" class="form-control" value="<?= date('Y-m-d') ?>">
+        </div>
+        <!-- Limit -->
+        <div class="col-md-2">
+          <label class="form-label fw-semibold">Max Rows</label>
+          <select id="rbLimit" class="form-select">
+            <option value="50">50</option>
+            <option value="100" selected>100</option>
+            <option value="250">250</option>
+            <option value="500">500</option>
+          </select>
+        </div>
+        <!-- Actions -->
+        <div class="col-md-2 d-flex flex-column justify-content-end gap-2">
+          <button class="btn btn-sm" style="background:#8e44ad;color:white" onclick="rbRun()"><i class="fas fa-play me-1"></i>Run Report</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="rbExportCsv()"><i class="fas fa-download me-1"></i>Export CSV</button>
+        </div>
+      </div>
+
+      <!-- Column selector -->
+      <div id="rbColSection" style="display:none" class="mb-3">
+        <label class="form-label fw-semibold">Columns <span class="text-muted fw-normal small">(select all you want to include)</span></label>
+        <div id="rbCols" class="d-flex flex-wrap gap-2"></div>
+        <button class="btn btn-xs btn-outline-secondary mt-2" style="font-size:.75rem;padding:2px 10px" onclick="rbSelectAll()">Select All</button>
+        <button class="btn btn-xs btn-outline-secondary mt-2 ms-1" style="font-size:.75rem;padding:2px 10px" onclick="rbClearAll()">Clear All</button>
+      </div>
+
+      <!-- Save template row -->
+      <div id="rbSaveRow" style="display:none" class="d-flex align-items-center gap-2 mb-3 p-2 rounded" style="background:#f8f0ff;border:1px solid #e0c4f5">
+        <input type="text" id="rbTemplateName" class="form-control form-control-sm" placeholder="Template name…" style="max-width:220px">
+        <button class="btn btn-sm" style="background:#8e44ad;color:white" onclick="rbSaveTemplate()"><i class="fas fa-save me-1"></i>Save Template</button>
+        <?php if (!empty($savedTemplates)): ?>
+        <span class="text-muted small ms-2">Saved:</span>
+        <?php foreach ($savedTemplates as $tpl): ?>
+        <button class="btn btn-sm btn-outline-secondary" onclick='rbLoadTemplate(<?= htmlspecialchars(json_encode($tpl), ENT_QUOTES) ?>)' title="Load template">
+          <?= e($tpl['name']) ?>
+        </button>
+        <button class="btn btn-sm btn-outline-danger" onclick="rbDeleteTemplate('<?= e($tpl['name']) ?>')" title="Delete"><i class="fas fa-times"></i></button>
+        <?php endforeach; ?>
+        <?php endif; ?>
+      </div>
+
+      <!-- Results -->
+      <div id="rbResults" style="display:none">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="fw-semibold small" id="rbResultCount"></span>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover data-table mb-0" id="rbTable">
+            <thead id="rbThead" class="table-light"></thead>
+            <tbody id="rbTbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="rbEmpty" class="text-center text-muted py-5" style="display:none">
+        <i class="fas fa-search fa-2x mb-2 d-block opacity-25"></i>No rows returned for your selection.
+      </div>
+      <div id="rbError" class="alert alert-danger d-none"></div>
+    </div>
+  </div>
+
 </div>
 
 <?php
+$sourcesJson   = json_encode($REPORT_SOURCES);
+$csrfTokenJson = json_encode($_SESSION['csrf_token'] ?? '');
 $extraJs = <<<JS
 <script>
 const salesChart = document.getElementById('salesChart');
@@ -450,6 +672,130 @@ function showSection(id) {
 function hideSection(id) {
     const sec = document.getElementById('section-' + id);
     if (sec) sec.classList.add('d-none');
+}
+
+// ── Report Builder ─────────────────────────────────────────────────
+const SOURCES    = {$sourcesJson};
+const CSRF_TOKEN = {$csrfTokenJson};
+let   _rbTable   = null;
+
+function rbLoadColumns() {
+    const src  = document.getElementById('rbSource').value;
+    const wrap = document.getElementById('rbColSection');
+    const box  = document.getElementById('rbCols');
+    const save = document.getElementById('rbSaveRow');
+    box.innerHTML = '';
+    if (!src || !SOURCES[src]) { wrap.style.display='none'; save.style.display='none'; return; }
+    SOURCES[src].cols.forEach(col => {
+        const lbl = document.createElement('label');
+        lbl.className = 'd-flex align-items-center gap-1 px-2 py-1 rounded border small user-select-none';
+        lbl.style.cursor = 'pointer';
+        lbl.style.background = '#f8fafc';
+        lbl.innerHTML = '<input type="checkbox" class="rb-col form-check-input m-0" value="' + col + '" checked> ' + col;
+        box.appendChild(lbl);
+    });
+    wrap.style.display = '';
+    save.style.display = '';
+    document.getElementById('rbResults').style.display = 'none';
+    document.getElementById('rbEmpty').style.display = 'none';
+}
+
+function rbSelectAll() { document.querySelectorAll('.rb-col').forEach(c => c.checked = true); }
+function rbClearAll()  { document.querySelectorAll('.rb-col').forEach(c => c.checked = false); }
+
+function rbRun() {
+    const src  = document.getElementById('rbSource').value;
+    const cols = Array.from(document.querySelectorAll('.rb-col:checked')).map(c => c.value);
+    if (!src) { Swal.fire('Pick a source','Select a data source first.','warning'); return; }
+    if (!cols.length) { Swal.fire('Pick columns','Select at least one column.','warning'); return; }
+    const from  = document.getElementById('rbFrom').value;
+    const to    = document.getElementById('rbTo').value;
+    const limit = document.getElementById('rbLimit').value;
+    const params = new URLSearchParams({ action:'run_report', source:src, from, to, limit });
+    cols.forEach(c => params.append('cols[]', c));
+
+    document.getElementById('rbError').classList.add('d-none');
+    fetch(window.location.pathname + '?' + params.toString())
+        .then(r => r.json())
+        .then(res => {
+            if (res.error) { document.getElementById('rbError').textContent = res.error; document.getElementById('rbError').classList.remove('d-none'); return; }
+            const thead = document.getElementById('rbThead');
+            const tbody = document.getElementById('rbTbody');
+            thead.innerHTML = '<tr>' + res.cols.map(c => '<th>' + c + '</th>').join('') + '</tr>';
+            tbody.innerHTML = res.rows.length
+                ? res.rows.map(r => '<tr>' + r.map(v => '<td>' + (v ?? '') + '</td>').join('') + '</tr>').join('')
+                : '';
+            document.getElementById('rbResultCount').textContent = res.rows.length + ' row' + (res.rows.length!==1?'s':'') + ' returned';
+            if (_rbTable) { try { _rbTable.destroy(); } catch(e){} _rbTable = null; }
+            if (res.rows.length) {
+                document.getElementById('rbResults').style.display = '';
+                document.getElementById('rbEmpty').style.display = 'none';
+                _rbTable = $('#rbTable').DataTable({ pageLength:25, order:[], responsive:true });
+            } else {
+                document.getElementById('rbResults').style.display = 'none';
+                document.getElementById('rbEmpty').style.display = '';
+            }
+        })
+        .catch(e => { document.getElementById('rbError').textContent = 'Network error: ' + e.message; document.getElementById('rbError').classList.remove('d-none'); });
+}
+
+function rbExportCsv() {
+    const src  = document.getElementById('rbSource').value;
+    const cols = Array.from(document.querySelectorAll('.rb-col:checked')).map(c => c.value);
+    if (!src || !cols.length) { rbRun(); return; }
+    const from  = document.getElementById('rbFrom').value;
+    const to    = document.getElementById('rbTo').value;
+    const params = new URLSearchParams({ action:'run_report', source:src, from, to, limit:500 });
+    cols.forEach(c => params.append('cols[]', c));
+    fetch(window.location.pathname + '?' + params.toString())
+        .then(r => r.json())
+        .then(res => {
+            if (res.error || !res.rows) return;
+            const rows = [res.cols, ...res.rows];
+            const csv  = rows.map(r => r.map(v => '"' + String(v??'').replace(/"/g,'""') + '"').join(',')).join('\\n');
+            const a    = document.createElement('a');
+            a.href     = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+            a.download = src + '-' + new Date().toISOString().slice(0,10) + '.csv';
+            a.click();
+        });
+}
+
+function rbSaveTemplate() {
+    const name = document.getElementById('rbTemplateName').value.trim();
+    const src  = document.getElementById('rbSource').value;
+    const cols = Array.from(document.querySelectorAll('.rb-col:checked')).map(c => c.value);
+    if (!name || !src || !cols.length) { Swal.fire('Incomplete','Fill name, source and columns.','warning'); return; }
+    fetch(window.location.pathname, {
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({action:'save_template', _token:CSRF_TOKEN, name, source:src, cols:JSON.stringify(cols), from:document.getElementById('rbFrom').value, to:document.getElementById('rbTo').value })
+    }).then(r=>r.json()).then(res => {
+        if (res.success) { Swal.fire({icon:'success',title:'Saved',timer:1200,showConfirmButton:false}).then(()=>location.reload()); }
+        else Swal.fire('Error', res.error ?? 'Could not save.', 'error');
+    });
+}
+
+function rbLoadTemplate(tpl) {
+    document.getElementById('rbSource').value = tpl.source;
+    rbLoadColumns();
+    setTimeout(() => {
+        document.querySelectorAll('.rb-col').forEach(c => { c.checked = tpl.cols.includes(c.value); });
+        if (tpl.from) document.getElementById('rbFrom').value = tpl.from;
+        if (tpl.to)   document.getElementById('rbTo').value   = tpl.to;
+        rbRun();
+    }, 50);
+}
+
+function rbDeleteTemplate(name) {
+    Swal.fire({title:'Delete template?',text:name,icon:'warning',showCancelButton:true,confirmButtonColor:'#e74c3c',confirmButtonText:'Delete'})
+        .then(r => {
+            if (!r.isConfirmed) return;
+            fetch(window.location.pathname, {
+                method:'POST',
+                headers:{'Content-Type':'application/x-www-form-urlencoded'},
+                body: new URLSearchParams({action:'delete_template',_token:CSRF_TOKEN,name})
+            }).then(()=>location.reload());
+        });
 }
 </script>
 JS;

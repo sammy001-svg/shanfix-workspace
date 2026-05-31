@@ -56,6 +56,14 @@ $ogUrl         = APP_URL . ($_SERVER['REQUEST_URI'] ?? '/');
 <meta name="twitter:title"      content="<?= e($ogTitle) ?>">
 <meta name="twitter:description"content="<?= e($ogDescription) ?>">
 <meta name="twitter:image"      content="<?= e($ogImage) ?>">
+<!-- PWA -->
+<link rel="manifest" href="<?= APP_URL ?>/manifest.php">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="<?= e(APP_NAME) ?>">
+<meta name="theme-color" content="#1A8A4E" id="pwaThemeColor">
+<link rel="apple-touch-icon" href="<?= APP_URL ?>/api/pwa-icon.php?size=192">
 <script>/* Prevent dark mode FOUC */(function(){const t=localStorage.getItem('odTheme');if(t)document.getElementById('htmlRoot')?.setAttribute('data-theme',t);})();</script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
@@ -63,6 +71,7 @@ $ogUrl         = APP_URL . ($_SERVER['REQUEST_URI'] ?? '/');
 <link href="<?= APP_URL ?>/assets/css/style.css" rel="stylesheet">
 <link href="<?= APP_URL ?>/assets/css/mobile.css" rel="stylesheet">
 <link href="<?= APP_URL ?>/assets/css/dark-mode.css" rel="stylesheet">
+<?= orgBrandingStyle((int)$user['org_id']) ?>
 <style>
 /* ── Header search bar ───────────────────────────────────────── */
 .header-search { position:relative; display:flex; align-items:center; }

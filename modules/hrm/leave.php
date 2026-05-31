@@ -53,6 +53,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$status, $user['id'], $id, $orgId]);
         setFlash('success', 'Leave request ' . $status . '.');
         logActivity('update', 'hrm', "Leave #$id $status by admin");
+        // SMS notification to employee
+        try {
+            $empRow = $pdo->prepare("SELECT e.phone, CONCAT(e.first_name,' ',e.last_name) AS name FROM hrm_leave_requests lr JOIN hrm_employees e ON lr.employee_id=e.id WHERE lr.id=?");
+            $empRow->execute([$id]);
+            $emp = $empRow->fetch();
+            if ($emp && !empty($emp['phone'])) {
+                $word = strtoupper($status);
+                notifySms($emp['phone'], APP_NAME . ": Hi {$emp['name']}, your leave request has been $word. Login to view details.", $orgId, "leave_$status");
+            }
+        } catch (Throwable $e) {}
         redirect('leave.php');
     }
 

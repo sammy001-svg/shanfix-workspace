@@ -51,6 +51,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("INSERT INTO health_appointments (org_id, patient_id, doctor_id, date, time, type, complaint, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([$orgId, $patientId, $doctorId, $date, $time, $type, $complaint, $status, $notes]);
             setFlash('success', 'Appointment booked successfully.');
+            // SMS confirmation to patient
+            try {
+                $ptRow = $pdo->prepare("SELECT phone, CONCAT(first_name,' ',last_name) AS name FROM health_patients WHERE id=? AND org_id=?");
+                $ptRow->execute([$patientId, $orgId]);
+                $pt = $ptRow->fetch();
+                if ($pt && !empty($pt['phone'])) {
+                    $apptStr = date('D d M', strtotime($date)) . ' at ' . date('g:ia', strtotime($time));
+                    notifySms($pt['phone'], APP_NAME . ": Hi {$pt['name']}, your {$type} appointment is confirmed for $apptStr. Please arrive 10 mins early.", $orgId, 'appointment_booked');
+                }
+            } catch (Throwable $e) {}
         }
         logActivity($id > 0 ? 'update' : 'create', 'health', "Appointment booked (Patient: $patientId, Doc: $doctorId, Date: $date)");
         redirect('appointments.php');

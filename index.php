@@ -16,6 +16,14 @@ $plans = $stmt->fetchAll();
 // USD exchange rate for pricing display (configurable in admin settings)
 $usdRate = max(1, (float)(getSetting('usd_rate', '130') ?: 130));
 
+// ── Company/contact settings — dynamically read from admin settings ────────
+$sitePhone   = getSetting('company_phone',   '+254 700 000 000');
+$siteEmail   = getSetting('support_email',   'info@orbitdesk.co.ke');
+$siteAddress = getSetting('company_address', 'Nairobi, Kenya');
+$siteHours   = getSetting('company_hours',   'Mon – Sat, 8AM – 8PM EAT');
+$siteWebsite = getSetting('company_website', APP_URL);
+$appTagline  = getSetting('app_tagline',     defined('APP_TAGLINE') ? APP_TAGLINE : 'Powering African Businesses');
+
 // ── Module feature lists (shown in popup) ─────────────────────
 $moduleFeatures = [
     'accounting'    => ['General ledger & chart of accounts','Invoice & receipt generation','Expense tracking & categorisation','VAT & tax computation reports','Bank reconciliation','Profit & loss and balance sheet'],
@@ -72,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['contact_submit'])) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <?php
-$_ogTitle = APP_NAME . ' — ' . APP_TAGLINE;
+$_ogTitle = APP_NAME . ' — ' . $appTagline;
 $_ogDesc  = 'The all-in-one business management platform for African businesses. Manage accounting, CRM, HRM, POS, hotel, school, SACCO, health clinic and 20+ modules in one place. M-Pesa integrated.';
 $_ogImg   = APP_URL . '/assets/images/og-banner-1200.png';
 $_ogUrl   = APP_URL . '/';
@@ -1299,28 +1307,32 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
             <div class="ci-icon"><i class="fas fa-phone"></i></div>
             <div>
               <div class="ci-label">Phone / WhatsApp</div>
-              <div class="ci-value">+254 700 000 000</div>
+              <div class="ci-value"><?= htmlspecialchars($sitePhone, ENT_QUOTES) ?></div>
             </div>
           </div>
           <div class="contact-info-card">
             <div class="ci-icon"><i class="fas fa-envelope"></i></div>
             <div>
               <div class="ci-label">Email</div>
-              <div class="ci-value">info@orbitdesk.co.ke</div>
+              <div class="ci-value">
+                <a href="mailto:<?= htmlspecialchars($siteEmail, ENT_QUOTES) ?>" style="color:inherit;text-decoration:none">
+                  <?= htmlspecialchars($siteEmail, ENT_QUOTES) ?>
+                </a>
+              </div>
             </div>
           </div>
           <div class="contact-info-card">
             <div class="ci-icon"><i class="fas fa-map-marker-alt"></i></div>
             <div>
               <div class="ci-label">Head Office</div>
-              <div class="ci-value">Nairobi, Kenya</div>
+              <div class="ci-value"><?= nl2br(htmlspecialchars($siteAddress, ENT_QUOTES)) ?></div>
             </div>
           </div>
           <div class="contact-info-card">
             <div class="ci-icon"><i class="fas fa-clock"></i></div>
             <div>
               <div class="ci-label">Business Hours</div>
-              <div class="ci-value">Mon – Sat, 8AM – 8PM EAT</div>
+              <div class="ci-value"><?= htmlspecialchars($siteHours, ENT_QUOTES) ?></div>
             </div>
           </div>
         </div>
@@ -1454,7 +1466,7 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
           <div style="width:38px;height:38px;background:linear-gradient(135deg,#1A8A4E,#22c27a);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:900;color:white;font-size:.85rem">OD</div>
           <div class="foot-logo-name">Orbit<span>Desk</span></div>
         </div>
-        <p class="foot-desc"><?=APP_TAGLINE?>. Built for African businesses, trusted across Kenya and East Africa.</p>
+        <p class="foot-desc"><?= htmlspecialchars($appTagline, ENT_QUOTES) ?>. Built for African businesses, trusted across Kenya and East Africa.</p>
         <div class="social-links">
           <a href="#" class="soc-btn"><i class="fab fa-facebook-f"></i></a>
           <a href="#" class="soc-btn"><i class="fab fa-twitter"></i></a>

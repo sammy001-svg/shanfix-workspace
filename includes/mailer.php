@@ -13,6 +13,8 @@ class Mailer
     private string $encryption; // 'tls' | 'ssl' | 'none'
     private string $fromName;
     private string $fromEmail;
+    private string $brandColor = '#1A8A4E';
+    private string $orgLogo    = '';
 
     public function __construct(array $config = [])
     {
@@ -23,6 +25,15 @@ class Mailer
         $this->encryption = $config['encryption'] ?? 'tls';
         $this->fromName   = $config['from_name']  ?? APP_NAME;
         $this->fromEmail  = $config['from_email'] ?? 'noreply@orbitdesk.co.ke';
+        if (!empty($config['brand_color'])) $this->brandColor = $config['brand_color'];
+        if (!empty($config['org_logo']))    $this->orgLogo    = $config['org_logo'];
+    }
+
+    /** Fluent setter — allows mailer()->withBranding('#hex','path/to/logo.png') */
+    public function withBranding(string $color, string $logo = ''): static {
+        if (preg_match('/^#[0-9A-Fa-f]{6}$/', $color)) $this->brandColor = $color;
+        $this->orgLogo = $logo;
+        return $this;
     }
 
     /**
@@ -63,7 +74,7 @@ class Mailer
             <p>Your workspace for <strong>{$orgName}</strong> has been set up successfully on " . APP_NAME . ".</p>
             <p>You can now access your dashboard and start using your selected modules.</p>
             <div style='text-align:center;margin:24px 0'>
-              <a href='" . APP_URL . "/auth/login.php' style='background:#1A8A4E;color:white;padding:12px 28px;border-radius:50px;text-decoration:none;font-weight:700;display:inline-block'>
+              <a href='" . APP_URL . "/auth/login.php' style='background:{$this->brandColor};color:white;padding:12px 28px;border-radius:50px;text-decoration:none;font-weight:700;display:inline-block'>
                 Access Your Dashboard →
               </a>
             </div>
@@ -82,11 +93,11 @@ class Mailer
               <tr><td style='padding:8px;border:1px solid #eee;color:#666'>Invoice #</td><td style='padding:8px;border:1px solid #eee;font-weight:700'>{$invoice['invoice_number']}</td></tr>
               <tr><td style='padding:8px;border:1px solid #eee;color:#666'>Amount</td><td style='padding:8px;border:1px solid #eee'>KES " . number_format($invoice['amount'],2) . "</td></tr>
               <tr><td style='padding:8px;border:1px solid #eee;color:#666'>Tax (VAT)</td><td style='padding:8px;border:1px solid #eee'>KES " . number_format($invoice['tax'],2) . "</td></tr>
-              <tr style='background:#f0f9f4'><td style='padding:8px;border:1px solid #eee;font-weight:700'>Total Due</td><td style='padding:8px;border:1px solid #eee;font-weight:700;color:#1A8A4E'>KES " . number_format($invoice['total'],2) . "</td></tr>
+              <tr style='background:#f0f9f4'><td style='padding:8px;border:1px solid #eee;font-weight:700'>Total Due</td><td style='padding:8px;border:1px solid #eee;font-weight:700;color:{$this->brandColor}'>KES " . number_format($invoice['total'],2) . "</td></tr>
               <tr><td style='padding:8px;border:1px solid #eee;color:#666'>Due Date</td><td style='padding:8px;border:1px solid #eee;color:#e67e22;font-weight:600'>{$invoice['due_date']}</td></tr>
             </table>
             <p style='color:#666;font-size:.85rem'>Pay via M-Pesa: Paybill <strong>" . (function_exists('getSettings') ? (getSettings(['mpesa_paybill'])['mpesa_paybill'] ?: 'N/A') : 'N/A') . "</strong>, Account: <strong>{$invoice['invoice_number']}</strong></p>
-            <a href='" . APP_URL . "/client/billing.php' style='background:#1A8A4E;color:white;padding:12px 28px;border-radius:50px;text-decoration:none;font-weight:700;display:inline-block'>
+            <a href='" . APP_URL . "/client/billing.php' style='background:{$this->brandColor};color:white;padding:12px 28px;border-radius:50px;text-decoration:none;font-weight:700;display:inline-block'>
               View &amp; Pay Invoice
             </a>
         ");
@@ -130,7 +141,7 @@ class Mailer
               </tr>
               <tr style='background:#f0f9f4'>
                 <td style='padding:8px;border:1px solid #eee;color:#666'>Renewal Amount</td>
-                <td style='padding:8px;border:1px solid #eee;font-weight:700;color:#1A8A4E'>
+                <td style='padding:8px;border:1px solid #eee;font-weight:700;color:{$this->brandColor}'>
                   KES " . number_format($amount, 2) . "
                 </td>
               </tr>
@@ -144,7 +155,7 @@ class Mailer
             <p>Renew before it expires to avoid service interruption and loss of data access.</p>
             <div style='text-align:center;margin:24px 0'>
               <a href='" . APP_URL . "/client/billing.php'
-                 style='background:#1A8A4E;color:white;padding:12px 28px;border-radius:50px;
+                 style='background:{$this->brandColor};color:white;padding:12px 28px;border-radius:50px;
                         text-decoration:none;font-weight:700;display:inline-block'>
                 Renew My Subscription →
               </a>
@@ -193,7 +204,7 @@ class Mailer
             <p>Your free trial on " . APP_NAME . " expires in <strong>{$daysLeft} day" . ($daysLeft===1?'':'s') . "</strong>.</p>
             <p>To keep access to all your modules and data, upgrade to a paid plan now.</p>
             <div style='text-align:center;margin:24px 0'>
-              <a href='" . APP_URL . "/client/billing.php' style='background:#1A8A4E;color:white;padding:12px 28px;border-radius:50px;text-decoration:none;font-weight:700;display:inline-block'>
+              <a href='" . APP_URL . "/client/billing.php' style='background:{$this->brandColor};color:white;padding:12px 28px;border-radius:50px;text-decoration:none;font-weight:700;display:inline-block'>
                 Upgrade My Plan →
               </a>
             </div>
@@ -205,9 +216,14 @@ class Mailer
 
     private function template(string $heading, string $content): string
     {
+        $bc      = $this->brandColor;
+        $logoHtml = $this->orgLogo
+            ? "<img src='" . APP_URL . "/" . htmlspecialchars($this->orgLogo, ENT_QUOTES) . "' alt='" . APP_NAME . "' style='max-height:40px;max-width:160px;object-fit:contain;margin-bottom:8px;display:block;margin:0 auto 8px'>"
+            : '';
         return "
         <div style='font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;background:#f0f4f8;padding:24px'>
-          <div style='background:#0B2D4E;padding:20px 28px;border-radius:12px 12px 0 0;text-align:center'>
+          <div style='background:{$bc};padding:20px 28px;border-radius:12px 12px 0 0;text-align:center'>
+            {$logoHtml}
             <span style='color:white;font-size:1.2rem;font-weight:800'>" . APP_NAME . "</span>
           </div>
           <div style='background:white;padding:32px;border-radius:0 0 12px 12px'>
@@ -216,7 +232,7 @@ class Mailer
             <hr style='border:none;border-top:1px solid #eee;margin:24px 0'>
             <p style='color:#999;font-size:.8rem;margin:0'>
               &copy; " . date('Y') . " " . APP_NAME . " &bull;
-              <a href='" . APP_URL . "' style='color:#1A8A4E'>Visit Website</a> &bull;
+              <a href='" . APP_URL . "' style='color:{$bc}'>Visit Website</a> &bull;
               If you did not sign up, ignore this email.
             </p>
           </div>
@@ -331,4 +347,19 @@ function mailer(): Mailer
 function sendEmail($to, string $subject, string $body): bool
 {
     return mailer()->send($to, $subject, $body);
+}
+
+/**
+ * Return a Mailer pre-configured with the org's branding (primary color + logo).
+ * Use instead of mailer() when sending org-specific emails.
+ *
+ * Usage: orgMailer($orgId)->sendWelcome(...);
+ */
+function orgMailer(int $orgId): Mailer
+{
+    if (!function_exists('getOrgBranding')) {
+        require_once __DIR__ . '/functions.php';
+    }
+    $b = getOrgBranding($orgId);
+    return mailer()->withBranding($b['color'], $b['logo']);
 }

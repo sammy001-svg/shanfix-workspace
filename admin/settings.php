@@ -12,6 +12,7 @@ $cfg = getSettings([
     'mpesa_paybill','mpesa_account_ref','bank_name','bank_account','bank_branch',
     'session_timeout','max_login_attempts',
     'sms_enabled','at_username','at_api_key','at_shortcode','at_env',
+    'company_phone','company_hours','usd_rate',
 ]);
 $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTES);
 ?>
@@ -54,7 +55,7 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
       <div class="card-body">
         <div class="row g-3">
           <div class="col-md-6"><label class="form-label">System Name</label><input type="text" class="form-control" id="app_name" value="<?= $s('app_name', APP_NAME) ?>"></div>
-          <div class="col-md-6"><label class="form-label">Support Email</label><input type="email" class="form-control" id="support_email" value="<?= $s('support_email', 'support@orbitdesk.co.ke') ?>"></div>
+          <div class="col-md-6"><label class="form-label">Support Email <span class="text-muted small">(shown on landing page &amp; emails)</span></label><input type="email" class="form-control" id="support_email" value="<?= $s('support_email', 'support@orbitdesk.co.ke') ?>"></div>
           <div class="col-12"><label class="form-label">Tagline <span class="text-muted small">(shown on invoices, emails, and login page)</span></label><input type="text" class="form-control" id="app_tagline" value="<?= $s('app_tagline', defined('APP_TAGLINE') ? APP_TAGLINE : '') ?>" placeholder="e.g. Powering African Businesses"></div>
           <div class="col-md-6">
             <label class="form-label">Default Currency</label>
@@ -73,8 +74,17 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
           </div>
           <div class="col-md-6"><label class="form-label">Trial Period (days)</label><input type="number" class="form-control" id="trial_days" value="<?= $s('trial_days','14') ?>"></div>
           <div class="col-md-6"><label class="form-label">Max Users (default)</label><input type="number" class="form-control" id="max_users" value="<?= $s('max_users','5') ?>"></div>
+          <div class="col-md-6">
+            <label class="form-label">USD Exchange Rate <span class="text-muted small">(1 USD = ? KES)</span></label>
+            <div class="input-group">
+              <span class="input-group-text">1 USD =</span>
+              <input type="number" class="form-control" id="usd_rate" value="<?= $s('usd_rate','130') ?>" step="0.01" min="1" placeholder="130">
+              <span class="input-group-text">KES</span>
+            </div>
+            <div class="form-text">Used to convert module &amp; plan prices to USD on the landing page and billing portal.</div>
+          </div>
           <div class="col-12">
-            <button class="btn btn-primary" onclick="saveSection('general',['app_name','app_tagline','support_email','default_currency','default_timezone','trial_days','max_users'],this)">
+            <button class="btn btn-primary" onclick="saveSection('general',['app_name','app_tagline','support_email','default_currency','default_timezone','trial_days','max_users','usd_rate'],this)">
               <i class="fas fa-save me-2"></i>Save General Settings
             </button>
           </div>
@@ -86,15 +96,34 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
     <div class="card mb-4" id="company">
       <div class="card-header"><i class="fas fa-building text-green me-2"></i>Company / Branding</div>
       <div class="card-body">
+        <div class="alert alert-info small mb-3 py-2">
+          <i class="fas fa-info-circle me-2"></i>These details appear on your <strong>landing page contact section</strong>, invoices, and email footers.
+        </div>
         <div class="row g-3">
-          <div class="col-12"><label class="form-label">Company Address <span class="text-muted small">(shown on invoices)</span></label>
-            <textarea class="form-control" id="company_address" rows="2" placeholder="P.O. Box 00100, Nairobi, Kenya"><?= $s('company_address') ?></textarea>
+          <div class="col-md-6">
+            <label class="form-label">Company Phone / WhatsApp <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="fas fa-phone"></i></span>
+              <input type="tel" class="form-control" id="company_phone" value="<?= $s('company_phone', '+254 700 000 000') ?>" placeholder="+254 700 000 000">
+            </div>
           </div>
-          <div class="col-md-6"><label class="form-label">Company Website</label>
-            <input type="url" class="form-control" id="company_website" value="<?= $s('company_website') ?>" placeholder="https://yourdomain.co.ke">
+          <div class="col-md-6">
+            <label class="form-label">Company Website</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="fas fa-globe"></i></span>
+              <input type="url" class="form-control" id="company_website" value="<?= $s('company_website') ?>" placeholder="https://yourdomain.co.ke">
+            </div>
           </div>
           <div class="col-12">
-            <button class="btn btn-primary" onclick="saveSection('company',['company_address','company_website'],this)">
+            <label class="form-label">Company Address <span class="text-muted small">(shown on invoices &amp; landing page)</span></label>
+            <textarea class="form-control" id="company_address" rows="2" placeholder="P.O. Box 00100, Nairobi, Kenya"><?= $s('company_address') ?></textarea>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Business Hours <span class="text-muted small">(shown on landing page)</span></label>
+            <input type="text" class="form-control" id="company_hours" value="<?= $s('company_hours', 'Mon – Sat, 8AM – 8PM EAT') ?>" placeholder="Mon – Sat, 8AM – 8PM EAT">
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary" onclick="saveSection('company',['company_address','company_website','company_phone','company_hours'],this)">
               <i class="fas fa-save me-2"></i>Save Company Settings
             </button>
           </div>
@@ -181,18 +210,22 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
               <?php endforeach; ?>
             </select>
           </div>
-          <div class="col-md-6 d-flex align-items-end">
-            <div class="input-group">
-              <input type="email" class="form-control" id="testEmailAddr" placeholder="Send test to...">
-              <button class="btn btn-outline-secondary" type="button" id="testEmailBtn" onclick="sendTestEmail()">
-                <i class="fas fa-paper-plane me-1"></i>Send Test
-              </button>
-            </div>
-          </div>
           <div class="col-12">
             <button class="btn btn-primary" onclick="saveSection('email',['smtp_host','smtp_port','smtp_user','smtp_pass','smtp_enc','mail_from','mail_from_name'],this)">
               <i class="fas fa-save me-2"></i>Save Email Settings
             </button>
+          </div>
+          <div class="col-12 border-top pt-3 mt-1">
+            <label class="form-label fw-semibold">Test Your SMTP Configuration</label>
+            <div class="input-group mb-2">
+              <span class="input-group-text"><i class="fas fa-envelope"></i></span>
+              <input type="email" class="form-control" id="testEmailAddr" placeholder="Enter recipient address for test email">
+              <button class="btn btn-outline-success" type="button" id="testEmailBtn" onclick="sendTestEmail()">
+                <i class="fas fa-paper-plane me-1"></i>Send Test Email
+              </button>
+            </div>
+            <div class="form-text mb-2">Save your SMTP settings above first, then test. A real email will be sent via your configured SMTP server.</div>
+            <div id="emailTestResult" style="display:none"></div>
           </div>
         </div>
       </div>
@@ -412,14 +445,21 @@ function testKopokopo() {
   });
 }
 
-// ── Test email with spinner and clear feedback ────────────────────────────────
+// ── Test email with full diagnostic output ───────────────────────────────────
 function sendTestEmail() {
-  const addr = document.getElementById('testEmailAddr').value.trim();
-  if (!addr) { showAlert('warning', 'Enter a recipient email address first.'); return; }
+  const addr   = document.getElementById('testEmailAddr').value.trim();
+  const result = document.getElementById('emailTestResult');
+  if (!addr) {
+    result.style.display = '';
+    result.innerHTML = '<div class="alert alert-warning small py-2 mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Please enter a recipient email address.</div>';
+    return;
+  }
 
   const btn      = document.getElementById('testEmailBtn');
-  const origHTML = btn ? btn.innerHTML : null;
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sending…'; }
+  const origHTML = btn.innerHTML;
+  btn.disabled   = true;
+  btn.innerHTML  = '<i class="fas fa-spinner fa-spin me-1"></i>Sending…';
+  result.style.display = 'none';
 
   fetch('<?= APP_URL ?>/admin/ajax.php', {
     method: 'POST',
@@ -428,12 +468,35 @@ function sendTestEmail() {
   })
   .then(r => r.json())
   .then(res => {
-    if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
-    showAlert(res.success ? 'success' : 'danger', res.message ?? (res.error ?? 'Unknown error'));
+    btn.disabled  = false;
+    btn.innerHTML = origHTML;
+    result.style.display = '';
+    if (res.success) {
+      result.innerHTML = `<div class="alert alert-success small py-2 mb-0">
+        <i class="fas fa-check-circle me-2"></i>
+        <strong>SMTP test passed!</strong> Email sent to <strong>${addr}</strong>. Check your inbox.
+      </div>`;
+    } else {
+      const diag = res.debug ? `<details class="mt-2"><summary class="small text-muted" style="cursor:pointer">Technical details</summary><pre class="mt-1 mb-0 small bg-light p-2 rounded" style="font-size:.75rem;white-space:pre-wrap">${res.debug}</pre></details>` : '';
+      result.innerHTML = `<div class="alert alert-danger small py-2 mb-0">
+        <i class="fas fa-times-circle me-2"></i>
+        <strong>SMTP test failed.</strong> ${res.message ?? res.error ?? 'Unknown error'}
+        ${diag}
+        <div class="mt-2 text-muted" style="font-size:.75rem">
+          Check: <strong>Host/Port/Encryption</strong> match your mail server.
+          Common ports: <strong>587</strong> (TLS), <strong>465</strong> (SSL), <strong>25</strong> (None).
+          Make sure credentials are saved before testing.
+        </div>
+      </div>`;
+    }
   })
-  .catch(() => {
-    if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
-    showAlert('danger', 'Network error — test email could not be sent.');
+  .catch(e => {
+    btn.disabled  = false;
+    btn.innerHTML = origHTML;
+    result.style.display = '';
+    result.innerHTML = `<div class="alert alert-danger small py-2 mb-0">
+      <i class="fas fa-wifi me-2"></i><strong>Network error:</strong> ${e.message}
+    </div>`;
   });
 }
 
