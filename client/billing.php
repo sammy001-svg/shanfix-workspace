@@ -537,7 +537,7 @@ if ($usersNear || $modulesNear):
               </div>
             </div>
             <div class="text-end flex-shrink-0">
-              <div class="fw-bold text-green" style="font-size:.95rem;white-space:nowrap">
+              <div class="fw-bold text-green" style="font-size:.92rem;white-space:nowrap">
                 KES <?= number_format($planPrice, 0) ?>
                 <span class="text-muted fw-normal" style="font-size:.7rem"><?= $cycleLabel ?></span>
               </div>
@@ -622,9 +622,9 @@ if ($usersNear || $modulesNear):
             <span class="small text-muted" style="white-space:nowrap">KES <?= number_format($taxEst, 0) ?></span>
           </div>
           <div class="d-flex justify-content-between align-items-center border-top pt-2">
-            <span class="fw-bold small">Total<?= $cycleLabel ?> (incl. VAT)</span>
+            <span class="fw-bold small">Total<?= $cycleLabel ?></span>
             <div class="text-end">
-              <span class="fw-bold text-green" style="font-size:1rem;white-space:nowrap">KES <?= number_format($planTotal, 0) ?></span>
+              <span class="fw-bold text-green" style="font-size:.92rem;white-space:nowrap">KES <?= number_format($planTotal, 0) ?></span>
               <?php if ($planTotalUsd > 0 && $usdRate > 1): ?>
               <div class="text-muted" style="font-size:.68rem;white-space:nowrap">≈ USD <?= number_format($planTotalUsd, 2) ?></div>
               <?php endif; ?>

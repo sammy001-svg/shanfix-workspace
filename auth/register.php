@@ -100,7 +100,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Create Account — <?= APP_NAME ?></title>
+<title>Start Free Trial — <?= APP_NAME ?> | All-in-One Business Management</title>
+<meta name="description" content="Create your free <?= APP_NAME ?> account. 14-day free trial, no credit card required. Access 22+ business modules — accounting, CRM, HRM, POS, school, SACCO, hotel &amp; more.">
+<meta name="keywords" content="OrbitDesk free trial, business management software Kenya, ERP sign up Africa, M-Pesa accounting software">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="<?= APP_URL ?>/auth/register.php">
+<meta property="og:title"       content="Start Free Trial — <?= APP_NAME ?>">
+<meta property="og:description" content="Get 14-day free access to 22+ business modules. M-Pesa integrated. No credit card needed.">
+<meta property="og:image"       content="<?= APP_URL ?>/assets/images/og-banner-1200.png">
+<meta property="og:url"         content="<?= APP_URL ?>/auth/register.php">
+<meta property="og:type"        content="website">
+<link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/assets/images/favicon.svg">
+<link rel="sitemap" type="application/xml" href="<?= APP_URL ?>/sitemap.xml">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <link href="<?= APP_URL ?>/assets/css/style.css" rel="stylesheet">

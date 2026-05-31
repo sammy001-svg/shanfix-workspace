@@ -108,6 +108,164 @@ $_ogUrl   = APP_URL . '/';
 <meta name="twitter:image"      content="<?= e($_ogImg) ?>">
 <meta name="twitter:image:alt"  content="<?= e(APP_NAME) ?> preview">
 <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/assets/images/favicon.svg">
+<!-- PWA & Sitemap discovery -->
+<link rel="manifest" href="<?= APP_URL ?>/manifest.php">
+<link rel="sitemap" type="application/xml" title="Sitemap" href="<?= APP_URL ?>/sitemap.xml">
+<meta name="theme-color" content="#1A8A4E">
+
+<!-- ═══════════════════════════════════════════════════════
+     JSON-LD STRUCTURED DATA (Schema.org)
+     Enables rich results in Google: sitelinks, FAQ,
+     software ratings, and knowledge graph cards.
+ ══════════════════════════════════════════════════════ -->
+<?php
+// Build plan offers for PriceSpecification
+$_planOffers = [];
+foreach ($plans as $_p) {
+    $_planOffers[] = [
+        '@type'         => 'Offer',
+        'name'          => $_p['name'],
+        'price'         => (string)(float)$_p['price_monthly'],
+        'priceCurrency' => 'KES',
+        'priceSpecification' => [
+            '@type'        => 'UnitPriceSpecification',
+            'price'        => (string)(float)$_p['price_monthly'],
+            'priceCurrency'=> 'KES',
+            'unitCode'     => 'MON',
+        ],
+        'eligibleCustomerType' => 'Business',
+        'availability'  => 'https://schema.org/InStock',
+        'url'           => APP_URL . '/auth/register.php',
+    ];
+}
+
+// Module list for ItemList
+$_modItems = [];
+foreach ($modules as $_i => $_m) {
+    $_modItems[] = [
+        '@type'    => 'ListItem',
+        'position' => $_i + 1,
+        'name'     => $_m['name'],
+        'url'      => APP_URL . '/module/' . $_m['slug'],
+        'description' => $_m['description'] ?? '',
+    ];
+}
+
+// FAQ entries
+$_faqs = [
+    ['q' => 'What is ' . APP_NAME . '?',
+     'a' => APP_NAME . ' is an all-in-one business management platform for African businesses. It includes 22+ integrated modules — accounting, CRM, HRM, POS, school management, SACCO, hotel, health clinic, and more — all in one place with M-Pesa payment integration.'],
+    ['q' => 'Is M-Pesa payment integration included?',
+     'a' => 'Yes. ' . APP_NAME . ' includes native M-Pesa Daraja API integration (STK push via KopoKopo) for accepting payments, generating invoices, and automating billing — all without needing a third-party service.'],
+    ['q' => 'How many modules does ' . APP_NAME . ' include?',
+     'a' => APP_NAME . ' includes 22 business modules: Accounting, CRM, Sales, HRM, POS, School Management, Health/Clinic, SACCO, Rental Properties, Church, Finance, Hotel, Salon, Retail, Tour & Travel, Events, Manufacturing, Car Yard, Shopping Mall, Courier, and Driving School.'],
+    ['q' => 'Is there a free trial?',
+     'a' => 'Yes. Every new organisation gets a 14-day free trial with full access to all selected modules. No credit card is required to start.'],
+    ['q' => 'How much does ' . APP_NAME . ' cost?',
+     'a' => 'Plans start at KES 4,999 per month (Starter), KES 12,999/mo (Professional), and KES 29,999/mo (Enterprise). Annual billing saves up to 17%. All prices include M-Pesa integration, local support, and full feature access.'],
+    ['q' => 'Can I use ' . APP_NAME . ' for multiple businesses?',
+     'a' => 'Yes. ' . APP_NAME . ' is a multi-tenant platform. Each organisation has a completely separate workspace, user base, and data. You can manage multiple client organisations from the super-admin panel.'],
+    ['q' => 'Does ' . APP_NAME . ' work on mobile phones?',
+     'a' => 'Yes. ' . APP_NAME . ' is fully mobile-responsive and installable as a Progressive Web App (PWA) on Android and iOS. It is optimised for low-bandwidth networks common in Kenya and East Africa.'],
+    ['q' => 'Where is my data stored?',
+     'a' => 'Your data is stored on a cPanel-hosted MySQL database. ' . APP_NAME . ' uses AES-256 encryption for sensitive fields, enforces HTTPS, and includes role-based access control so only authorised users can access your data.'],
+];
+
+$_jsonLd = [
+    '@context' => 'https://schema.org',
+    '@graph'   => [
+        // 1. Organization
+        [
+            '@type'       => 'Organization',
+            '@id'         => APP_URL . '/#organization',
+            'name'        => APP_NAME,
+            'url'         => APP_URL,
+            'logo'        => [
+                '@type'   => 'ImageObject',
+                'url'     => APP_URL . '/assets/images/favicon.svg',
+                'width'   => 512,
+                'height'  => 512,
+            ],
+            'description' => APP_TAGLINE . '. All-in-one business management for African businesses.',
+            'email'       => $siteEmail,
+            'telephone'   => $sitePhone,
+            'address'     => [
+                '@type'           => 'PostalAddress',
+                'streetAddress'   => $siteAddress,
+                'addressLocality' => 'Nairobi',
+                'addressCountry'  => 'KE',
+            ],
+            'areaServed'  => ['KE', 'UG', 'TZ', 'RW', 'ET', 'NG', 'GH', 'ZA'],
+            'knowsAbout'  => ['ERP Software', 'Business Management', 'M-Pesa Integration', 'SaaS Africa'],
+            'sameAs'      => [],
+        ],
+        // 2. WebSite (enables Google Sitelinks Search Box)
+        [
+            '@type'           => 'WebSite',
+            '@id'             => APP_URL . '/#website',
+            'url'             => APP_URL,
+            'name'            => APP_NAME,
+            'description'     => APP_TAGLINE,
+            'publisher'       => ['@id' => APP_URL . '/#organization'],
+            'inLanguage'      => 'en-KE',
+        ],
+        // 3. SoftwareApplication
+        [
+            '@type'                  => 'SoftwareApplication',
+            '@id'                    => APP_URL . '/#software',
+            'name'                   => APP_NAME,
+            'alternateName'          => 'OrbitDesk',
+            'description'            => 'All-in-one business management platform with 22 modules including accounting, CRM, HRM, POS, SACCO, school management, hotel, and health clinic. Built for African businesses with M-Pesa integration.',
+            'applicationCategory'    => 'BusinessApplication',
+            'applicationSubCategory' => 'ERP, CRM, Accounting, HRM, POS',
+            'operatingSystem'        => 'Web Browser, Android (PWA), iOS (PWA)',
+            'url'                    => APP_URL,
+            'screenshot'             => APP_URL . '/assets/images/og-banner-1200.png',
+            'inLanguage'             => 'en-KE',
+            'isAccessibleForFree'    => true,
+            'offers'                 => ['@type' => 'AggregateOffer', 'offerCount' => count($plans), 'lowPrice' => !empty($plans) ? (float)$plans[0]['price_monthly'] : 0, 'highPrice' => !empty($plans) ? (float)end($plans)['price_monthly'] : 0, 'priceCurrency' => 'KES'],
+            'publisher'              => ['@id' => APP_URL . '/#organization'],
+            'featureList'            => 'Accounting & Bookkeeping, CRM, HRM & Payroll, Point of Sale (POS), School Management, SACCO System, Hotel Management, Health Clinic, Rental Properties, Church Management, Finance & Budgeting, Salon & Barbershop, Retail & Wholesale, Tour & Travel, Events Management, Manufacturing, Car Yard, Shopping Mall, Courier Management, Driving School',
+        ],
+        // 4. WebPage
+        [
+            '@type'           => 'WebPage',
+            '@id'             => APP_URL . '/#webpage',
+            'url'             => APP_URL,
+            'name'            => $_ogTitle,
+            'description'     => $_ogDesc,
+            'isPartOf'        => ['@id' => APP_URL . '/#website'],
+            'about'           => ['@id' => APP_URL . '/#software'],
+            'inLanguage'      => 'en-KE',
+            'datePublished'   => '2024-01-01',
+            'dateModified'    => date('Y-m-d'),
+            'primaryImageOfPage' => ['@type' => 'ImageObject', 'url' => APP_URL . '/assets/images/og-banner-1200.png'],
+        ],
+        // 5. ItemList — all modules
+        [
+            '@type'           => 'ItemList',
+            'name'            => APP_NAME . ' — All Business Modules',
+            'description'     => '22 integrated business management modules for African businesses',
+            'url'             => APP_URL . '/#modules',
+            'numberOfItems'   => count($_modItems),
+            'itemListElement' => $_modItems,
+        ],
+        // 6. FAQPage — rich snippet in Google
+        [
+            '@type'       => 'FAQPage',
+            '@id'         => APP_URL . '/#faq',
+            'mainEntity'  => array_map(fn($f) => [
+                '@type'          => 'Question',
+                'name'           => $f['q'],
+                'acceptedAnswer' => ['@type' => 'Answer', 'text' => $f['a']],
+            ], $_faqs),
+        ],
+    ],
+];
+echo '<script type="application/ld+json">' . json_encode($_jsonLd, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . '</script>' . "\n";
+// Clean up vars
+unset($_planOffers, $_modItems, $_faqs, $_jsonLd, $_ogTitle, $_ogDesc, $_ogImg, $_ogUrl);
+?>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">

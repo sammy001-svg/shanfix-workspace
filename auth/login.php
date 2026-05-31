@@ -160,7 +160,12 @@ function _completeLogin(PDO $pdo, array $user, bool $remember): void {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sign In — <?= APP_NAME ?></title>
+<title>Sign In — <?= APP_NAME ?> | Business Management Platform</title>
+<meta name="description" content="Sign in to your <?= APP_NAME ?> workspace. Manage your business modules, invoices, team, and reports all in one place.">
+<meta name="robots" content="noindex, follow">
+<link rel="canonical" href="<?= APP_URL ?>/auth/login.php">
+<link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/assets/images/favicon.svg">
+<link rel="sitemap" type="application/xml" href="<?= APP_URL ?>/sitemap.xml">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <link href="<?= APP_URL ?>/assets/css/style.css" rel="stylesheet">

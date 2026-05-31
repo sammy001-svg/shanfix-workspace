@@ -76,12 +76,8 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
           <div class="col-md-6"><label class="form-label">Max Users (default)</label><input type="number" class="form-control" id="max_users" value="<?= $s('max_users','5') ?>"></div>
           <div class="col-md-6">
             <label class="form-label">USD Exchange Rate <span class="text-muted small">(1 USD = ? KES)</span></label>
-            <div class="input-group">
-              <span class="input-group-text">1 USD =</span>
-              <input type="number" class="form-control" id="usd_rate" value="<?= $s('usd_rate','130') ?>" step="0.01" min="1" placeholder="130">
-              <span class="input-group-text">KES</span>
-            </div>
-            <div class="form-text">Used to convert module &amp; plan prices to USD on the landing page and billing portal.</div>
+            <input type="number" class="form-control" id="usd_rate" value="<?= $s('usd_rate','130') ?>" step="0.01" min="1" placeholder="130">
+            <div class="form-text">Used to show USD prices on the landing page &amp; billing portal.</div>
           </div>
           <div class="col-12">
             <button class="btn btn-primary" onclick="saveSection('general',['app_name','app_tagline','support_email','default_currency','default_timezone','trial_days','max_users','usd_rate'],this)">
@@ -96,31 +92,24 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
     <div class="card mb-4" id="company">
       <div class="card-header"><i class="fas fa-building text-green me-2"></i>Company / Branding</div>
       <div class="card-body">
-        <div class="alert alert-info small mb-3 py-2">
-          <i class="fas fa-info-circle me-2"></i>These details appear on your <strong>landing page contact section</strong>, invoices, and email footers.
-        </div>
         <div class="row g-3">
           <div class="col-md-6">
-            <label class="form-label">Company Phone / WhatsApp <span class="text-danger">*</span></label>
-            <div class="input-group">
-              <span class="input-group-text"><i class="fas fa-phone"></i></span>
-              <input type="tel" class="form-control" id="company_phone" value="<?= $s('company_phone', '+254 700 000 000') ?>" placeholder="+254 700 000 000">
-            </div>
+            <label class="form-label">Company Phone / WhatsApp</label>
+            <input type="tel" class="form-control" id="company_phone" value="<?= $s('company_phone', '+254 700 000 000') ?>" placeholder="+254 700 000 000">
+            <div class="form-text">Shown on landing page contact section.</div>
           </div>
           <div class="col-md-6">
             <label class="form-label">Company Website</label>
-            <div class="input-group">
-              <span class="input-group-text"><i class="fas fa-globe"></i></span>
-              <input type="url" class="form-control" id="company_website" value="<?= $s('company_website') ?>" placeholder="https://yourdomain.co.ke">
-            </div>
+            <input type="url" class="form-control" id="company_website" value="<?= $s('company_website') ?>" placeholder="https://yourdomain.co.ke">
           </div>
           <div class="col-12">
             <label class="form-label">Company Address <span class="text-muted small">(shown on invoices &amp; landing page)</span></label>
             <textarea class="form-control" id="company_address" rows="2" placeholder="P.O. Box 00100, Nairobi, Kenya"><?= $s('company_address') ?></textarea>
           </div>
           <div class="col-md-6">
-            <label class="form-label">Business Hours <span class="text-muted small">(shown on landing page)</span></label>
+            <label class="form-label">Business Hours</label>
             <input type="text" class="form-control" id="company_hours" value="<?= $s('company_hours', 'Mon – Sat, 8AM – 8PM EAT') ?>" placeholder="Mon – Sat, 8AM – 8PM EAT">
+            <div class="form-text">Shown on landing page contact section.</div>
           </div>
           <div class="col-12">
             <button class="btn btn-primary" onclick="saveSection('company',['company_address','company_website','company_phone','company_hours'],this)">
@@ -210,22 +199,19 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
               <?php endforeach; ?>
             </select>
           </div>
+          <div class="col-md-6 d-flex align-items-end">
+            <div class="input-group">
+              <input type="email" class="form-control" id="testEmailAddr" placeholder="Send test to...">
+              <button class="btn btn-outline-secondary" type="button" id="testEmailBtn" onclick="sendTestEmail()">
+                <i class="fas fa-paper-plane me-1"></i>Send Test
+              </button>
+            </div>
+          </div>
+          <div class="col-12" id="emailTestResult" style="display:none"></div>
           <div class="col-12">
             <button class="btn btn-primary" onclick="saveSection('email',['smtp_host','smtp_port','smtp_user','smtp_pass','smtp_enc','mail_from','mail_from_name'],this)">
               <i class="fas fa-save me-2"></i>Save Email Settings
             </button>
-          </div>
-          <div class="col-12 border-top pt-3 mt-1">
-            <label class="form-label fw-semibold">Test Your SMTP Configuration</label>
-            <div class="input-group mb-2">
-              <span class="input-group-text"><i class="fas fa-envelope"></i></span>
-              <input type="email" class="form-control" id="testEmailAddr" placeholder="Enter recipient address for test email">
-              <button class="btn btn-outline-success" type="button" id="testEmailBtn" onclick="sendTestEmail()">
-                <i class="fas fa-paper-plane me-1"></i>Send Test Email
-              </button>
-            </div>
-            <div class="form-text mb-2">Save your SMTP settings above first, then test. A real email will be sent via your configured SMTP server.</div>
-            <div id="emailTestResult" style="display:none"></div>
           </div>
         </div>
       </div>
