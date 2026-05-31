@@ -434,17 +434,21 @@ function getOrgBranding(int $orgId): array {
 
 /**
  * Output a <style> block that overrides --green CSS variables with the org's primary color.
+ * Only injects when the org has a CUSTOM color set — otherwise returns empty string so
+ * style.css variables remain unchanged.
  * Call inside <head> after style.css is loaded.
  */
 function orgBrandingStyle(int $orgId): string {
     $b   = getOrgBranding($orgId);
     $hex = $b['color'];
 
-    // Derive dark/light shades from the hex (simple brightness scaling)
+    // Do nothing when using the default platform color — let style.css values stand.
+    if ($hex === '#1A8A4E') return '';
+
+    // Derive dark/light/pale shades from the custom hex
     [$r, $g, $bl] = sscanf(ltrim($hex, '#'), '%02x%02x%02x');
     $dark  = sprintf('#%02x%02x%02x', max(0, (int)($r * .65)), max(0, (int)($g * .65)), max(0, (int)($bl * .65)));
-    $light = sprintf('#%02x%02x%02x', min(255, (int)($r + (255 - $r) * .35)), min(255, (int)($g + (255 - $g) * .35)), min(255, (int)($bl + (255 - $bl) * .35)));
-    // Pale = full rgb at 8% opacity rendered as a hex approximation on white
+    $light = sprintf('#%02x%02x%02x', min(255, (int)($r + (255 - $r) * .45)), min(255, (int)($g + (255 - $g) * .45)), min(255, (int)($bl + (255 - $bl) * .45)));
     $pale  = sprintf('#%02x%02x%02x', min(255, (int)(255 * .92 + $r * .08)), min(255, (int)(255 * .92 + $g * .08)), min(255, (int)(255 * .92 + $bl * .08)));
 
     return "<style>:root{--green:{$hex};--green-dark:{$dark};--green-light:{$light};--green-pale:{$pale}}</style>\n";

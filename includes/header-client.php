@@ -208,14 +208,14 @@ document.addEventListener('DOMContentLoaded', function() {
       <i class="fas fa-home"></i><span>Dashboard</span></a>
     <?php if (!$__isStaff): ?>
     <a href="<?= APP_URL ?>/client/modules.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'modules.php' ? 'active' : '' ?>">
-      <i class="fas fa-store"></i><span>Module Marketplace</span></a>
+      <i class="fas fa-th"></i><span>My Modules</span></a>
     <?php endif; ?>
 
     <?php if (!empty($modules)): ?>
     <div class="nav-label"><?= $__isStaff ? 'MY MODULES' : 'ACTIVE MODULES' ?></div>
     <?php foreach ($modules as $mod): ?>
     <a href="<?= APP_URL ?>/modules/<?= $mod['slug'] ?>/index.php" class="nav-item">
-      <i class="<?= e($mod['icon']) ?>" style="color:<?= e($mod['color']) ?>"></i><span><?= e($mod['name']) ?></span></a>
+      <i class="<?= e($mod['icon']) ?>"></i><span><?= e($mod['name']) ?></span></a>
     <?php endforeach; ?>
     <?php endif; ?>
 

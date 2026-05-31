@@ -34,16 +34,29 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
   </div>
 </div>
 
+<style>
+/* ── Settings page sidebar nav ───────────────── */
+#settingsTabs { border-radius:10px; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,.06); }
+#settingsTabs .list-group-item { border:none; border-left:3px solid transparent; padding:.7rem 1rem; font-size:.875rem; font-weight:500; color:#475569; display:flex; align-items:center; gap:.6rem; transition:all .15s; background:#fff; }
+#settingsTabs .list-group-item i { width:16px; text-align:center; opacity:.7; }
+#settingsTabs .list-group-item:hover { background:#f0fdf4; color:#1A8A4E; border-left-color:#c6e8d7; }
+#settingsTabs .list-group-item.active { background:#e8f5ef; color:#1A8A4E; border-left-color:#1A8A4E; font-weight:600; }
+#settingsTabs .list-group-item.active i { opacity:1; }
+.settings-sticky { position:sticky; top:80px; }
+</style>
+
 <div class="row g-4">
   <div class="col-lg-3">
+    <div class="settings-sticky">
     <div class="list-group" id="settingsTabs">
-      <a href="#general"  class="list-group-item list-group-item-action active d-flex align-items-center gap-2"><i class="fas fa-sliders-h"></i> General</a>
-      <a href="#company"  class="list-group-item list-group-item-action d-flex align-items-center gap-2"><i class="fas fa-building"></i> Company</a>
-      <a href="#billing"  class="list-group-item list-group-item-action d-flex align-items-center gap-2"><i class="fas fa-file-invoice-dollar"></i> Billing</a>
-      <a href="#email"    class="list-group-item list-group-item-action d-flex align-items-center gap-2"><i class="fas fa-envelope"></i> Email / SMTP</a>
-      <a href="#kopokopo" class="list-group-item list-group-item-action d-flex align-items-center gap-2"><i class="fas fa-mobile-alt"></i> KopoKopo (M-Pesa)</a>
-      <a href="#sms"      class="list-group-item list-group-item-action d-flex align-items-center gap-2"><i class="fas fa-sms"></i> SMS Notifications</a>
-      <a href="#security" class="list-group-item list-group-item-action d-flex align-items-center gap-2"><i class="fas fa-shield-alt"></i> Security</a>
+      <a href="#general"  class="list-group-item active"><i class="fas fa-sliders-h"></i> General</a>
+      <a href="#company"  class="list-group-item"><i class="fas fa-building"></i> Company</a>
+      <a href="#billing"  class="list-group-item"><i class="fas fa-file-invoice-dollar"></i> Billing</a>
+      <a href="#email"    class="list-group-item"><i class="fas fa-envelope"></i> Email / SMTP</a>
+      <a href="#kopokopo" class="list-group-item"><i class="fas fa-mobile-alt"></i> KopoKopo (M-Pesa)</a>
+      <a href="#sms"      class="list-group-item"><i class="fas fa-sms"></i> SMS Notifications</a>
+      <a href="#security" class="list-group-item"><i class="fas fa-shield-alt"></i> Security</a>
+    </div>
     </div>
   </div>
 
@@ -199,19 +212,22 @@ $s = fn(string $k, string $d = '') => htmlspecialchars($cfg[$k] ?? $d, ENT_QUOTE
               <?php endforeach; ?>
             </select>
           </div>
-          <div class="col-md-6 d-flex align-items-end">
-            <div class="input-group">
-              <input type="email" class="form-control" id="testEmailAddr" placeholder="Send test to...">
-              <button class="btn btn-outline-secondary" type="button" id="testEmailBtn" onclick="sendTestEmail()">
-                <i class="fas fa-paper-plane me-1"></i>Send Test
-              </button>
-            </div>
-          </div>
-          <div class="col-12" id="emailTestResult" style="display:none"></div>
           <div class="col-12">
             <button class="btn btn-primary" onclick="saveSection('email',['smtp_host','smtp_port','smtp_user','smtp_pass','smtp_enc','mail_from','mail_from_name'],this)">
               <i class="fas fa-save me-2"></i>Save Email Settings
             </button>
+          </div>
+          <div class="col-12 border-top pt-3 mt-1">
+            <label class="form-label fw-semibold">Test Your SMTP Configuration</label>
+            <div class="input-group mb-2">
+              <span class="input-group-text"><i class="fas fa-envelope"></i></span>
+              <input type="email" class="form-control" id="testEmailAddr" placeholder="Enter recipient address for test email">
+              <button class="btn btn-outline-success" type="button" id="testEmailBtn" onclick="sendTestEmail()">
+                <i class="fas fa-paper-plane me-1"></i>Send Test Email
+              </button>
+            </div>
+            <div class="form-text mb-2">Save your SMTP settings above first, then send a test. A real email will be sent via your configured SMTP server.</div>
+            <div id="emailTestResult" style="display:none"></div>
           </div>
         </div>
       </div>

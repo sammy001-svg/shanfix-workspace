@@ -363,9 +363,28 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
 }
 ?>
 
+<style>
+/* ── Billing page tab nav — OrbitDesk brand ─────────────────────── */
+.billing-tabs { display:flex; gap:4px; background:#f0f4f8; border-radius:12px; padding:4px; margin-bottom:1.5rem; flex-wrap:wrap; }
+.billing-tabs a {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:.45rem 1rem; border-radius:9px; font-size:.84rem; font-weight:500;
+  color:#475569; text-decoration:none; transition:all .18s; white-space:nowrap;
+}
+.billing-tabs a:hover { background:#fff; color:#0B2D4E; }
+.billing-tabs a.active { background:#fff; color:#1A8A4E; font-weight:700;
+  box-shadow:0 1px 6px rgba(0,0,0,.1); }
+.billing-tabs a.active i { color:#1A8A4E; }
+.billing-tabs .tab-badge { background:#f59e0b; color:#fff; border-radius:50px;
+  font-size:.65rem; font-weight:700; padding:.1rem .42rem; margin-left:2px; }
+.billing-tabs .tab-badge-green { background:#1A8A4E; color:#fff; border-radius:50px;
+  font-size:.65rem; font-weight:700; padding:.1rem .42rem; margin-left:2px; }
+@media(max-width:640px) { .billing-tabs a { font-size:.78rem; padding:.4rem .7rem; } }
+</style>
+
 <div class="page-header d-flex align-items-center justify-content-between mb-3">
   <div>
-    <h4><i class="fas fa-file-invoice-dollar me-2 text-green"></i>Billing & Subscription</h4>
+    <h4><i class="fas fa-file-invoice-dollar me-2 text-green"></i>Billing &amp; Subscription</h4>
     <p class="text-muted mb-0">Manage your plan, pay invoices, and activate modules</p>
   </div>
   <a href="<?= APP_URL ?>/client/modules.php" class="btn btn-outline-primary btn-sm">
@@ -374,39 +393,25 @@ if (!$focusInv && $activeTab === 'pay' && !empty($unpaidInvoices)) {
 </div>
 
 <!-- Tabs -->
-<ul class="nav nav-tabs mb-4">
-  <li class="nav-item">
-    <a href="?tab=overview" class="nav-link <?= $activeTab==='overview' ? 'active' : '' ?>">
-      <i class="fas fa-home me-1"></i>Overview
-    </a>
-  </li>
-  <li class="nav-item">
-    <a href="?tab=invoices" class="nav-link <?= $activeTab==='invoices' ? 'active' : '' ?>">
-      <i class="fas fa-file-invoice me-1"></i>Invoices
-      <?php if (count($unpaidInvoices)): ?>
-      <span class="badge bg-warning text-dark ms-1"><?= count($unpaidInvoices) ?></span>
-      <?php endif; ?>
-    </a>
-  </li>
-  <li class="nav-item">
-    <a href="?tab=pay" class="nav-link <?= $activeTab==='pay' ? 'active' : '' ?>">
-      <i class="fas fa-credit-card me-1"></i>Make Payment
-    </a>
-  </li>
-  <li class="nav-item">
-    <a href="?tab=plans" class="nav-link <?= $activeTab==='plans' ? 'active' : '' ?>">
-      <i class="fas fa-layer-group me-1"></i>Plans
-    </a>
-  </li>
-  <li class="nav-item">
-    <a href="?tab=wallet" class="nav-link <?= $activeTab==='wallet' ? 'active' : '' ?>">
-      <i class="fas fa-wallet me-1"></i>Wallet
-      <?php if ($walletBalance > 0): ?>
-      <span class="badge bg-success ms-1"><?= formatCurrency($walletBalance) ?></span>
-      <?php endif; ?>
-    </a>
-  </li>
-</ul>
+<div class="billing-tabs">
+  <a href="?tab=overview" class="<?= $activeTab==='overview' ? 'active' : '' ?>">
+    <i class="fas fa-home"></i>Overview
+  </a>
+  <a href="?tab=invoices" class="<?= $activeTab==='invoices' ? 'active' : '' ?>">
+    <i class="fas fa-file-invoice"></i>Invoices
+    <?php if (count($unpaidInvoices)): ?><span class="tab-badge"><?= count($unpaidInvoices) ?></span><?php endif; ?>
+  </a>
+  <a href="?tab=pay" class="<?= $activeTab==='pay' ? 'active' : '' ?>">
+    <i class="fas fa-credit-card"></i>Make Payment
+  </a>
+  <a href="?tab=plans" class="<?= $activeTab==='plans' ? 'active' : '' ?>">
+    <i class="fas fa-layer-group"></i>Plans
+  </a>
+  <a href="?tab=wallet" class="<?= $activeTab==='wallet' ? 'active' : '' ?>">
+    <i class="fas fa-wallet"></i>Wallet
+    <?php if ($walletBalance > 0): ?><span class="tab-badge-green"><?= formatCurrency($walletBalance) ?></span><?php endif; ?>
+  </a>
+</div>
 
 <!-- ═══════════════ OVERVIEW ═══════════════ -->
 <?php if ($activeTab === 'overview'): ?>
