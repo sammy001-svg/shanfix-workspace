@@ -62,6 +62,11 @@ echo "File checks:\n";
 echo "  $queryCheck\n";
 echo "  $billingCheck\n\n";
 echo "Live DB check (most recent invoice amount): " . ($liveAmount ?? 'none') . "\n\n";
+
+// Sanity-check the CURRENCY_SYMBOL constant
+$symOk = defined('CURRENCY_SYMBOL') && preg_match('/^[A-Za-z$€£¥₹\s]{1,6}$/', CURRENCY_SYMBOL);
+echo "CURRENCY_SYMBOL = " . json_encode(defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : '(undefined)') . "\n";
+echo "CURRENCY_SYMBOL check: " . ($symOk ? "✅  Looks valid." : "❌  Corrupted value! Expected letters/spaces (e.g. \"KES \"). Check config/database.php on this server.") . "\n\n";
 echo "Next steps:\n";
 echo "  1. If OPCache cleared successfully, hard-refresh the admin invoices page.\n";
 echo "  2. If either file check shows ❌, re-upload that file from your local git repo.\n";

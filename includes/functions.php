@@ -34,6 +34,10 @@ function csrfField(): string {
 }
 
 function formatCurrency(float $amount, string $currency = CURRENCY_SYMBOL): string {
+    // Guard: if the constant is corrupted (e.g. resolved to digits on some servers), fall back
+    if (!preg_match('/^[A-Za-z$€£¥₹\s]{1,6}$/', $currency)) {
+        $currency = 'KES ';
+    }
     return $currency . number_format($amount, 2);
 }
 

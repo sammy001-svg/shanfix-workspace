@@ -1,6 +1,10 @@
 <?php
-// Force OPCache to reload this file so the CAST fix takes effect immediately
-if (function_exists('opcache_invalidate')) opcache_invalidate(__FILE__, true);
+// Force OPCache to reload this file and functions.php so all fixes take effect
+if (function_exists('opcache_invalidate')) {
+    opcache_invalidate(__FILE__, true);
+    opcache_invalidate(__DIR__ . '/../includes/functions.php', true);
+    opcache_invalidate(__DIR__ . '/../config/database.php', true);
+}
 
 $pageTitle = 'Invoice Management';
 require_once __DIR__ . '/../config/database.php';
@@ -233,7 +237,7 @@ require_once __DIR__ . '/../includes/header-admin.php';
   </div>
 </div>
 
-<!-- DEBUG-MARKER-v2 | totalRevenue=<?= $totalRevenue ?> | firstInv_amount=<?= isset($invoices[0]) ? $invoices[0]['amount'] : 'none' ?> | phpfile=<?= basename(__FILE__) ?> | ts=<?= time() ?> -->
+<!-- DEBUG-MARKER-v3 | totalRevenue=<?= $totalRevenue ?> | firstInv_amount=<?= isset($invoices[0]) ? $invoices[0]['amount'] : 'none' ?> | currency_symbol=<?= json_encode(CURRENCY_SYMBOL) ?> | phpfile=<?= basename(__FILE__) ?> | ts=<?= time() ?> -->
 
 <!-- KPI Cards -->
 <div class="row g-3 mb-4">
