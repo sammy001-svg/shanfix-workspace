@@ -193,9 +193,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
             redirect(APP_URL . '/client/billing.php?tab=plans');
         }
 
-        $amount    = $cycle === 'annual' ? (float)$plan['price_annual'] : (float)$plan['price_monthly'];
-        $tax       = round($amount * 0.16, 2);
-        $total     = $amount + $tax;
+        $amount = max(0.0, $cycle === 'annual' ? (float)$plan['price_annual'] : (float)$plan['price_monthly']);
+        // Use DB tax rate but clamp to 0–100 % to guard against corrupted settings
+        $planTaxRate = max(0.0, min(100.0, (float)(getSettings(['invoice_tax_rate'])['invoice_tax_rate'] ?? 16)));
+        $tax    = round($amount * ($planTaxRate / 100), 2);
+        $total  = round($amount + $tax, 2);
         $invoiceNo = 'INV-' . strtoupper(substr(md5(uniqid($orgId, true)), 0, 8));
         $dueDate   = date('Y-m-d', strtotime('+7 days'));
         $pdo->prepare("INSERT INTO invoices (org_id, subscription_id, invoice_number, amount, tax, total, status, due_date, notes)

@@ -59,6 +59,17 @@ switch ($action) {
         $id           = (int)($input['id']             ?? 0);
         $monthlyPrice = (float)($input['monthly_price'] ?? 0);
         $annualPrice  = (float)($input['annual_price']  ?? 0);
+        // Reject obviously wrong prices (module prices should be between 0 and 9,999,999 KES)
+        if ($monthlyPrice < 0 || $monthlyPrice > 9_999_999) {
+            http_response_code(400);
+            echo json_encode(['error' => "Monthly price KES {$monthlyPrice} is out of range (0 – 9,999,999)."]);
+            break;
+        }
+        if ($annualPrice < 0 || $annualPrice > 99_999_999) {
+            http_response_code(400);
+            echo json_encode(['error' => "Annual price KES {$annualPrice} is out of range (0 – 99,999,999)."]);
+            break;
+        }
         if ($id) {
             $pdo->prepare("UPDATE modules SET monthly_price=?, annual_price=? WHERE id=?")
                 ->execute([$monthlyPrice, $annualPrice, $id]);
@@ -118,11 +129,12 @@ switch ($action) {
         $section = $input['section'] ?? '';
         $data    = $input['data']    ?? [];
         $allowed = [
-            'general'  => ['app_name','app_tagline','support_email','default_currency','default_timezone','trial_days','max_users'],
-            'company'  => ['company_address','company_website'],
+            'general'  => ['app_name','app_tagline','support_email','default_currency','default_timezone','trial_days','max_users','usd_rate'],
+            'company'  => ['company_address','company_website','company_phone','company_hours'],
             'billing'  => ['invoice_prefix','invoice_tax_rate','invoice_footer','invoice_notes','mpesa_paybill','mpesa_account_ref','bank_name','bank_account','bank_branch'],
             'email'    => ['smtp_host','smtp_port','smtp_user','smtp_pass','smtp_enc','mail_from','mail_from_name'],
             'kopokopo' => ['kopokopo_client_id','kopokopo_client_secret','kopokopo_till_number','kopokopo_api_secret','kopokopo_env'],
+            'sms'      => ['sms_enabled','at_username','at_api_key','at_shortcode','at_env'],
             'security' => ['session_timeout','max_login_attempts'],
         ];
         if (!isset($allowed[$section])) {
@@ -131,9 +143,31 @@ switch ($action) {
             break;
         }
         foreach ($data as $key => $value) {
-            if (in_array($key, $allowed[$section], true)) {
-                saveSetting($key, (string)$value);
+            if (!in_array($key, $allowed[$section], true)) continue;
+
+            // ── Per-key validation and sanitisation ──────────────────
+            if ($key === 'invoice_tax_rate') {
+                // Tax rate must be a sensible percentage: 0–100 %
+                $rate = (float)$value;
+                if ($rate < 0 || $rate > 100) {
+                    echo json_encode(['success' => false, 'error' => "Tax rate must be between 0 and 100 (you entered {$rate}%). Please correct it."]);
+                    break 2; // break out of foreach AND case
+                }
+                $value = number_format($rate, 2, '.', '');
+            } elseif ($key === 'invoice_prefix') {
+                $value = preg_replace('/[^A-Z0-9\-_]/i', '', strtoupper(trim((string)$value)));
+                if (empty($value)) $value = 'INV';
+            } elseif (in_array($key, ['trial_days','max_users','max_login_attempts','session_timeout'], true)) {
+                $value = (string)max(0, (int)$value);
+            } elseif ($key === 'usd_rate') {
+                $rate = (float)$value;
+                if ($rate <= 0) $rate = 130;
+                $value = number_format(min($rate, 99999), 4, '.', '');
+            } elseif ($key === 'sms_enabled') {
+                $value = $value === '1' ? '1' : '0';
             }
+
+            saveSetting($key, (string)$value);
         }
         echo json_encode(['success' => true]);
         break;

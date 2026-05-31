@@ -107,11 +107,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     }
 
     // Build and insert invoice
-    $cfgTax    = (float)(getSettings(['invoice_tax_rate'])['invoice_tax_rate'] ?? 16);
-    $prefix    = getSettings(['invoice_prefix'])['invoice_prefix'] ?? 'INV';
-    $price     = (float)$mod['monthly_price'];
+    // Clamp tax rate to 0–100 % — prevents any corrupted setting from producing absurd totals
+    $cfgTaxRaw = (float)(getSettings(['invoice_tax_rate'])['invoice_tax_rate'] ?? 16);
+    $cfgTax    = max(0.0, min(100.0, $cfgTaxRaw));
+    $prefix    = preg_replace('/[^A-Z0-9\-_]/i', '', strtoupper(getSettings(['invoice_prefix'])['invoice_prefix'] ?? 'INV')) ?: 'INV';
+    $price     = max(0.0, (float)$mod['monthly_price']);
     $tax       = round($price * ($cfgTax / 100), 2);
-    $total     = $price + $tax;
+    $total     = round($price + $tax, 2);
+
+    // Safety guard: if total is unreasonably large (over KES 10,000,000), something is wrong
+    if ($total > 10_000_000) {
+        error_log("[add_module] Sanity check failed: computed total KES {$total} for module {$mod['slug']} (price={$price}, tax_rate={$cfgTax}). Falling back to price-only total.");
+        $cfgTax = 16.0;
+        $tax    = round($price * 0.16, 2);
+        $total  = round($price + $tax, 2);
+    }
+
     $invoiceNo = $prefix . '-' . strtoupper(substr(md5(uniqid($orgId, true)), 0, 8));
     $dueDate   = date('Y-m-d', strtotime('+7 days'));
     $invoiceId = 0;
