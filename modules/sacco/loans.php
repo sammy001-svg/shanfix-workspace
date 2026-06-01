@@ -5,18 +5,20 @@ $moduleName  = 'SACCO Management';
 $moduleIcon  = 'fas fa-piggy-bank';
 $moduleColor = '#8e44ad';
 $moduleNav   = [
-    ['url' => 'index.php',        'icon' => 'fas fa-tachometer-alt',   'label' => 'Dashboard'],
-    ['url' => 'members.php',      'icon' => 'fas fa-users',            'label' => 'Members'],
-    ['url' => 'savings.php',      'icon' => 'fas fa-piggy-bank',       'label' => 'Savings'],
-    ['url' => 'loans.php',        'icon' => 'fas fa-hand-holding-usd', 'label' => 'Loans'],
-    ['url' => 'shares.php',       'icon' => 'fas fa-certificate',      'label' => 'Shares'],
-    ['url' => 'repayments.php',   'icon' => 'fas fa-undo',             'label' => 'Repayments'],
-    ['url' => 'dividends.php',    'icon' => 'fas fa-percentage',       'label' => 'Dividends'],
-    ['url' => 'statements.php',   'icon' => 'fas fa-file-invoice',     'label' => 'Statements'],
-    ['url' => 'guarantors.php',   'icon' => 'fas fa-user-shield',      'label' => 'Guarantors'],
-    ['url' => 'penalties.php',    'icon' => 'fas fa-exclamation-circle','label' => 'Penalties'],
-    ['url' => 'communications.php','icon'=> 'fas fa-envelope',          'label' => 'Communications'],
-    ['url' => 'reports.php',      'icon' => 'fas fa-chart-bar',        'label' => 'Reports'],
+    ['url' => 'index.php',        'icon' => 'fas fa-tachometer-alt',      'label' => 'Dashboard'],
+    ['url' => 'members.php',      'icon' => 'fas fa-users',               'label' => 'Members'],
+    ['url' => 'savings.php',      'icon' => 'fas fa-piggy-bank',          'label' => 'Savings'],
+    ['url' => 'loans.php',        'icon' => 'fas fa-hand-holding-usd',    'label' => 'Loans'],
+    ['url' => 'schedule.php',     'icon' => 'fas fa-calendar-alt',        'label' => 'Schedules'],
+    ['url' => 'arrears.php',      'icon' => 'fas fa-exclamation-triangle','label' => 'Arrears'],
+    ['url' => 'shares.php',       'icon' => 'fas fa-certificate',         'label' => 'Shares'],
+    ['url' => 'repayments.php',   'icon' => 'fas fa-undo',                'label' => 'Repayments'],
+    ['url' => 'dividends.php',    'icon' => 'fas fa-percentage',          'label' => 'Dividends'],
+    ['url' => 'statements.php',   'icon' => 'fas fa-file-invoice',        'label' => 'Statements'],
+    ['url' => 'guarantors.php',   'icon' => 'fas fa-user-shield',         'label' => 'Guarantors'],
+    ['url' => 'penalties.php',    'icon' => 'fas fa-exclamation-circle',  'label' => 'Penalties'],
+    ['url' => 'communications.php','icon'=> 'fas fa-envelope',             'label' => 'Communications'],
+    ['url' => 'reports.php',      'icon' => 'fas fa-chart-bar',           'label' => 'Reports'],
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -75,21 +77,127 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'disburse') {
         $id = (int)($_POST['id'] ?? 0);
-        $stmt = $pdo->prepare("UPDATE sacco_loans SET status='active', disbursed_at=CURRENT_DATE WHERE id=? AND org_id=? AND status='approved'");
-        $stmt->execute([$id, $orgId]);
-        setFlash('success', 'Loan disbursed and marked as active.');
+
+        // Fetch loan details before disbursing
+        $lRow = $pdo->prepare("SELECT * FROM sacco_loans WHERE id=? AND org_id=? AND status='approved' LIMIT 1");
+        $lRow->execute([$id, $orgId]);
+        $loanData = $lRow->fetch();
+
+        if (!$loanData) {
+            setFlash('danger', 'Loan not found or already disbursed.');
+            redirect('loans.php');
+        }
+
+        $disburseDate = date('Y-m-d');
+        $pdo->beginTransaction();
+        try {
+            // Mark loan active
+            $pdo->prepare("UPDATE sacco_loans SET status='active', disbursed_at=? WHERE id=? AND org_id=?")
+                ->execute([$disburseDate, $id, $orgId]);
+
+            // Generate amortization schedule
+            $amt        = (float)$loanData['amount'];
+            $rate       = (float)$loanData['interest_rate'];
+            $term       = (int)$loanData['term_months'];
+            $totalInt   = $amt * ($rate / 100) * ($term / 12);
+            $totalRepay = $amt + $totalInt;
+            $installAmt = round($totalRepay / $term, 2);
+            $intPerInst = round($totalInt / $term, 2);
+            $prinPerInst = round($amt / $term, 2);
+
+            // Delete any existing schedule rows (idempotent)
+            $pdo->prepare("DELETE FROM sacco_loan_schedule WHERE loan_id=?")->execute([$id]);
+
+            $ins = $pdo->prepare(
+                "INSERT INTO sacco_loan_schedule (org_id,loan_id,installment_no,due_date,amount_due,principal,interest,status)
+                 VALUES (?,?,?,?,?,?,?,'pending')"
+            );
+            $firstDueDate = null;
+            for ($i = 1; $i <= $term; $i++) {
+                $due = date('Y-m-d', strtotime($disburseDate . " +$i months"));
+                if ($i === 1) $firstDueDate = $due;
+                // Last installment absorbs rounding
+                $instAmt = ($i === $term)
+                    ? round($totalRepay - ($installAmt * ($term - 1)), 2)
+                    : $installAmt;
+                $ins->execute([$orgId, $id, $i, $due, $instAmt, $prinPerInst, $intPerInst]);
+            }
+
+            // Set next_repayment_date on the loan
+            if ($firstDueDate) {
+                $pdo->prepare("UPDATE sacco_loans SET next_repayment_date=? WHERE id=?")
+                    ->execute([$firstDueDate, $id]);
+            }
+
+            $pdo->commit();
+            setFlash('success', 'Loan disbursed. Amortization schedule of ' . $term . ' installments generated.');
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            setFlash('danger', 'Disbursement failed: ' . $e->getMessage());
+        }
+
         logActivity('update', 'sacco', "Disbursed loan #$id");
         redirect('loans.php');
     }
 
     if ($action === 'reject') {
         $id = (int)($_POST['id'] ?? 0);
-        // We delete or reject the pending loan
         $stmt = $pdo->prepare("DELETE FROM sacco_loans WHERE id=? AND org_id=? AND status='pending'");
         $stmt->execute([$id, $orgId]);
         setFlash('success', 'Loan request rejected and removed.');
         logActivity('delete', 'sacco', "Rejected/Deleted loan request #$id");
         redirect('loans.php');
+    }
+
+    // ── Regenerate schedule for legacy loans ──────────────────────
+    if ($action === 'regenerate_schedule') {
+        $id   = (int)($_POST['id'] ?? 0);
+        $lRow = $pdo->prepare("SELECT * FROM sacco_loans WHERE id=? AND org_id=? AND status='active' LIMIT 1");
+        $lRow->execute([$id, $orgId]);
+        $loanData = $lRow->fetch();
+
+        if (!$loanData) {
+            setFlash('danger', 'Active loan not found.'); redirect('schedule.php');
+        }
+
+        $disburseDate = $loanData['disbursed_at'] ?? date('Y-m-d');
+        $amt        = (float)$loanData['amount'];
+        $rate       = (float)$loanData['interest_rate'];
+        $term       = (int)$loanData['term_months'];
+        $totalInt   = $amt * ($rate / 100) * ($term / 12);
+        $totalRepay = $amt + $totalInt;
+        $installAmt = round($totalRepay / $term, 2);
+        $intPerInst  = round($totalInt / $term, 2);
+        $prinPerInst = round($amt / $term, 2);
+
+        try {
+            $pdo->beginTransaction();
+            $pdo->prepare("DELETE FROM sacco_loan_schedule WHERE loan_id=?")->execute([$id]);
+            $ins = $pdo->prepare(
+                "INSERT INTO sacco_loan_schedule (org_id,loan_id,installment_no,due_date,amount_due,principal,interest,status)
+                 VALUES (?,?,?,?,?,?,?,'pending')"
+            );
+            $firstDue = null;
+            $paidSoFar = (float)$loanData['total_paid'];
+            for ($i = 1; $i <= $term; $i++) {
+                $due  = date('Y-m-d', strtotime($disburseDate . " +$i months"));
+                if ($i === 1) $firstDue = $due;
+                $instAmt = ($i === $term) ? round($totalRepay - ($installAmt * ($term - 1)), 2) : $installAmt;
+                // Mark past installments paid if total_paid covers them
+                $cumulative = $instAmt * $i;
+                $status = ($paidSoFar >= $cumulative && $due <= date('Y-m-d')) ? 'paid' : (($due < date('Y-m-d')) ? 'overdue' : 'pending');
+                $ins->execute([$orgId, $id, $i, $due, $instAmt, $prinPerInst, $intPerInst]);
+            }
+            if ($firstDue) {
+                $pdo->prepare("UPDATE sacco_loans SET next_repayment_date=? WHERE id=?")->execute([$firstDue, $id]);
+            }
+            $pdo->commit();
+            setFlash('success', 'Amortization schedule regenerated for loan #' . $loanData['loan_no'] . '.');
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            setFlash('danger', 'Schedule regeneration failed: ' . $e->getMessage());
+        }
+        redirect('schedule.php?loan_id=' . $id);
     }
 }
 

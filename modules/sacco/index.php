@@ -19,30 +19,32 @@ $moduleNav   = [
 ];
 require_once __DIR__ . '/../../includes/header-module.php';
 
-$orgId = (int)$user['org_id'];
+$orgId   = (int)$user['org_id'];
+$bWhere  = branchWhere('branch_id');
+$bParams = branchParams();
 
-$totalMembers   = countRows('sacco_members', 'org_id = ?', [$orgId]);
-$activeLoans    = countRows('sacco_loans', 'org_id = ? AND status = ?', [$orgId, 'active']);
+$totalMembers   = countRows('sacco_members', 'org_id = ?' . $bWhere, array_merge([$orgId], $bParams));
+$activeLoans    = countRows('sacco_loans',   'org_id = ? AND status = ?' . $bWhere, array_merge([$orgId, 'active'], $bParams));
 $totalSavings   = 0;
 $loanPortfolio  = 0;
 
 try {
-    $stmt = $pdo->prepare("SELECT COALESCE(SUM(total_savings),0) FROM sacco_members WHERE org_id=?");
-    $stmt->execute([$orgId]);
+    $stmt = $pdo->prepare("SELECT COALESCE(SUM(total_savings),0) FROM sacco_members WHERE org_id=?" . $bWhere);
+    $stmt->execute(array_merge([$orgId], $bParams));
     $totalSavings = (float)$stmt->fetchColumn();
 } catch (Exception $e) {}
 
 try {
-    $stmt = $pdo->prepare("SELECT COALESCE(SUM(balance),0) FROM sacco_loans WHERE org_id=? AND status='active'");
-    $stmt->execute([$orgId]);
+    $stmt = $pdo->prepare("SELECT COALESCE(SUM(balance),0) FROM sacco_loans WHERE org_id=? AND status='active'" . $bWhere);
+    $stmt->execute(array_merge([$orgId], $bParams));
     $loanPortfolio = (float)$stmt->fetchColumn();
 } catch (Exception $e) {}
 
 // Recent members
 $members = [];
 try {
-    $stmt = $pdo->prepare("SELECT * FROM sacco_members WHERE org_id=? ORDER BY created_at DESC LIMIT 10");
-    $stmt->execute([$orgId]);
+    $stmt = $pdo->prepare("SELECT * FROM sacco_members WHERE org_id=?" . $bWhere . " ORDER BY created_at DESC LIMIT 10");
+    $stmt->execute(array_merge([$orgId], $bParams));
     $members = $stmt->fetchAll();
 } catch (Exception $e) {}
 
@@ -53,8 +55,8 @@ for ($i = 5; $i >= 0; $i--) {
     $month = date('Y-m', strtotime("-$i months"));
     $savingLabels[] = date('M Y', strtotime("-$i months"));
     try {
-        $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM sacco_savings WHERE org_id=? AND type='deposit' AND DATE_FORMAT(created_at,'%Y-%m')=?");
-        $stmt->execute([$orgId, $month]);
+        $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM sacco_savings WHERE org_id=? AND type='deposit' AND DATE_FORMAT(created_at,'%Y-%m')=?" . $bWhere);
+        $stmt->execute(array_merge([$orgId, $month], $bParams));
         $savingData[] = (float)$stmt->fetchColumn();
     } catch (Exception $e) { $savingData[] = 0; }
 }

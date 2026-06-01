@@ -26,26 +26,29 @@ $moduleNav   = [
 ];
 require_once __DIR__ . '/../../includes/header-module.php';
 
-$orgId = (int)$user['org_id'];
+$orgId   = (int)$user['org_id'];
+$bWhere  = branchWhere('branch_id');
+$bWhereA = branchWhere('a.branch_id');
+$bParams = branchParams();
 
-$totalPatients      = countRows('health_patients', 'org_id = ?', [$orgId]);
-$todayAppointments  = countRows('health_appointments', 'org_id = ? AND date = CURDATE()', [$orgId]);
-$totalDoctors       = countRows('health_doctors', 'org_id = ? AND status = ?', [$orgId, 'active']);
-$totalRecords       = countRows('health_records', 'org_id = ?', [$orgId]);
+$totalPatients      = countRows('health_patients',     'org_id = ?' . $bWhere, array_merge([$orgId], $bParams));
+$todayAppointments  = countRows('health_appointments', 'org_id = ? AND date = CURDATE()' . $bWhere, array_merge([$orgId], $bParams));
+$totalDoctors       = countRows('health_doctors',      'org_id = ? AND status = ?', [$orgId, 'active']);
+$totalRecords       = countRows('health_records',      'org_id = ?', [$orgId]);
 
 // Today's appointments
 $appointments = [];
 try {
-    $stmt = $pdo->prepare("SELECT a.*, 
+    $stmt = $pdo->prepare("SELECT a.*,
                                   CONCAT(p.first_name, ' ', p.last_name) AS patient_name,
                                   CONCAT(d.first_name, ' ', d.last_name) AS doctor_name
-                           FROM health_appointments a 
+                           FROM health_appointments a
                            JOIN health_patients p ON a.patient_id = p.id
                            LEFT JOIN health_doctors d ON a.doctor_id = d.id
-                           WHERE a.org_id=? AND a.date=CURDATE() 
-                           ORDER BY a.time ASC 
+                           WHERE a.org_id=? AND a.date=CURDATE()" . $bWhereA . "
+                           ORDER BY a.time ASC
                            LIMIT 10");
-    $stmt->execute([$orgId]);
+    $stmt->execute(array_merge([$orgId], $bParams));
     $appointments = $stmt->fetchAll();
 } catch (Exception $e) {}
 ?>

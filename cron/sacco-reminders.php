@@ -37,7 +37,7 @@ function saccoMarkSent(PDO $pdo, string $eventType, int $refId, string $periodDa
 }
 
 // ── Email body builder ────────────────────────────────────────────
-function buildSaccoEmailBody(string $subject, string $memberName, string $bodyContent): string
+function buildSaccoEmailBody(string $memberName, string $bodyContent): string
 {
     $name    = htmlspecialchars($memberName, ENT_QUOTES);
     $appName = APP_NAME;
@@ -68,9 +68,11 @@ echo "\n[1/3] Loan repayment reminders...\n";
 $eventTypeRepayment = 'sacco_repayment_reminder';
 
 try {
+    // Also surface loans whose NEXT PENDING schedule installment is due within 3 days
     $stmt = $pdo->prepare("
         SELECT l.id AS loan_id, l.org_id, l.outstanding_balance, l.next_repayment_date,
-               m.first_name, m.last_name, m.email AS member_email, m.id AS member_id
+               m.first_name, m.last_name, m.email AS member_email, m.phone AS member_phone,
+               m.id AS member_id
         FROM sacco_loans l
         JOIN sacco_members m ON l.member_id = m.id
         WHERE l.status = 'active'
@@ -117,7 +119,7 @@ foreach ($upcomingLoans as $loan) {
         </div>";
 
     try {
-        $body = buildSaccoEmailBody('Loan Repayment Due ' . ucfirst($dueLabel), $memberName, $bodyContent);
+        $body = buildSaccoEmailBody($memberName, $bodyContent);
         $ok   = empty($loan['member_email']) ? false : mailer()->send(
             $loan['member_email'],
             "SACCO: Loan repayment due {$dueLabel} — " . $amtFmt,
@@ -126,6 +128,12 @@ foreach ($upcomingLoans as $loan) {
     } catch (Exception $e) {
         error_log("[sacco-reminders] Email build failed loan#{$loanId}: " . $e->getMessage());
         $ok = false;
+    }
+
+    // SMS reminder
+    if (!empty($loan['member_phone'])) {
+        $smsMsg = "SACCO: Dear {$memberName}, your loan repayment of {$amtFmt} is due {$dueLabel}. Please pay on time to avoid penalties.";
+        notifySms($loan['member_phone'], $smsMsg, (int)$loan['org_id'], 'sacco_repayment_due');
     }
 
     if ($ok) {
@@ -236,13 +244,20 @@ foreach ($overdueLoans as $loan) {
         $ok = empty($loan['member_email']) ? false : mailer()->send(
             $loan['member_email'],
             "SACCO: Overdue loan penalty applied — " . $penFmt,
-            buildSaccoEmailBody('Overdue Loan Penalty', $memberName, $bodyContent)
+            buildSaccoEmailBody($memberName, $bodyContent)
         );
         if ($ok) $sent++;
         else $errors++;
     } catch (Exception $e) {
         error_log("[sacco-reminders] Penalty email failed loan#{$loanId}: " . $e->getMessage());
         $errors++;
+    }
+
+    // SMS penalty alert
+    if (!empty($loan['member_email'])) { /* email already attempted above */ }
+    if (!empty($loan['member_phone'] ?? '')) {
+        $smsMsg = "SACCO: Dear {$memberName}, a late payment penalty of {$penFmt} has been applied to your loan. Please contact the SACCO office urgently.";
+        notifySms($loan['member_phone'], $smsMsg, (int)$loan['org_id'], 'sacco_penalty');
     }
 
     notifyOrg(
@@ -328,11 +343,17 @@ foreach ($noSavings as $member) {
         $ok = empty($member['email']) ? false : mailer()->send(
             $member['email'],
             "SACCO: Don't forget your " . date('F Y') . " savings deposit",
-            buildSaccoEmailBody('Monthly Savings Reminder', $memberName, $bodyContent)
+            buildSaccoEmailBody($memberName, $bodyContent)
         );
     } catch (Exception $e) {
         error_log("[sacco-reminders] Savings email failed member#{$memberId}: " . $e->getMessage());
         $ok = false;
+    }
+
+    // SMS savings nudge
+    if (!empty($member['phone'] ?? '')) {
+        $smsMsg = "SACCO: Dear {$memberName}, you haven't saved this month (" . date('F Y') . "). Regular savings keep your membership strong. Save today!";
+        notifySms($member['phone'], $smsMsg, (int)$member['org_id'], 'sacco_savings_nudge');
     }
 
     if ($ok) {

@@ -6,24 +6,26 @@ $moduleColor = '#e74c3c';
 $moduleNav=[['url'=>'index.php','icon'=>'fas fa-tachometer-alt','label'=>'Dashboard'],['url'=>'terminal.php','icon'=>'fas fa-cash-register','label'=>'POS Terminal'],['url'=>'products.php','icon'=>'fas fa-box','label'=>'Products'],['url'=>'categories.php','icon'=>'fas fa-tags','label'=>'Categories'],['url'=>'customers.php','icon'=>'fas fa-users','label'=>'Customers'],['url'=>'suppliers.php','icon'=>'fas fa-truck','label'=>'Suppliers'],['url'=>'stock.php','icon'=>'fas fa-warehouse','label'=>'Stock'],['url'=>'purchases.php','icon'=>'fas fa-cart-arrow-down','label'=>'Purchases'],['url'=>'returns.php','icon'=>'fas fa-undo','label'=>'Returns'],['url'=>'shifts.php','icon'=>'fas fa-clock','label'=>'Shifts'],['url'=>'expenses.php','icon'=>'fas fa-wallet','label'=>'Expenses'],['url'=>'discounts.php','icon'=>'fas fa-percent','label'=>'Discounts'],['url'=>'sales.php','icon'=>'fas fa-receipt','label'=>'Sales History'],['url'=>'reports.php','icon'=>'fas fa-chart-bar','label'=>'Reports']];
 require_once __DIR__ . '/../../includes/header-module.php';
 
-$orgId = (int)$user['org_id'];
+$orgId   = (int)$user['org_id'];
+$bWhere  = branchWhere('branch_id');
+$bParams = branchParams();
 
-$totalProducts = countRows('pos_products', 'org_id = ?', [$orgId]);
-$lowStock      = countRows('pos_products', 'org_id = ? AND stock <= reorder_level', [$orgId]);
-$todaySales    = countRows('pos_sales', 'org_id = ? AND DATE(created_at) = CURDATE()', [$orgId]);
+$totalProducts = countRows('pos_products', 'org_id = ?' . $bWhere, array_merge([$orgId], $bParams));
+$lowStock      = countRows('pos_products', 'org_id = ? AND stock_quantity <= reorder_level' . $bWhere, array_merge([$orgId], $bParams));
+$todaySales    = countRows('pos_sales', 'org_id = ? AND DATE(created_at) = CURDATE()' . $bWhere, array_merge([$orgId], $bParams));
 $todayRevenue  = 0;
 
 try {
-    $stmt = $pdo->prepare("SELECT COALESCE(SUM(total),0) FROM pos_sales WHERE org_id=? AND DATE(created_at)=CURDATE()");
-    $stmt->execute([$orgId]);
+    $stmt = $pdo->prepare("SELECT COALESCE(SUM(total),0) FROM pos_sales WHERE org_id=? AND DATE(created_at)=CURDATE()" . $bWhere);
+    $stmt->execute(array_merge([$orgId], $bParams));
     $todayRevenue = (float)$stmt->fetchColumn();
 } catch (Exception $e) {}
 
 // Recent sales
 $sales = [];
 try {
-    $stmt = $pdo->prepare("SELECT * FROM pos_sales WHERE org_id=? ORDER BY created_at DESC LIMIT 10");
-    $stmt->execute([$orgId]);
+    $stmt = $pdo->prepare("SELECT * FROM pos_sales WHERE org_id=?" . $bWhere . " ORDER BY created_at DESC LIMIT 10");
+    $stmt->execute(array_merge([$orgId], $bParams));
     $sales = $stmt->fetchAll();
 } catch (Exception $e) {}
 
@@ -33,8 +35,8 @@ $hourlyData = [];
 for ($h = 7; $h <= 22; $h++) {
     $hours[] = date('h A', mktime($h, 0, 0));
     try {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM pos_sales WHERE org_id=? AND DATE(created_at)=CURDATE() AND HOUR(created_at)=?");
-        $stmt->execute([$orgId, $h]);
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM pos_sales WHERE org_id=? AND DATE(created_at)=CURDATE() AND HOUR(created_at)=?" . $bWhere);
+        $stmt->execute(array_merge([$orgId, $h], $bParams));
         $hourlyData[] = (int)$stmt->fetchColumn();
     } catch (Exception $e) { $hourlyData[] = 0; }
 }
@@ -44,7 +46,7 @@ $methods     = ['cash', 'mpesa', 'card', 'other'];
 $methodCnts  = [];
 foreach ($methods as $m) {
     try {
-        $methodCnts[] = countRows('pos_sales', 'org_id = ? AND payment_method = ? AND DATE(created_at) = CURDATE()', [$orgId, $m]);
+        $methodCnts[] = countRows('pos_sales', 'org_id = ? AND payment_method = ? AND DATE(created_at) = CURDATE()' . $bWhere, array_merge([$orgId, $m], $bParams));
     } catch (Exception $e) { $methodCnts[] = 0; }
 }
 ?>

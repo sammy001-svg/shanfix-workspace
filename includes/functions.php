@@ -251,13 +251,81 @@ function getSubscriptionWarning(int $orgId): ?array {
 
 function currentUser(): array {
     return [
-        'id'       => $_SESSION['user_id']   ?? 0,
-        'name'     => $_SESSION['user_name'] ?? '',
-        'email'    => $_SESSION['user_email'] ?? '',
-        'role'     => $_SESSION['user_role'] ?? '',
-        'org_id'   => $_SESSION['org_id']   ?? 0,
-        'org_name' => $_SESSION['org_name'] ?? '',
+        'id'        => $_SESSION['user_id']    ?? 0,
+        'name'      => $_SESSION['user_name']  ?? '',
+        'email'     => $_SESSION['user_email'] ?? '',
+        'role'      => $_SESSION['user_role']  ?? '',
+        'org_id'    => $_SESSION['org_id']     ?? 0,
+        'org_name'  => $_SESSION['org_name']   ?? '',
+        'branch_id' => $_SESSION['user_branch_id'] ?? null,
     ];
+}
+
+// ── Multi-Branch Helpers ───────────────────────────────────────
+
+/**
+ * Returns all active branches for an org.
+ */
+function getOrgBranches(int $orgId): array {
+    global $pdo;
+    try {
+        $s = $pdo->prepare("SELECT * FROM org_branches WHERE org_id=? AND status='active' ORDER BY name");
+        $s->execute([$orgId]);
+        return $s->fetchAll();
+    } catch (Throwable $e) { return []; }
+}
+
+/**
+ * Returns the currently active branch ID from session, or null for "all branches".
+ * Staff with an assigned branch are always locked to it.
+ */
+function getActiveBranchId(): ?int {
+    $bid = (int)($_SESSION['active_branch_id'] ?? 0);
+    return $bid > 0 ? $bid : null;
+}
+
+/**
+ * Returns a SQL AND clause for branch filtering, or empty string if no branch active.
+ * @param string $col  Column reference, e.g. 'b.branch_id' or just 'branch_id'
+ */
+function branchWhere(string $col = 'branch_id'): string {
+    return getActiveBranchId() !== null ? " AND {$col} = ?" : '';
+}
+
+/**
+ * Returns the params array to bind with branchWhere().
+ * Append to your existing execute() params array.
+ */
+function branchParams(): array {
+    $bid = getActiveBranchId();
+    return $bid !== null ? [$bid] : [];
+}
+
+/**
+ * Initialises branch context in session for the current user.
+ * Called after login. Staff locked to their assigned branch; admins default to "all".
+ */
+function initBranchSession(array $user): void {
+    // Recover user's assigned branch_id from DB if not in session
+    if (!isset($_SESSION['user_branch_id'])) {
+        global $pdo;
+        try {
+            $s = $pdo->prepare("SELECT branch_id FROM users WHERE id=? LIMIT 1");
+            $s->execute([$user['id']]);
+            $bid = $s->fetchColumn();
+            $_SESSION['user_branch_id'] = $bid ?: null;
+        } catch (Throwable $e) {
+            $_SESSION['user_branch_id'] = null;
+        }
+    }
+
+    // Staff locked to their branch; admins default to their assigned branch or "all"
+    $userBranch = $_SESSION['user_branch_id'];
+    if ($user['role'] === 'staff' && $userBranch) {
+        $_SESSION['active_branch_id'] = $userBranch;
+    } elseif (!isset($_SESSION['active_branch_id'])) {
+        $_SESSION['active_branch_id'] = $userBranch ?: 0; // 0 = all branches
+    }
 }
 
 // ── DB helpers ─────────────────────────────────────────────────

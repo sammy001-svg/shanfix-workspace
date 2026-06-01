@@ -16,6 +16,16 @@ if ($user['role'] !== 'staff' && !str_ends_with($_SERVER['PHP_SELF'], '/onboardi
     }
 }
 
+// Initialise branch session context (sets active_branch_id based on user assignment)
+initBranchSession($user);
+$__branches      = getOrgBranches((int)$user['org_id']);
+$__activeBranchId = getActiveBranchId();
+$__activeBranch   = null;
+foreach ($__branches as $__b) {
+    if ((int)$__b['id'] === $__activeBranchId) { $__activeBranch = $__b; break; }
+}
+$__isMultiBranch = count($__branches) > 0;
+
 // Staff see only their granted modules; admins see all
 $modules = ($user['role'] === 'staff')
     ? getUserAccessibleModules((int)$user['id'], (int)$user['org_id'])
@@ -270,6 +280,8 @@ document.addEventListener('DOMContentLoaded', function() {
     <?php if (!$__isStaff): ?>
     <a href="<?= APP_URL ?>/client/users.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'users.php' ? 'active' : '' ?>">
       <i class="fas fa-users-cog"></i><span>Team</span></a>
+    <a href="<?= APP_URL ?>/client/branches.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'branches.php' ? 'active' : '' ?>">
+      <i class="fas fa-code-branch"></i><span>Branches</span></a>
     <?php endif; ?>
     <a href="<?= APP_URL ?>/auth/logout.php" class="nav-item text-danger">
       <i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
@@ -281,6 +293,33 @@ document.addEventListener('DOMContentLoaded', function() {
   <header class="top-header">
     <button class="sidebar-toggle" id="sidebarToggle"><i class="fas fa-bars"></i></button>
     <div class="header-title"><?= e($pageTitle) ?></div>
+
+    <!-- ── Branch selector (multi-branch orgs, admin only) ──── -->
+    <?php if ($__isMultiBranch && ($user['role'] ?? '') === 'client_admin'): ?>
+    <form method="POST" action="<?= APP_URL ?>/client/set-branch.php" class="d-flex align-items-center">
+      <?= csrfField() ?>
+      <div class="input-group input-group-sm" style="max-width:200px">
+        <span class="input-group-text" style="background:var(--navy);color:#fff;border-color:var(--navy)">
+          <i class="fas fa-code-branch" style="font-size:.75rem"></i>
+        </span>
+        <select name="branch_id" class="form-select form-select-sm border-start-0"
+                onchange="this.form.submit()"
+                style="font-size:.78rem;border-color:#dee2e6">
+          <option value="0" <?= !$__activeBranchId ? 'selected' : '' ?>>All Branches</option>
+          <?php foreach ($__branches as $__b): ?>
+          <option value="<?= $__b['id'] ?>" <?= $__activeBranchId === (int)$__b['id'] ? 'selected' : '' ?>>
+            <?= e($__b['name']) ?>
+          </option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+    </form>
+    <?php elseif ($__isMultiBranch && ($user['role'] ?? '') === 'staff' && $__activeBranch): ?>
+    <!-- Staff see their branch as a read-only badge -->
+    <span class="badge d-flex align-items-center gap-1" style="background:var(--navy);font-size:.72rem">
+      <i class="fas fa-code-branch"></i><?= e($__activeBranch['name']) ?>
+    </span>
+    <?php endif; ?>
 
     <!-- ── Global Search ─────────────────────────────────────── -->
     <div class="header-search" id="headerSearch">

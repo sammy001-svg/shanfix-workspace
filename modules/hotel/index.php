@@ -18,36 +18,38 @@ $moduleNav   = [
 require_once __DIR__ . '/../../includes/header-module.php';
 
 $orgId = (int)$user['org_id'];
+$bWhere  = branchWhere('branch_id');
+$bParams = branchParams();
 
-$totalRooms    = countRows('hotel_rooms', 'org_id = ?', [$orgId]);
-$occupiedRooms = countRows('hotel_rooms', 'org_id = ? AND status = ?', [$orgId, 'occupied']);
-$availableRooms= countRows('hotel_rooms', 'org_id = ? AND status = ?', [$orgId, 'available']);
+$totalRooms    = countRows('hotel_rooms', 'org_id = ?' . $bWhere, array_merge([$orgId], $bParams));
+$occupiedRooms = countRows('hotel_rooms', 'org_id = ? AND status = ?' . $bWhere, array_merge([$orgId, 'occupied'], $bParams));
+$availableRooms= countRows('hotel_rooms', 'org_id = ? AND status = ?' . $bWhere, array_merge([$orgId, 'available'], $bParams));
 $todayRevenue  = 0;
 
 try {
-    $stmt = $pdo->prepare("SELECT COALESCE(SUM(total_amount),0) FROM hotel_bookings WHERE org_id=? AND DATE(created_at)=CURDATE() AND status != 'cancelled'");
-    $stmt->execute([$orgId]);
+    $stmt = $pdo->prepare("SELECT COALESCE(SUM(total_amount),0) FROM hotel_bookings WHERE org_id=? AND DATE(created_at)=CURDATE() AND status != 'cancelled'" . $bWhere);
+    $stmt->execute(array_merge([$orgId], $bParams));
     $todayRevenue = (float)$stmt->fetchColumn();
 } catch (Exception $e) {}
 
 // Today's bookings
 $bookings = [];
 try {
-    $stmt = $pdo->prepare("SELECT b.*, 
+    $stmt = $pdo->prepare("SELECT b.*,
                                   CONCAT(g.first_name, ' ', g.last_name) AS guest_name,
                                   r.room_no AS room_number
                            FROM hotel_bookings b
                            LEFT JOIN hotel_guests g ON b.guest_id = g.id
                            LEFT JOIN hotel_rooms r ON b.room_id = r.id
-                           WHERE b.org_id=? AND (DATE(b.check_in)=CURDATE() OR DATE(b.check_out)=CURDATE() OR b.status='checked_in') 
-                           ORDER BY b.check_in ASC 
+                           WHERE b.org_id=? AND (DATE(b.check_in)=CURDATE() OR DATE(b.check_out)=CURDATE() OR b.status='checked_in')" . str_replace('branch_id', 'b.branch_id', $bWhere) . "
+                           ORDER BY b.check_in ASC
                            LIMIT 10");
-    $stmt->execute([$orgId]);
+    $stmt->execute(array_merge([$orgId], $bParams));
     $bookings = $stmt->fetchAll();
 } catch (Exception $e) {}
 
 // Occupancy doughnut
-$maintenanceRooms = countRows('hotel_rooms', 'org_id = ? AND status = ?', [$orgId, 'maintenance']);
+$maintenanceRooms = countRows('hotel_rooms', 'org_id = ? AND status = ?' . $bWhere, array_merge([$orgId, 'maintenance'], $bParams));
 
 // Monthly revenue trend (6 months)
 $revLabels = [];

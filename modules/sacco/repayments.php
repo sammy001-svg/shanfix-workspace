@@ -5,18 +5,20 @@ $moduleName  = 'SACCO Management';
 $moduleIcon  = 'fas fa-piggy-bank';
 $moduleColor = '#8e44ad';
 $moduleNav   = [
-    ['url' => 'index.php',        'icon' => 'fas fa-tachometer-alt',   'label' => 'Dashboard'],
-    ['url' => 'members.php',      'icon' => 'fas fa-users',            'label' => 'Members'],
-    ['url' => 'savings.php',      'icon' => 'fas fa-piggy-bank',       'label' => 'Savings'],
-    ['url' => 'loans.php',        'icon' => 'fas fa-hand-holding-usd', 'label' => 'Loans'],
-    ['url' => 'shares.php',       'icon' => 'fas fa-certificate',      'label' => 'Shares'],
-    ['url' => 'repayments.php',   'icon' => 'fas fa-undo',             'label' => 'Repayments'],
-    ['url' => 'dividends.php',    'icon' => 'fas fa-percentage',       'label' => 'Dividends'],
-    ['url' => 'statements.php',   'icon' => 'fas fa-file-invoice',     'label' => 'Statements'],
-    ['url' => 'guarantors.php',   'icon' => 'fas fa-user-shield',      'label' => 'Guarantors'],
-    ['url' => 'penalties.php',    'icon' => 'fas fa-exclamation-circle','label' => 'Penalties'],
-    ['url' => 'communications.php','icon'=> 'fas fa-envelope',          'label' => 'Communications'],
-    ['url' => 'reports.php',      'icon' => 'fas fa-chart-bar',        'label' => 'Reports'],
+    ['url' => 'index.php',        'icon' => 'fas fa-tachometer-alt',      'label' => 'Dashboard'],
+    ['url' => 'members.php',      'icon' => 'fas fa-users',               'label' => 'Members'],
+    ['url' => 'savings.php',      'icon' => 'fas fa-piggy-bank',          'label' => 'Savings'],
+    ['url' => 'loans.php',        'icon' => 'fas fa-hand-holding-usd',    'label' => 'Loans'],
+    ['url' => 'schedule.php',     'icon' => 'fas fa-calendar-alt',        'label' => 'Schedules'],
+    ['url' => 'arrears.php',      'icon' => 'fas fa-exclamation-triangle','label' => 'Arrears'],
+    ['url' => 'shares.php',       'icon' => 'fas fa-certificate',         'label' => 'Shares'],
+    ['url' => 'repayments.php',   'icon' => 'fas fa-undo',                'label' => 'Repayments'],
+    ['url' => 'dividends.php',    'icon' => 'fas fa-percentage',          'label' => 'Dividends'],
+    ['url' => 'statements.php',   'icon' => 'fas fa-file-invoice',        'label' => 'Statements'],
+    ['url' => 'guarantors.php',   'icon' => 'fas fa-user-shield',         'label' => 'Guarantors'],
+    ['url' => 'penalties.php',    'icon' => 'fas fa-exclamation-circle',  'label' => 'Penalties'],
+    ['url' => 'communications.php','icon'=> 'fas fa-envelope',             'label' => 'Communications'],
+    ['url' => 'reports.php',      'icon' => 'fas fa-chart-bar',           'label' => 'Reports'],
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -79,8 +81,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Update Loan balance & status
             $newStatus = $newBalance <= 0 ? 'completed' : 'active';
-            $stmt = $pdo->prepare("UPDATE sacco_loans SET balance = ?, total_paid = ?, status = ? WHERE id = ?");
-            $stmt->execute([$newBalance, $newTotalPaid, $newStatus, $loanId]);
+            $repaymentId = (int)$pdo->lastInsertId();
+            $stmt = $pdo->prepare("UPDATE sacco_loans SET balance=?, total_paid=?, status=?, last_repayment_date=? WHERE id=?");
+            $stmt->execute([$newBalance, $newTotalPaid, $newStatus, $paymentDate, $loanId]);
+
+            // Mark the earliest pending/partial/overdue schedule installment as paid
+            try {
+                $nextInst = $pdo->prepare(
+                    "SELECT id FROM sacco_loan_schedule
+                     WHERE loan_id=? AND status IN ('pending','partial','overdue')
+                     ORDER BY installment_no ASC LIMIT 1"
+                );
+                $nextInst->execute([$loanId]);
+                $instRow = $nextInst->fetch();
+                if ($instRow) {
+                    $pdo->prepare(
+                        "UPDATE sacco_loan_schedule
+                         SET paid_amount=amount_due, status='paid', paid_at=?, repayment_id=?
+                         WHERE id=?"
+                    )->execute([$paymentDate, $repaymentId, $instRow['id']]);
+                }
+
+                // Advance next_repayment_date to the next pending installment
+                $upcoming = $pdo->prepare(
+                    "SELECT due_date FROM sacco_loan_schedule
+                     WHERE loan_id=? AND status IN ('pending','partial','overdue')
+                     ORDER BY installment_no ASC LIMIT 1"
+                );
+                $upcoming->execute([$loanId]);
+                $nextDate = $upcoming->fetchColumn();
+                if ($nextDate) {
+                    $pdo->prepare("UPDATE sacco_loans SET next_repayment_date=? WHERE id=?")
+                        ->execute([$nextDate, $loanId]);
+                }
+
+                // Mark any schedule rows whose due_date has passed as overdue
+                $pdo->prepare(
+                    "UPDATE sacco_loan_schedule SET status='overdue'
+                     WHERE loan_id=? AND status='pending' AND due_date < CURDATE()"
+                )->execute([$loanId]);
+            } catch (Throwable $e) {
+                // Schedule table may not exist yet — non-fatal
+                error_log('[repayments] Schedule update: ' . $e->getMessage());
+            }
 
             $pdo->commit();
             setFlash('success', 'Repayment of ' . formatCurrency($amount) . ' logged successfully.');

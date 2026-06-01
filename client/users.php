@@ -88,8 +88,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($chk->fetch()) {
                 setFlash('danger', 'That email is already registered in the system.');
             } else {
-                $pdo->prepare("INSERT INTO users (org_id,name,email,password,phone,role,status) VALUES (?,?,?,?,?,?,'active')")
-                    ->execute([$orgId, $name, $email, password_hash($pwd, PASSWORD_BCRYPT), $phone, $role]);
+                $branchId = (int)($_POST['branch_id'] ?? 0) ?: null;
+                $pdo->prepare("INSERT INTO users (org_id,name,email,password,phone,role,branch_id,status) VALUES (?,?,?,?,?,?,?,'active')")
+                    ->execute([$orgId, $name, $email, password_hash($pwd, PASSWORD_BCRYPT), $phone, $role, $branchId]);
                 $newId = (int)$pdo->lastInsertId();
                 $grantsOk = true;
                 // Grant module access + roles for staff members
@@ -176,8 +177,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $moduleRoles = $_POST['module_roles'] ?? [];
         // Guard: cannot demote yourself
         if ($uid === $myId) $role = 'client_admin';
-        $pdo->prepare("UPDATE users SET name=?,phone=?,role=? WHERE id=? AND org_id=? AND role!='super_admin'")
-            ->execute([$name, $phone, $role, $uid, $orgId]);
+        $editBranchId = (int)($_POST['branch_id'] ?? 0) ?: null;
+        $pdo->prepare("UPDATE users SET name=?,phone=?,role=?,branch_id=? WHERE id=? AND org_id=? AND role!='super_admin'")
+            ->execute([$name, $phone, $role, $editBranchId, $uid, $orgId]);
         // Update module grants + roles (always re-sync; clear for admins, set for staff)
         $editGrantsOk = true;
         try {
@@ -274,6 +276,9 @@ $planRow->execute([$sub['plan_id'] ?? 0]);
 $plan     = $planRow->fetch();
 $maxUsers = (int)($plan['max_users'] ?? 5);
 $userCount = count($members);
+
+// Org branches (for user assignment)
+$orgBranches = getOrgBranches($orgId);
 
 // Org modules subscribed
 $orgModules = getOrgModules($orgId);
@@ -479,12 +484,13 @@ function copyPortalLink() {
       <div class="d-flex flex-wrap gap-1">
         <button class="btn btn-xs btn-outline-primary"
                 onclick='openEdit(<?= htmlspecialchars(json_encode([
-                    'id'    => (int)$m['id'],
-                    'name'  => $m['name'],
-                    'phone' => $m['phone'] ?? '',
-                    'role'  => $m['role'],
-                    'grants'=> array_values($grants),
-                    'roles' => $rolesRaw[(int)$m['id']] ?? new stdClass(),
+                    'id'        => (int)$m['id'],
+                    'name'      => $m['name'],
+                    'phone'     => $m['phone'] ?? '',
+                    'role'      => $m['role'],
+                    'branch_id' => $m['branch_id'] ?? null,
+                    'grants'    => array_values($grants),
+                    'roles'     => $rolesRaw[(int)$m['id']] ?? new stdClass(),
                 ]), ENT_QUOTES) ?>)'>
           <i class="fas fa-edit me-1"></i>Edit
         </button>
@@ -554,6 +560,18 @@ function copyPortalLink() {
                   <label class="form-label fw-semibold">Phone</label>
                   <input type="tel" name="phone" class="form-control" maxlength="25" placeholder="+254 7xx xxx xxx">
                 </div>
+                <?php if (!empty($orgBranches)): ?>
+                <div class="col-12">
+                  <label class="form-label fw-semibold">Assign to Branch</label>
+                  <select name="branch_id" class="form-select">
+                    <option value="">All Branches (no restriction)</option>
+                    <?php foreach ($orgBranches as $__br): ?>
+                    <option value="<?= $__br['id'] ?>"><?= e($__br['name']) ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                  <div class="form-text">Staff see only data for their assigned branch.</div>
+                </div>
+                <?php endif; ?>
                 <div class="col-12">
                   <label class="form-label fw-semibold">Role <span class="text-danger">*</span></label>
                   <select name="role" class="form-select" id="addRole" onchange="onAddRoleChange()">
@@ -716,6 +734,17 @@ function copyPortalLink() {
                   <label class="form-label fw-semibold">Phone</label>
                   <input type="tel" name="phone" id="editPhone" class="form-control" maxlength="25">
                 </div>
+                <?php if (!empty($orgBranches)): ?>
+                <div class="col-12">
+                  <label class="form-label fw-semibold">Assign to Branch</label>
+                  <select name="branch_id" id="editBranchId" class="form-select">
+                    <option value="">All Branches (no restriction)</option>
+                    <?php foreach ($orgBranches as $__br): ?>
+                    <option value="<?= $__br['id'] ?>"><?= e($__br['name']) ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                </div>
+                <?php endif; ?>
                 <div class="col-12">
                   <label class="form-label fw-semibold">Role</label>
                   <select name="role" id="editRole" class="form-select" onchange="onEditRoleChange()">
@@ -1019,6 +1048,8 @@ function openEdit(m) {
     document.getElementById('editName').value   = m.name  || '';
     document.getElementById('editPhone').value  = m.phone || '';
     document.getElementById('editRole').value   = m.role  || 'staff';
+    const brSel = document.getElementById('editBranchId');
+    if (brSel) brSel.value = m.branch_id || '';
 
     // Tick granted modules, reveal role cards, restore saved role selection
     document.querySelectorAll('#editModuleGrid input[type=checkbox]').forEach(cb => {

@@ -300,6 +300,35 @@ $sub           = getOrgSubscription($orgId);
 $activeModules = getOrgModules($orgId);
 $activeSlugs   = array_column($activeModules, 'slug');
 
+// ── Per-branch KPI data (only loaded when org has branches) ─────
+$branchKpis  = [];
+$orgBranches = getOrgBranches($orgId);
+if (!empty($orgBranches)) {
+    foreach ($orgBranches as $br) {
+        $bid = (int)$br['id'];
+        $kpi = ['branch' => $br, 'staff' => 0, 'hotel_rooms' => null, 'health_patients' => null, 'pos_revenue' => null, 'sacco_members' => null];
+        // Staff count
+        try { $s=$pdo->prepare("SELECT COUNT(*) FROM users WHERE org_id=? AND branch_id=? AND status='active'"); $s->execute([$orgId,$bid]); $kpi['staff']=(int)$s->fetchColumn(); } catch(Throwable $e) {}
+        // Hotel rooms (if subscribed)
+        if (in_array('hotel', $activeSlugs)) {
+            try { $s=$pdo->prepare("SELECT COUNT(*) FROM hotel_rooms WHERE org_id=? AND branch_id=?"); $s->execute([$orgId,$bid]); $kpi['hotel_rooms']=(int)$s->fetchColumn(); } catch(Throwable $e) {}
+        }
+        // Health patients (if subscribed)
+        if (in_array('health', $activeSlugs)) {
+            try { $s=$pdo->prepare("SELECT COUNT(*) FROM health_patients WHERE org_id=? AND branch_id=?"); $s->execute([$orgId,$bid]); $kpi['health_patients']=(int)$s->fetchColumn(); } catch(Throwable $e) {}
+        }
+        // POS today's revenue (if subscribed)
+        if (in_array('pos', $activeSlugs)) {
+            try { $s=$pdo->prepare("SELECT COALESCE(SUM(total),0) FROM pos_sales WHERE org_id=? AND branch_id=? AND DATE(created_at)=CURDATE()"); $s->execute([$orgId,$bid]); $kpi['pos_revenue']=(float)$s->fetchColumn(); } catch(Throwable $e) {}
+        }
+        // SACCO members (if subscribed)
+        if (in_array('sacco', $activeSlugs)) {
+            try { $s=$pdo->prepare("SELECT COUNT(*) FROM sacco_members WHERE org_id=? AND branch_id=?"); $s->execute([$orgId,$bid]); $kpi['sacco_members']=(int)$s->fetchColumn(); } catch(Throwable $e) {}
+        }
+        $branchKpis[] = $kpi;
+    }
+}
+
 // Trial progress
 $trialDaysLeft = null;
 $trialPct      = 0;
@@ -729,6 +758,72 @@ $actIcons = [
     </a>
   </div>
 </div>
+
+<!-- ── Per-branch breakdown ─────────────────────────────────── -->
+<?php if (!empty($branchKpis)): ?>
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <h6 class="mb-0 fw-bold"><i class="fas fa-code-branch me-2 text-green"></i>Branch Overview</h6>
+    <a href="<?= APP_URL ?>/client/branches.php" class="btn btn-xs btn-outline-secondary">Manage Branches</a>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Branch</th>
+            <th class="text-center">Staff</th>
+            <?php if (in_array('hotel',  $activeSlugs)): ?><th class="text-center">Rooms</th><?php endif; ?>
+            <?php if (in_array('health', $activeSlugs)): ?><th class="text-center">Patients</th><?php endif; ?>
+            <?php if (in_array('pos',    $activeSlugs)): ?><th class="text-end">POS Today</th><?php endif; ?>
+            <?php if (in_array('sacco',  $activeSlugs)): ?><th class="text-center">SACCO Members</th><?php endif; ?>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+        <?php foreach ($branchKpis as $bk):
+          $br = $bk['branch'];
+          $isActiveBr = getActiveBranchId() === (int)$br['id'];
+        ?>
+        <tr class="<?= $isActiveBr ? 'table-success' : '' ?>">
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              <div style="width:8px;height:8px;border-radius:50%;background:<?= $br['status']==='active'?'var(--green)':'#94a3b8' ?>;flex-shrink:0"></div>
+              <div>
+                <div class="fw-semibold small"><?= e($br['name']) ?></div>
+                <?php if ($br['city']): ?><div class="text-muted" style="font-size:.68rem"><?= e($br['city']) ?></div><?php endif; ?>
+              </div>
+              <?php if ($isActiveBr): ?><span class="badge bg-success" style="font-size:.6rem">Active view</span><?php endif; ?>
+            </div>
+          </td>
+          <td class="text-center small"><?= $bk['staff'] ?></td>
+          <?php if (in_array('hotel',  $activeSlugs)): ?><td class="text-center small"><?= $bk['hotel_rooms'] ?? '—' ?></td><?php endif; ?>
+          <?php if (in_array('health', $activeSlugs)): ?><td class="text-center small"><?= $bk['health_patients'] ?? '—' ?></td><?php endif; ?>
+          <?php if (in_array('pos',    $activeSlugs)): ?><td class="text-end small"><?= $bk['pos_revenue'] !== null ? formatCurrency($bk['pos_revenue']) : '—' ?></td><?php endif; ?>
+          <?php if (in_array('sacco',  $activeSlugs)): ?><td class="text-center small"><?= $bk['sacco_members'] ?? '—' ?></td><?php endif; ?>
+          <td>
+            <a href="<?= APP_URL ?>/client/set-branch.php?branch_id=<?= $br['id'] ?>"
+               class="btn btn-xs <?= $isActiveBr ? 'btn-success' : 'btn-outline-secondary' ?>">
+              <i class="fas fa-eye me-1"></i><?= $isActiveBr ? 'Viewing' : 'Switch' ?>
+            </a>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+    <?php if (getActiveBranchId()): ?>
+    <div class="px-3 py-2 border-top bg-light d-flex align-items-center gap-2" style="font-size:.78rem">
+      <i class="fas fa-filter text-success"></i>
+      <span>All module data is filtered to the active branch.</span>
+      <a href="<?= APP_URL ?>/client/set-branch.php?branch_id=0" class="ms-auto text-muted">
+        <i class="fas fa-times me-1"></i>Clear — view all branches
+      </a>
+    </div>
+    <?php endif; ?>
+  </div>
+</div>
+<?php endif; ?>
 
 <!-- Module live stats -->
 <?php if (!empty($modStats)): ?>
