@@ -16,6 +16,11 @@ $user   = currentUser();
 $orgId  = (int)$user['org_id'];
 $userId = (int)$user['id'];
 
+// Staff accounts are always onboarded — skip wizard
+if ($user['role'] === 'staff') {
+    redirect(APP_URL . '/client/index.php');
+}
+
 $row = $pdo->prepare("SELECT is_onboarded FROM users WHERE id=?");
 $row->execute([$userId]);
 if ((bool)$row->fetchColumn()) {

@@ -40,6 +40,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $reset) {
         // Mark token as used
         $pdo->prepare("UPDATE password_resets SET used=1 WHERE token=?")->execute([$token]);
 
+        // Determine org portal URL for post-reset redirect
+        $postResetUrl = APP_URL . '/auth/login.php';
+        try {
+            $uRow = $pdo->prepare("SELECT u.role, o.slug FROM users u LEFT JOIN organizations o ON u.org_id=o.id WHERE u.email=? LIMIT 1");
+            $uRow->execute([$reset['email']]);
+            $uData = $uRow->fetch();
+            if ($uData && in_array($uData['role'], ['staff', 'client_admin'], true) && $uData['slug']) {
+                $postResetUrl = APP_URL . '/auth/org-login.php?org=' . rawurlencode($uData['slug']) . '&reset=1';
+            }
+        } catch (Exception $e) {}
+
         $done = true;
     }
 }
@@ -69,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $reset) {
       </div>
       <h3 class="fw-700">Password Reset!</h3>
       <p class="text-muted">Your password has been updated successfully. You can now sign in with your new password.</p>
-      <a href="login.php" class="btn btn-primary"><i class="fas fa-sign-in-alt me-2"></i>Sign In</a>
+      <a href="<?= htmlspecialchars($postResetUrl, ENT_QUOTES) ?>" class="btn btn-primary"><i class="fas fa-sign-in-alt me-2"></i>Sign In</a>
     </div>
 
     <?php elseif (!$reset): ?>

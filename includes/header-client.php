@@ -6,8 +6,9 @@ sendSecurityHeaders();
 requireClientAdmin();
 $user    = currentUser();
 
-// Onboarding guard — redirect first-time registrants to setup wizard
-if (!str_ends_with($_SERVER['PHP_SELF'], '/onboarding.php')) {
+// Onboarding guard — redirect first-time client_admin registrants to setup wizard
+// Staff accounts are pre-created by admins and skip onboarding entirely
+if ($user['role'] !== 'staff' && !str_ends_with($_SERVER['PHP_SELF'], '/onboarding.php')) {
     $_obStmt = $pdo->prepare("SELECT is_onboarded FROM users WHERE id=?");
     $_obStmt->execute([(int)$user['id']]);
     if (!(bool)$_obStmt->fetchColumn()) {
@@ -337,8 +338,10 @@ document.addEventListener('DOMContentLoaded', function() {
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
           <li><a class="dropdown-item" href="<?= APP_URL ?>/client/profile.php"><i class="fas fa-user me-2"></i>My Profile</a></li>
+          <?php if (!$__isStaff): ?>
           <li><a class="dropdown-item" href="<?= APP_URL ?>/client/billing.php"><i class="fas fa-credit-card me-2"></i>Billing</a></li>
           <li><a class="dropdown-item" href="<?= APP_URL ?>/client/settings.php"><i class="fas fa-cog me-2"></i>Settings</a></li>
+          <?php endif; ?>
           <li><hr class="dropdown-divider"></li>
           <li><button class="dropdown-item" onclick="toggleDarkMode()"><i class="dm-icon fas fa-moon me-2"></i><span class="dm-label">Dark Mode</span></button></li>
           <li><hr class="dropdown-divider"></li>

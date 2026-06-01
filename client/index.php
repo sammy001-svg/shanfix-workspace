@@ -4,61 +4,290 @@ require_once __DIR__ . '/../includes/header-client.php';
 
 $orgId = (int)$user['org_id'];
 
-// ── Staff members get their own focused dashboard, not the admin one ──────────
+// ── Staff workspace dashboard ─────────────────────────────────────────────────
 if (($user['role'] ?? '') === 'staff') {
     $staffModules = getUserAccessibleModules((int)$user['id'], $orgId);
-    $orgName      = e($user['org_name'] ?: APP_NAME);
-    $userName     = e($user['name'] ?? '');
+    $orgName      = $user['org_name'] ?: APP_NAME;
+    $firstName    = explode(' ', trim($user['name'] ?? 'there'))[0];
+    $hour         = (int)date('G');
+    $greeting     = $hour < 12 ? 'Good morning' : ($hour < 17 ? 'Good afternoon' : 'Good evening');
+    $modCount     = count($staffModules);
+
+    // Pre-load role info for each module
+    $staffRoleData = [];
+    foreach ($staffModules as $mod) {
+        $roleKey  = getUserModuleRole((int)$user['id'], $mod['slug']);
+        $roleDefs = getModuleRoles($mod['slug']);
+        $roleDef  = $roleDefs[$roleKey] ?? ['name' => ucfirst($roleKey), 'desc' => '', 'icon' => 'fa-user', 'color' => $mod['color'], 'readonly' => false];
+        $isRO     = !empty($roleDef['readonly']);
+        $staffRoleData[$mod['slug']] = [
+            'key'      => $roleKey,
+            'def'      => $roleDef,
+            'isRO'     => $isRO,
+            'actions'  => getModuleQuickActions($mod['slug'], $isRO),
+        ];
+    }
     ?>
-    <div class="page-header mb-4">
-      <h4><i class="fas fa-th-large me-2 text-green"></i>My Workspace</h4>
-      <p class="text-muted mb-0">Welcome back, <strong><?= $userName ?></strong> — <?= $orgName ?></p>
+
+<style>
+/* ── Staff workspace ──────────────────────────────────────────── */
+.sw-welcome {
+  background: linear-gradient(135deg, #0B2D4E 0%, #103d20 100%);
+  border-radius: 16px;
+  padding: 28px 32px;
+  color: #fff;
+  margin-bottom: 24px;
+  position: relative;
+  overflow: hidden;
+}
+.sw-welcome::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%231A8A4E' fill-opacity='0.07'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") repeat;
+  pointer-events: none;
+}
+.sw-welcome-content { position: relative; z-index: 1; }
+.sw-greeting { font-size: 1.55rem; font-weight: 800; margin-bottom: 4px; }
+.sw-meta { font-size: .88rem; color: rgba(255,255,255,.6); }
+.sw-meta strong { color: rgba(255,255,255,.85); }
+.sw-date-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.15);
+  border-radius: 20px; padding: 4px 14px; font-size: .78rem; color: rgba(255,255,255,.7);
+}
+.sw-mod-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(26,138,78,.2); border: 1px solid rgba(26,138,78,.35);
+  border-radius: 20px; padding: 4px 14px; font-size: .78rem; color: #4ade80;
+}
+
+/* ── Quick Actions ────────────────────────────────────────────── */
+.qa-section { margin-bottom: 24px; }
+.qa-section-header {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 12px;
+}
+.qa-mod-badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 12px 5px 8px;
+  border-radius: 20px; font-size: .8rem; font-weight: 700;
+  color: #fff;
+}
+.qa-mod-icon {
+  width: 28px; height: 28px; border-radius: 8px;
+  background: rgba(255,255,255,.25);
+  display: flex; align-items: center; justify-content: center;
+  font-size: .75rem;
+}
+.qa-role-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 12px;
+  font-size: .72rem; font-weight: 600; white-space: nowrap;
+}
+.qa-ro-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: #fef3c7; color: #92400e;
+  padding: 3px 8px; border-radius: 10px; font-size: .68rem; font-weight: 600;
+}
+.qa-actions-wrap {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 14px 16px;
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;
+}
+.qa-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 8px;
+  font-size: .8rem; font-weight: 600;
+  text-decoration: none; transition: all .15s; white-space: nowrap;
+}
+.qa-btn-write {
+  color: #fff;
+}
+.qa-btn-write:hover {
+  filter: brightness(1.1); color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.15);
+}
+.qa-btn-read {
+  background: #fff; color: #0B2D4E;
+  border: 1.5px solid #e2e8f0;
+}
+.qa-btn-read:hover {
+  border-color: currentColor; background: #f0fdf4;
+  transform: translateY(-1px);
+}
+.qa-open-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: .75rem; font-weight: 600; padding: 5px 12px;
+  border-radius: 8px; border: none; text-decoration: none; white-space: nowrap;
+}
+
+/* ── Module cards row ─────────────────────────────────────────── */
+.sw-mod-card {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px; padding: 16px;
+  background: #fff; transition: box-shadow .15s, border-color .15s;
+  display: flex; flex-direction: column; height: 100%;
+}
+.sw-mod-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+.sw-mod-icon {
+  width: 44px; height: 44px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; color: #fff; flex-shrink: 0;
+}
+.sw-role-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border-radius: 10px;
+  font-size: .72rem; font-weight: 600;
+}
+@media (max-width: 575px) {
+  .sw-welcome { padding: 20px 18px; }
+  .sw-greeting { font-size: 1.25rem; }
+  .qa-actions-wrap { padding: 10px 12px; gap: 6px; }
+  .qa-btn { font-size: .75rem; padding: 6px 10px; }
+}
+</style>
+
+    <!-- ── Welcome banner ─────────────────────────────────────────── -->
+    <div class="sw-welcome">
+      <div class="sw-welcome-content">
+        <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+          <div>
+            <div class="sw-greeting"><?= e($greeting) ?>, <?= e($firstName) ?> 👋</div>
+            <div class="sw-meta mt-1">
+              <strong><?= e($orgName) ?></strong> &mdash; your workspace is ready
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-3">
+              <span class="sw-mod-chip">
+                <i class="fas fa-puzzle-piece"></i>
+                <?= $modCount ?> module<?= $modCount !== 1 ? 's' : '' ?> assigned
+              </span>
+            </div>
+          </div>
+          <div class="text-end flex-shrink-0">
+            <span class="sw-date-chip">
+              <i class="fas fa-calendar-alt"></i>
+              <?= date('l, j M Y') ?>
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <?php if (empty($staffModules)): ?>
-    <div class="card text-center py-5">
-      <div class="card-body text-muted">
-        <i class="fas fa-lock fa-3x mb-3 d-block opacity-25"></i>
-        <h5>No modules assigned yet</h5>
-        <p class="small">Your administrator hasn't assigned any modules to your account. Contact your admin to get access.</p>
+    <!-- ── Empty state ──────────────────────────────────────────── -->
+    <div class="card border-0 shadow-sm text-center py-5">
+      <div class="card-body">
+        <div style="width:72px;height:72px;background:#f1f5f9;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
+          <i class="fas fa-lock fa-2x text-muted opacity-50"></i>
+        </div>
+        <h5 class="fw-700 text-navy">No modules assigned yet</h5>
+        <p class="text-muted small mb-4">Your administrator hasn't assigned any modules to your account yet.<br>Reach out to them to get access.</p>
+        <a href="<?= APP_URL ?>/client/support.php" class="btn btn-outline-primary btn-sm">
+          <i class="fas fa-headset me-2"></i>Contact Support
+        </a>
       </div>
     </div>
+
     <?php else: ?>
-    <div class="row g-3">
-      <?php foreach ($staffModules as $mod):
-        $roleKey  = getUserModuleRole((int)$user['id'], $mod['slug']);
-        $roleDefs = getModuleRoles($mod['slug']);
-        $roleDef  = $roleDefs[$roleKey] ?? ['name' => ucfirst($roleKey), 'icon' => 'fa-user', 'color' => $mod['color']];
-        $roleName = $roleDef['name'] ?? ucfirst($roleKey);
-        $roleIcon = $roleDef['icon'] ?? 'fa-user';
-        $isRO     = !empty($roleDef['readonly']);
-      ?>
-      <div class="col-sm-6 col-lg-4 col-xl-3">
-        <div class="card h-100 border-0 shadow-sm" style="border-left:4px solid <?= e($mod['color']) ?>!important">
-          <div class="card-body d-flex flex-column">
-            <div class="d-flex align-items-center gap-3 mb-3">
-              <div class="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0 text-white"
-                   style="width:44px;height:44px;background:<?= e($mod['color']) ?>;font-size:1.1rem">
-                <i class="<?= e($mod['icon']) ?>"></i>
-              </div>
-              <div class="overflow-hidden">
-                <div class="fw-700 text-truncate"><?= e($mod['name']) ?></div>
-                <div class="small" style="color:<?= e($roleDef['color'] ?? $mod['color']) ?>">
-                  <i class="fas <?= e($roleIcon) ?> me-1"></i><?= e($roleName) ?>
-                  <?php if ($isRO): ?><span class="badge bg-warning text-dark ms-1" style="font-size:.6rem">Read-only</span><?php endif; ?>
-                </div>
-              </div>
-            </div>
+
+    <!-- ── Quick Actions ────────────────────────────────────────── -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-3">
+        <div style="width:32px;height:32px;background:linear-gradient(135deg,#0B2D4E,#1A8A4E);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:.8rem;flex-shrink:0">
+          <i class="fas fa-bolt"></i>
+        </div>
+        <div>
+          <div class="fw-700 text-navy" style="font-size:.9rem">Quick Actions</div>
+          <div class="text-muted" style="font-size:.72rem">Jump straight to your most-used tasks</div>
+        </div>
+      </div>
+      <div class="card-body p-3 p-md-4">
+        <?php foreach ($staffModules as $mod):
+          $rd      = $staffRoleData[$mod['slug']];
+          $roleDef = $rd['def'];
+          $isRO    = $rd['isRO'];
+          $actions = $rd['actions'];
+          $clr     = $mod['color'];
+        ?>
+        <div class="qa-section">
+          <div class="qa-section-header">
+            <span class="qa-mod-badge" style="background:<?= e($clr) ?>">
+              <span class="qa-mod-icon"><i class="<?= e($mod['icon']) ?>"></i></span>
+              <?= e($mod['name']) ?>
+            </span>
+            <span class="qa-role-pill" style="background:<?= e($roleDef['color'] ?? $clr) ?>18;color:<?= e($roleDef['color'] ?? $clr) ?>;border:1px solid <?= e($roleDef['color'] ?? $clr) ?>30">
+              <i class="fas <?= e($roleDef['icon'] ?? 'fa-user') ?>"></i>
+              <?= e($roleDef['name'] ?? ucfirst($rd['key'])) ?>
+            </span>
+            <?php if ($isRO): ?>
+            <span class="qa-ro-badge"><i class="fas fa-eye me-1"></i>View only</span>
+            <?php endif; ?>
             <a href="<?= APP_URL ?>/modules/<?= e($mod['slug']) ?>/index.php"
-               class="btn btn-sm w-100 mt-auto text-white fw-600"
-               style="background:<?= e($mod['color']) ?>">
-              <i class="fas fa-arrow-right me-1"></i>Open <?= e($mod['name']) ?>
+               class="ms-auto qa-open-btn text-white"
+               style="background:<?= e($clr) ?>">
+              Open <i class="fas fa-arrow-right"></i>
             </a>
           </div>
+          <?php if (!empty($actions)): ?>
+          <div class="qa-actions-wrap">
+            <?php foreach ($actions as $act): ?>
+            <a href="<?= APP_URL ?>/modules/<?= e($mod['slug']) ?>/<?= e($act['url']) ?>"
+               class="qa-btn <?= $act['write'] ? 'qa-btn-write' : 'qa-btn-read' ?>"
+               <?= $act['write'] ? 'style="background:' . e($clr) . '"' : '' ?>>
+              <i class="fas <?= e($act['icon']) ?>"></i>
+              <?= e($act['label']) ?>
+            </a>
+            <?php endforeach; ?>
+          </div>
+          <?php endif; ?>
+        </div>
+        <?php endforeach; ?>
+      </div>
+    </div>
+
+    <!-- ── My Modules grid ────────────────────────────────────────── -->
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <span class="fw-700 text-navy" style="font-size:.9rem">My Modules</span>
+      <span class="badge bg-secondary bg-opacity-25 text-secondary" style="font-size:.7rem"><?= $modCount ?></span>
+      <hr class="flex-fill my-0">
+    </div>
+    <div class="row g-3">
+      <?php foreach ($staffModules as $mod):
+        $rd      = $staffRoleData[$mod['slug']];
+        $roleDef = $rd['def'];
+        $isRO    = $rd['isRO'];
+        $clr     = $mod['color'];
+        $desc    = $roleDef['desc'] ?? '';
+      ?>
+      <div class="col-sm-6 col-lg-4 col-xl-3">
+        <div class="sw-mod-card" style="border-top:3px solid <?= e($clr) ?>">
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <div class="sw-mod-icon" style="background:<?= e($clr) ?>">
+              <i class="<?= e($mod['icon']) ?>"></i>
+            </div>
+            <div class="overflow-hidden">
+              <div class="fw-700 text-navy text-truncate" style="font-size:.9rem"><?= e($mod['name']) ?></div>
+              <span class="sw-role-tag mt-1" style="background:<?= e($roleDef['color'] ?? $clr) ?>18;color:<?= e($roleDef['color'] ?? $clr) ?>">
+                <i class="fas <?= e($roleDef['icon'] ?? 'fa-user') ?>"></i>
+                <?= e($roleDef['name'] ?? ucfirst($rd['key'])) ?>
+                <?php if ($isRO): ?>&nbsp;<i class="fas fa-eye-slash" title="Read-only"></i><?php endif; ?>
+              </span>
+            </div>
+          </div>
+          <?php if ($desc): ?>
+          <p class="text-muted mb-3" style="font-size:.75rem;line-height:1.4"><?= e($desc) ?></p>
+          <?php endif; ?>
+          <a href="<?= APP_URL ?>/modules/<?= e($mod['slug']) ?>/index.php"
+             class="mt-auto btn btn-sm fw-600 text-white w-100"
+             style="background:<?= e($clr) ?>">
+            <i class="fas fa-arrow-right me-1"></i>Open <?= e($mod['name']) ?>
+          </a>
         </div>
       </div>
       <?php endforeach; ?>
     </div>
+
     <?php endif; ?>
 
     <?php

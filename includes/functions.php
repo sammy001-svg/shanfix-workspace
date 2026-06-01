@@ -138,16 +138,26 @@ function requireLogin(string $redirect = '/auth/login.php'): void {
 
     $timeoutSecs = $timeoutHours * 3600;
     if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > $timeoutSecs) {
+        $role    = $_SESSION['user_role'] ?? '';
+        $orgSlug = $_SESSION['org_slug']  ?? null;
         session_unset();
         session_destroy();
+        if ($orgSlug && in_array($role, ['staff', 'client_admin'], true)) {
+            redirect(APP_URL . '/auth/org-login.php?org=' . rawurlencode($orgSlug) . '&expired=1');
+        }
         redirect(APP_URL . '/auth/login.php?expired=1');
     }
 
     // Session fingerprint check (detects session hijacking)
     $currentFingerprint = md5(($_SERVER['HTTP_USER_AGENT'] ?? '') . ($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? ''));
     if (isset($_SESSION['fingerprint']) && !hash_equals($_SESSION['fingerprint'], $currentFingerprint)) {
+        $role    = $_SESSION['user_role'] ?? '';
+        $orgSlug = $_SESSION['org_slug']  ?? null;
         session_unset();
         session_destroy();
+        if ($orgSlug && in_array($role, ['staff', 'client_admin'], true)) {
+            redirect(APP_URL . '/auth/org-login.php?org=' . rawurlencode($orgSlug) . '&hijack=1');
+        }
         redirect(APP_URL . '/auth/login.php?hijack=1');
     }
 
@@ -1325,6 +1335,155 @@ function requireModuleRole(string $moduleSlug, string|array $roles): void {
         header('Location: ' . $ref);
         exit;
     }
+}
+
+/**
+ * Returns quick-action shortcuts for a module, filtered by write capability.
+ * Each action: ['label', 'url' (relative to /modules/SLUG/), 'icon', 'write' (bool)]
+ * Pass $readonly=true to suppress write-only actions.
+ */
+function getModuleQuickActions(string $slug, bool $readonly = false): array {
+    $map = [
+        'health' => [
+            ['label'=>'New Patient',      'url'=>'patients.php',            'icon'=>'fa-user-plus',           'write'=>true],
+            ['label'=>'Appointments',     'url'=>'appointments.php',        'icon'=>'fa-calendar-alt',        'write'=>false],
+            ['label'=>'Patient Records',  'url'=>'records.php',             'icon'=>'fa-folder-open',         'write'=>false],
+            ['label'=>'Prescriptions',    'url'=>'prescription.php',        'icon'=>'fa-prescription-bottle', 'write'=>false],
+            ['label'=>'Lab Tests',        'url'=>'lab.php',                 'icon'=>'fa-flask',               'write'=>false],
+            ['label'=>'Admit Patient',    'url'=>'admissions.php',          'icon'=>'fa-bed',                 'write'=>true],
+        ],
+        'pos' => [
+            ['label'=>'New Sale',         'url'=>'sales.php',               'icon'=>'fa-cash-register',       'write'=>true],
+            ['label'=>'Products',         'url'=>'products.php',            'icon'=>'fa-box-open',            'write'=>false],
+            ['label'=>'Customers',        'url'=>'customers.php',           'icon'=>'fa-users',               'write'=>false],
+            ['label'=>'Stock',            'url'=>'stock.php',               'icon'=>'fa-warehouse',           'write'=>false],
+            ['label'=>'Daily Report',     'url'=>'reports.php',             'icon'=>'fa-chart-bar',           'write'=>false],
+        ],
+        'school' => [
+            ['label'=>'Attendance',       'url'=>'attendance.php',          'icon'=>'fa-clipboard-check',     'write'=>true],
+            ['label'=>'Students',         'url'=>'students.php',            'icon'=>'fa-graduation-cap',      'write'=>false],
+            ['label'=>'Enter Marks',      'url'=>'results.php',             'icon'=>'fa-pen',                 'write'=>true],
+            ['label'=>'Timetable',        'url'=>'timetable.php',           'icon'=>'fa-calendar-week',       'write'=>false],
+            ['label'=>'Fees',             'url'=>'fees.php',                'icon'=>'fa-money-bill',          'write'=>false],
+            ['label'=>'Exams',            'url'=>'exams.php',               'icon'=>'fa-file-alt',            'write'=>false],
+        ],
+        'hrm' => [
+            ['label'=>'Add Employee',     'url'=>'index.php',               'icon'=>'fa-user-plus',           'write'=>true],
+            ['label'=>'Employees',        'url'=>'index.php',               'icon'=>'fa-users',               'write'=>false],
+            ['label'=>'Attendance',       'url'=>'index.php',               'icon'=>'fa-clock',               'write'=>true],
+            ['label'=>'Leave Requests',   'url'=>'index.php',               'icon'=>'fa-umbrella-beach',      'write'=>false],
+            ['label'=>'Payroll',          'url'=>'index.php',               'icon'=>'fa-money-check-alt',     'write'=>false],
+        ],
+        'accounting' => [
+            ['label'=>'New Invoice',      'url'=>'index.php',               'icon'=>'fa-file-invoice',        'write'=>true],
+            ['label'=>'Record Payment',   'url'=>'index.php',               'icon'=>'fa-hand-holding-dollar', 'write'=>true],
+            ['label'=>'Expenses',         'url'=>'index.php',               'icon'=>'fa-receipt',             'write'=>false],
+            ['label'=>'Reports',          'url'=>'index.php',               'icon'=>'fa-chart-line',          'write'=>false],
+        ],
+        'crm' => [
+            ['label'=>'Add Contact',      'url'=>'index.php',               'icon'=>'fa-user-plus',           'write'=>true],
+            ['label'=>'Contacts',         'url'=>'index.php',               'icon'=>'fa-address-book',        'write'=>false],
+            ['label'=>'Log Activity',     'url'=>'index.php',               'icon'=>'fa-phone',               'write'=>true],
+            ['label'=>'Deals',            'url'=>'index.php',               'icon'=>'fa-handshake',           'write'=>false],
+        ],
+        'hotel' => [
+            ['label'=>'New Booking',      'url'=>'index.php',               'icon'=>'fa-calendar-plus',       'write'=>true],
+            ['label'=>'Check In',         'url'=>'index.php',               'icon'=>'fa-door-open',           'write'=>true],
+            ['label'=>'Check Out',        'url'=>'index.php',               'icon'=>'fa-door-closed',         'write'=>true],
+            ['label'=>'Rooms',            'url'=>'index.php',               'icon'=>'fa-hotel',               'write'=>false],
+            ['label'=>'Reports',          'url'=>'reports.php',             'icon'=>'fa-chart-bar',           'write'=>false],
+        ],
+        'sacco' => [
+            ['label'=>'New Member',       'url'=>'index.php',               'icon'=>'fa-user-plus',           'write'=>true],
+            ['label'=>'Deposits',         'url'=>'index.php',               'icon'=>'fa-piggy-bank',          'write'=>false],
+            ['label'=>'Loan Request',     'url'=>'index.php',               'icon'=>'fa-file-alt',            'write'=>true],
+            ['label'=>'Statements',       'url'=>'statements.php',          'icon'=>'fa-file-lines',          'write'=>false],
+        ],
+        'rental' => [
+            ['label'=>'New Booking',      'url'=>'index.php',               'icon'=>'fa-calendar-plus',       'write'=>true],
+            ['label'=>'Properties',       'url'=>'index.php',               'icon'=>'fa-building',            'write'=>false],
+            ['label'=>'Payments',         'url'=>'index.php',               'icon'=>'fa-money-bill',          'write'=>false],
+            ['label'=>'Maintenance',      'url'=>'index.php',               'icon'=>'fa-wrench',              'write'=>false],
+        ],
+        'church' => [
+            ['label'=>'Add Member',       'url'=>'index.php',               'icon'=>'fa-user-plus',           'write'=>true],
+            ['label'=>'Members',          'url'=>'index.php',               'icon'=>'fa-users',               'write'=>false],
+            ['label'=>'Cell Groups',      'url'=>'cells.php',               'icon'=>'fa-sitemap',             'write'=>false],
+            ['label'=>'Contributions',    'url'=>'index.php',               'icon'=>'fa-hand-holding-dollar', 'write'=>false],
+        ],
+        'salon' => [
+            ['label'=>'New Appointment',  'url'=>'index.php',               'icon'=>'fa-calendar-plus',       'write'=>true],
+            ['label'=>'New Sale',         'url'=>'index.php',               'icon'=>'fa-shopping-bag',        'write'=>true],
+            ['label'=>'Clients',          'url'=>'index.php',               'icon'=>'fa-users',               'write'=>false],
+            ['label'=>'Services',         'url'=>'index.php',               'icon'=>'fa-scissors',            'write'=>false],
+        ],
+        'retail' => [
+            ['label'=>'New Sale',         'url'=>'index.php',               'icon'=>'fa-shopping-cart',       'write'=>true],
+            ['label'=>'Products',         'url'=>'index.php',               'icon'=>'fa-box',                 'write'=>false],
+            ['label'=>'Stock',            'url'=>'index.php',               'icon'=>'fa-warehouse',           'write'=>false],
+            ['label'=>'Reports',          'url'=>'reports.php',             'icon'=>'fa-chart-bar',           'write'=>false],
+        ],
+        'sales' => [
+            ['label'=>'New Order',        'url'=>'index.php',               'icon'=>'fa-plus-circle',         'write'=>true],
+            ['label'=>'Customers',        'url'=>'index.php',               'icon'=>'fa-users',               'write'=>false],
+            ['label'=>'Products',         'url'=>'index.php',               'icon'=>'fa-box',                 'write'=>false],
+            ['label'=>'Reports',          'url'=>'reports.php',             'icon'=>'fa-chart-bar',           'write'=>false],
+        ],
+        'tour' => [
+            ['label'=>'New Booking',      'url'=>'index.php',               'icon'=>'fa-plane-departure',     'write'=>true],
+            ['label'=>'Packages',         'url'=>'index.php',               'icon'=>'fa-suitcase',            'write'=>false],
+            ['label'=>'Clients',          'url'=>'index.php',               'icon'=>'fa-users',               'write'=>false],
+            ['label'=>'Reports',          'url'=>'reports.php',             'icon'=>'fa-chart-bar',           'write'=>false],
+        ],
+        'events' => [
+            ['label'=>'New Event',        'url'=>'index.php',               'icon'=>'fa-calendar-plus',       'write'=>true],
+            ['label'=>'Registrations',    'url'=>'index.php',               'icon'=>'fa-ticket-alt',          'write'=>false],
+            ['label'=>'Venues',           'url'=>'index.php',               'icon'=>'fa-map-marker-alt',      'write'=>false],
+            ['label'=>'Reports',          'url'=>'reports.php',             'icon'=>'fa-chart-bar',           'write'=>false],
+        ],
+        'manufacturing' => [
+            ['label'=>'Production Order', 'url'=>'index.php',               'icon'=>'fa-industry',            'write'=>true],
+            ['label'=>'Materials',        'url'=>'index.php',               'icon'=>'fa-boxes',               'write'=>false],
+            ['label'=>'Work Orders',      'url'=>'index.php',               'icon'=>'fa-clipboard-list',      'write'=>false],
+            ['label'=>'Reports',          'url'=>'reports.php',             'icon'=>'fa-chart-bar',           'write'=>false],
+        ],
+        'caryard' => [
+            ['label'=>'Add Vehicle',      'url'=>'index.php',               'icon'=>'fa-car',                 'write'=>true],
+            ['label'=>'Vehicles',         'url'=>'index.php',               'icon'=>'fa-car-side',            'write'=>false],
+            ['label'=>'New Sale',         'url'=>'index.php',               'icon'=>'fa-file-contract',       'write'=>true],
+            ['label'=>'Reports',          'url'=>'report-pdf.php',          'icon'=>'fa-chart-bar',           'write'=>false],
+        ],
+        'meetings' => [
+            ['label'=>'Schedule Meeting', 'url'=>'index.php',               'icon'=>'fa-video',               'write'=>true],
+            ['label'=>'Calendar',         'url'=>'calendar.php',            'icon'=>'fa-calendar-alt',        'write'=>false],
+            ['label'=>'Reports',          'url'=>'reports.php',             'icon'=>'fa-chart-bar',           'write'=>false],
+        ],
+        'finance' => [
+            ['label'=>'New Transaction',  'url'=>'index.php',               'icon'=>'fa-money-bill-transfer', 'write'=>true],
+            ['label'=>'Budget',           'url'=>'index.php',               'icon'=>'fa-wallet',              'write'=>false],
+            ['label'=>'Reports',          'url'=>'index.php',               'icon'=>'fa-chart-line',          'write'=>false],
+        ],
+        'courier' => [
+            ['label'=>'New Shipment',     'url'=>'index.php',               'icon'=>'fa-truck-fast',          'write'=>true],
+            ['label'=>'Shipments',        'url'=>'index.php',               'icon'=>'fa-truck',               'write'=>false],
+            ['label'=>'Customers',        'url'=>'index.php',               'icon'=>'fa-users',               'write'=>false],
+            ['label'=>'Reports',          'url'=>'reports.php',             'icon'=>'fa-chart-bar',           'write'=>false],
+        ],
+        'driving' => [
+            ['label'=>'New Student',      'url'=>'index.php',               'icon'=>'fa-user-plus',           'write'=>true],
+            ['label'=>'Schedule Lesson',  'url'=>'index.php',               'icon'=>'fa-calendar-plus',       'write'=>true],
+            ['label'=>'Students',         'url'=>'index.php',               'icon'=>'fa-graduation-cap',      'write'=>false],
+            ['label'=>'Reports',          'url'=>'reports.php',             'icon'=>'fa-chart-bar',           'write'=>false],
+        ],
+    ];
+
+    $actions = $map[$slug] ?? [['label'=>'Open Module', 'url'=>'index.php', 'icon'=>'fa-arrow-right', 'write'=>false]];
+
+    if ($readonly) {
+        $actions = array_values(array_filter($actions, fn($a) => !$a['write']));
+    }
+
+    return $actions;
 }
 
 /**

@@ -35,9 +35,17 @@ if (empty($_SESSION['csrf_token'])) {
 }
 $csrfToken = $_SESSION['csrf_token'];
 
-$loginError  = null;
-$loginEmail  = '';
-$orgActive   = $org['status'] === 'active';
+$loginError   = null;
+$loginNotice  = null;  // informational (not an error)
+$loginEmail   = '';
+$orgActive    = $org['status'] === 'active';
+
+// ── Status messages from redirects ────────────────────────────────
+if (!empty($_GET['expired']))            $loginNotice = ['type' => 'warning', 'icon' => 'fa-clock',          'msg' => 'Your session has expired. Please sign in again.'];
+elseif (!empty($_GET['hijack']))         $loginNotice = ['type' => 'danger',  'icon' => 'fa-shield-halved',  'msg' => 'Session invalidated for security. Please sign in again.'];
+elseif (!empty($_GET['logout']))         $loginNotice = ['type' => 'success', 'icon' => 'fa-check-circle',   'msg' => 'You have been signed out successfully.'];
+elseif (!empty($_GET['reset']))          $loginNotice = ['type' => 'success', 'icon' => 'fa-key',            'msg' => 'Password updated. Please sign in with your new password.'];
+elseif (!empty($_GET['staff_redirect'])) $loginNotice = ['type' => 'info',    'icon' => 'fa-circle-info',   'msg' => 'Staff accounts must sign in through this organization portal — not the main OrbitDesk login page.'];
 
 // ── POST: process login ────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $orgActive) {
@@ -103,6 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $orgActive) {
                     $_SESSION['user_role']     = $u['role'];
                     $_SESSION['org_id']        = $u['org_id'];
                     $_SESSION['org_name']      = $u['org_name'];
+                    $_SESSION['org_slug']      = $org['slug'];
                     $_SESSION['last_activity'] = time();
                     $_SESSION['fingerprint']   = md5(($_SERVER['HTTP_USER_AGENT'] ?? '') . ($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? ''));
 
@@ -386,6 +395,16 @@ body{background:var(--gray-50);display:flex;align-items:stretch;min-height:100vh
       </div>
       <?php else: ?>
 
+      <?php if ($loginNotice): ?>
+      <div style="background:<?= $loginNotice['type']==='success'?'#f0fdf4':($loginNotice['type']==='warning'?'#fffbeb':($loginNotice['type']==='danger'?'#fef2f2':'#eff6ff')) ?>;
+                  border:1px solid <?= $loginNotice['type']==='success'?'#bbf7d0':($loginNotice['type']==='warning'?'#fde68a':($loginNotice['type']==='danger'?'#fecaca':'#bfdbfe')) ?>;
+                  border-radius:10px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:flex-start;gap:10px;font-size:.85rem;
+                  color:<?= $loginNotice['type']==='success'?'#166534':($loginNotice['type']==='warning'?'#92400e':($loginNotice['type']==='danger'?'#7f1d1d':'#1e40af')) ?>">
+        <i class="fas <?= htmlspecialchars($loginNotice['icon'], ENT_QUOTES) ?>" style="margin-top:1px;flex-shrink:0"></i>
+        <div><?= htmlspecialchars($loginNotice['msg'], ENT_QUOTES) ?></div>
+      </div>
+      <?php endif; ?>
+
       <?php if ($loginError): ?>
       <div class="login-error" role="alert">
         <i class="fas fa-exclamation-circle"></i>
@@ -434,10 +453,10 @@ body{background:var(--gray-50);display:flex;align-items:stretch;min-height:100vh
         </button>
       </form>
 
-      <div class="login-divider">or</div>
+      <div class="login-divider">forgot your password?</div>
 
-      <a href="<?= APP_URL ?>/auth/login.php" class="back-link">
-        <i class="fas fa-arrow-left"></i> Back to main login
+      <a href="<?= APP_URL ?>/auth/forgot-password.php" class="back-link">
+        <i class="fas fa-key"></i> Reset Password
       </a>
 
       <?php endif; ?>

@@ -4,6 +4,7 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
 requireClientAdmin();
+requireAdminRole('Data import is restricted to administrators.');
 
 $user  = currentUser();
 $orgId = (int)$user['org_id'];

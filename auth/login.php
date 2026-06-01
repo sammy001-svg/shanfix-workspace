@@ -5,7 +5,10 @@ require_once __DIR__ . '/../includes/functions.php';
 sendSecurityHeaders();
 
 if (isLoggedIn()) {
-    redirect(($_SESSION['user_role'] === 'super_admin') ? APP_URL . '/admin/index.php' : APP_URL . '/client/index.php');
+    $role = $_SESSION['user_role'] ?? '';
+    if ($role === 'super_admin') redirect(APP_URL . '/admin/index.php');
+    elseif ($role === 'patient') redirect(APP_URL . '/patient/index.php');
+    else redirect(APP_URL . '/client/index.php');
 }
 
 // ── Security config ───────────────────────────────────────────────
@@ -91,6 +94,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 logAttempt($pdo, $email, $ip, true);
 
+                // ── Staff must use org portal, not main login ──
+                if ($user['role'] === 'staff') {
+                    $orgSlugRow = null;
+                    try {
+                        $s = $pdo->prepare("SELECT slug FROM organizations WHERE id=? LIMIT 1");
+                        $s->execute([$user['org_id']]);
+                        $orgSlugRow = $s->fetchColumn() ?: null;
+                    } catch (Exception $e) {}
+                    if ($orgSlugRow) {
+                        redirect(APP_URL . '/auth/org-login.php?org=' . rawurlencode($orgSlugRow) . '&staff_redirect=1');
+                    }
+                    // If no slug found (edge case), fall through to normal login
+                }
+
                 // ── 2FA check ─────────────────────────────────
                 if (!empty($user['totp_enabled']) && !empty($user['totp_secret'])) {
                     // Store pending auth in session (not full login yet)
@@ -143,6 +160,16 @@ function _completeLogin(PDO $pdo, array $user, bool $remember): void {
     $_SESSION['last_activity'] = time();
     $_SESSION['fingerprint']   = md5(($_SERVER['HTTP_USER_AGENT'] ?? '') . ($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? ''));
 
+    // Store org slug so logout/timeout can redirect back to the right portal
+    if ($user['org_id']) {
+        try {
+            $s = $pdo->prepare("SELECT slug FROM organizations WHERE id=? LIMIT 1");
+            $s->execute([$user['org_id']]);
+            $slug = $s->fetchColumn();
+            if ($slug) $_SESSION['org_slug'] = $slug;
+        } catch (Exception $e) {}
+    }
+
     $pdo->prepare("UPDATE users SET last_login=NOW() WHERE id=?")->execute([$user['id']]);
 
     if ($remember) {
@@ -152,6 +179,18 @@ function _completeLogin(PDO $pdo, array $user, bool $remember): void {
     }
 
     setFlash('success', 'Welcome back, ' . $user['name'] . '!');
+
+    if ($user['role'] === 'patient') {
+        // Resolve patient_id from health_patients and store in session
+        try {
+            $pt = $pdo->prepare("SELECT id FROM health_patients WHERE user_id=? AND org_id=? LIMIT 1");
+            $pt->execute([$user['id'], $user['org_id']]);
+            $pid = $pt->fetchColumn();
+            if ($pid) $_SESSION['patient_id'] = (int)$pid;
+        } catch (Throwable $e) {}
+        redirect(APP_URL . '/patient/index.php');
+    }
+
     redirect($user['role'] === 'super_admin' ? APP_URL . '/admin/index.php' : APP_URL . '/client/index.php');
 }
 ?>
@@ -270,8 +309,16 @@ function _completeLogin(PDO $pdo, array $user, bool $remember): void {
       <a href="<?= APP_URL ?>" class="text-muted small"><i class="fas fa-arrow-left me-1"></i>Back to home</a>
     </div>
 
+    <!-- Staff notice -->
+    <div class="mt-3 p-3 rounded d-flex align-items-start gap-2" style="background:#eff6ff;border:1px solid #bfdbfe">
+      <i class="fas fa-users text-primary mt-1 flex-shrink-0"></i>
+      <div class="small text-muted">
+        <strong class="text-primary">Staff member?</strong> Use your organization's dedicated login portal shared by your administrator — not this page.
+      </div>
+    </div>
+
     <!-- Security notice -->
-    <div class="mt-4 p-3 rounded d-flex align-items-start gap-2" style="background:#f0f9f4;border:1px solid #c3e6d1">
+    <div class="mt-3 p-3 rounded d-flex align-items-start gap-2" style="background:#f0f9f4;border:1px solid #c3e6d1">
       <i class="fas fa-shield-alt text-green mt-1 flex-shrink-0"></i>
       <div class="small text-muted">
         This system enforces login rate limiting and session security. Accounts are locked after <?= $maxAttempts ?> failed attempts.

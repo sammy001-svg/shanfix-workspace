@@ -112,7 +112,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Send welcome email to new team member
                 try {
                     $orgName  = $user['org_name'];
-                    $loginUrl = APP_URL . '/auth/login.php';
+                    // Use org-specific portal URL for the invitation link
+                    $orgSlugForEmail = null;
+                    try {
+                        $slugQ = $pdo->prepare("SELECT slug FROM organizations WHERE id=? LIMIT 1");
+                        $slugQ->execute([$orgId]);
+                        $orgSlugForEmail = $slugQ->fetchColumn() ?: null;
+                    } catch (Exception $e) {}
+                    $loginUrl  = $orgSlugForEmail
+                        ? APP_URL . '/auth/org-login.php?org=' . rawurlencode($orgSlugForEmail)
+                        : APP_URL . '/auth/login.php';
                     $roleLabel = $role === 'client_admin' ? 'Administrator' : 'Staff';
                     $modLine  = $role === 'client_admin'
                         ? '<p>As an <strong>Administrator</strong>, you have full access to all modules on the workspace.</p>'
@@ -136,9 +145,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <p style='color:#e67e22;font-size:.85rem;background:#fff9f0;border:1px solid #f6c06e;padding:10px 14px;border-radius:8px'>
                           ⚠ Please log in and change your password immediately via your Profile settings.
                         </p>
+                        <div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;margin:16px 0;font-size:.85rem;color:#166534'>
+                          <strong>Important:</strong> Bookmark this link — it is your organization's dedicated login portal.
+                        </div>
                         <div style='text-align:center;margin:24px 0'>
                           <a href='{$loginUrl}' style='background:#1A8A4E;color:white;padding:12px 28px;border-radius:50px;text-decoration:none;font-weight:700;display:inline-block'>
-                            Log In to Your Workspace →
+                            Sign In to Your Workspace Portal →
                           </a>
                         </div>
                         <hr style='border:none;border-top:1px solid #eee;margin:24px 0'>
@@ -318,6 +330,64 @@ $allModuleRoleDefs = getModuleRoleDefinitions();
   </a>
   <?php endif; ?>
 </div>
+
+<!-- ── Org Portal URL card ──────────────────────────────────────────── -->
+<?php
+$__orgSlugForPortal = null;
+try {
+    $__sq = $pdo->prepare("SELECT slug FROM organizations WHERE id=? LIMIT 1");
+    $__sq->execute([$orgId]);
+    $__orgSlugForPortal = $__sq->fetchColumn() ?: null;
+} catch (Exception $e) {}
+if ($__orgSlugForPortal):
+    $__portalLink = APP_URL . '/auth/org-login.php?org=' . rawurlencode($__orgSlugForPortal);
+?>
+<div class="card mb-4 border-0" style="background:linear-gradient(135deg,#f0fdf4,#eff6ff);border-left:4px solid #1A8A4E!important;border:1px solid #bbf7d0">
+  <div class="card-body py-3">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      <div class="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0 text-white"
+           style="width:40px;height:40px;background:linear-gradient(135deg,#1A8A4E,#22a860);font-size:.9rem">
+        <i class="fas fa-link"></i>
+      </div>
+      <div class="flex-fill">
+        <div class="fw-700 text-navy small">Team Login Portal URL</div>
+        <div class="text-muted" style="font-size:.73rem">Share this link with your staff so they can sign in directly to your workspace. Staff cannot use the main OrbitDesk login page.</div>
+      </div>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <code class="px-3 py-2 rounded small" style="background:#fff;border:1.5px solid #d1fae5;color:#0B2D4E;font-size:.75rem;max-width:340px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="portalUrlText"><?= htmlspecialchars($__portalLink, ENT_QUOTES) ?></code>
+        <button class="btn btn-sm btn-success" onclick="copyPortalLink()" id="copyPortalBtn" style="white-space:nowrap">
+          <i class="fas fa-copy me-1" id="copyPortalIcon"></i><span id="copyPortalText">Copy Link</span>
+        </button>
+        <a href="<?= htmlspecialchars($__portalLink, ENT_QUOTES) ?>" target="_blank" class="btn btn-sm btn-outline-secondary" style="white-space:nowrap">
+          <i class="fas fa-external-link-alt me-1"></i>Open
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+function copyPortalLink() {
+  var url  = document.getElementById('portalUrlText').textContent.trim();
+  var btn  = document.getElementById('copyPortalBtn');
+  var ico  = document.getElementById('copyPortalIcon');
+  var txt  = document.getElementById('copyPortalText');
+  navigator.clipboard.writeText(url).then(function() {
+    btn.classList.remove('btn-success'); btn.classList.add('btn-dark');
+    ico.className = 'fas fa-check me-1'; txt.textContent = 'Copied!';
+    setTimeout(function(){
+      btn.classList.remove('btn-dark'); btn.classList.add('btn-success');
+      ico.className = 'fas fa-copy me-1'; txt.textContent = 'Copy Link';
+    }, 2000);
+  }).catch(function() {
+    var ta = document.createElement('textarea'); ta.value = url;
+    ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta);
+    ta.select(); try { document.execCommand('copy'); } catch(e) {}
+    document.body.removeChild(ta); txt.textContent = 'Copied!';
+    setTimeout(function(){ txt.textContent = 'Copy Link'; }, 2000);
+  });
+}
+</script>
+<?php endif; ?>
 
 <!-- Usage bar -->
 <div class="card mb-4">
@@ -548,6 +618,7 @@ $allModuleRoleDefs = getModuleRoleDefinitions();
                 </div>
                 <?php foreach ($mods as $mod):
                   $modRoles = getModuleRoles($mod['slug']);
+                  $firstRoleKey = array_key_first($modRoles);
                 ?>
                 <div class="module-perm-card mb-2" id="addCard_<?= e($mod['slug']) ?>"
                      style="--mod-color:<?= e($mod['color']) ?>">
@@ -564,22 +635,33 @@ $allModuleRoleDefs = getModuleRoleDefinitions();
                     <div class="flex-fill">
                       <label for="add_<?= e($mod['slug']) ?>" class="fw-semibold small mb-0 cursor-pointer"><?= e($mod['name']) ?></label>
                     </div>
-                    <div id="addRole_<?= e($mod['slug']) ?>" style="display:none;min-width:140px">
-                      <select name="module_roles[<?= e($mod['slug']) ?>]" class="form-select form-select-sm"
-                              id="addRoleSel_<?= e($mod['slug']) ?>"
-                              onchange="updateRoleDesc('add','<?= e($mod['slug']) ?>')">
-                        <?php foreach ($modRoles as $rKey => $rDef): ?>
-                        <option value="<?= e($rKey) ?>" data-desc="<?= e($rDef['desc'] ?? '') ?>"><?= e($rDef['name']) ?></option>
-                        <?php endforeach; ?>
-                      </select>
+                    <div class="flex-shrink-0 text-muted" style="font-size:.7rem">
+                      <?= count($modRoles) ?> role<?= count($modRoles) !== 1 ? 's' : '' ?>
                     </div>
                   </div>
-                  <?php if (!empty($modRoles)): ?>
-                  <div id="addRoleDesc_<?= e($mod['slug']) ?>" class="small text-muted ps-5 mt-1" style="display:none;font-size:.72rem">
-                    <?php $firstRole = reset($modRoles); ?>
-                    <i class="fas fa-info-circle me-1"></i><span id="addRoleDescText_<?= e($mod['slug']) ?>"><?= e($firstRole['desc'] ?? '') ?></span>
+                  <!-- Role cards — revealed when module is ticked -->
+                  <div id="addRole_<?= e($mod['slug']) ?>" class="role-cards-section" style="display:none">
+                    <div class="role-cards-grid">
+                      <?php foreach ($modRoles as $rKey => $rDef):
+                        $rColor = $rDef['color'] ?? $mod['color'];
+                        $rIcon  = $rDef['icon']  ?? 'fa-user';
+                        $rDesc  = $rDef['desc']  ?? '';
+                      ?>
+                      <label class="rc-label" style="--rc-color:<?= e($rColor) ?>">
+                        <input type="radio" name="module_roles[<?= e($mod['slug']) ?>]"
+                               value="<?= e($rKey) ?>" class="rc-radio"
+                               <?= $rKey === $firstRoleKey ? 'checked' : '' ?>>
+                        <div class="rc-inner">
+                          <div class="rc-icon-box" style="background:<?= e($rColor) ?>20;color:<?= e($rColor) ?>">
+                            <i class="fas <?= e($rIcon) ?>"></i>
+                          </div>
+                          <div class="rc-name"><?= e($rDef['name']) ?></div>
+                          <?php if ($rDesc): ?><div class="rc-desc"><?= e($rDesc) ?></div><?php endif; ?>
+                        </div>
+                      </label>
+                      <?php endforeach; ?>
+                    </div>
                   </div>
-                  <?php endif; ?>
                 </div>
                 <?php endforeach; ?>
                 <?php endforeach; ?>
@@ -683,6 +765,7 @@ $allModuleRoleDefs = getModuleRoleDefinitions();
                 </div>
                 <?php foreach ($mods as $mod):
                   $modRoles = getModuleRoles($mod['slug']);
+                  $firstRoleKey = array_key_first($modRoles);
                 ?>
                 <div class="module-perm-card mb-2" id="editCard_<?= e($mod['slug']) ?>"
                      style="--mod-color:<?= e($mod['color']) ?>">
@@ -699,17 +782,32 @@ $allModuleRoleDefs = getModuleRoleDefinitions();
                     <div class="flex-fill">
                       <label for="edit_<?= e($mod['slug']) ?>" class="fw-semibold small mb-0 cursor-pointer"><?= e($mod['name']) ?></label>
                     </div>
-                    <div id="editRole_<?= e($mod['slug']) ?>" style="display:none;min-width:140px">
-                      <select name="module_roles[<?= e($mod['slug']) ?>]" class="form-select form-select-sm" id="editRoleSel_<?= e($mod['slug']) ?>"
-                              onchange="updateRoleDesc('edit','<?= e($mod['slug']) ?>')">
-                        <?php foreach ($modRoles as $rKey => $rDef): ?>
-                        <option value="<?= e($rKey) ?>" data-desc="<?= e($rDef['desc'] ?? '') ?>"><?= e($rDef['name']) ?></option>
-                        <?php endforeach; ?>
-                      </select>
+                    <div class="flex-shrink-0 text-muted" style="font-size:.7rem">
+                      <?= count($modRoles) ?> role<?= count($modRoles) !== 1 ? 's' : '' ?>
                     </div>
                   </div>
-                  <div id="editRoleDesc_<?= e($mod['slug']) ?>" class="small text-muted ps-5 mt-1" style="display:none;font-size:.72rem">
-                    <i class="fas fa-info-circle me-1"></i><span id="editRoleDescText_<?= e($mod['slug']) ?>"></span>
+                  <!-- Role cards — revealed when module is ticked -->
+                  <div id="editRole_<?= e($mod['slug']) ?>" class="role-cards-section" style="display:none">
+                    <div class="role-cards-grid">
+                      <?php foreach ($modRoles as $rKey => $rDef):
+                        $rColor = $rDef['color'] ?? $mod['color'];
+                        $rIcon  = $rDef['icon']  ?? 'fa-user';
+                        $rDesc  = $rDef['desc']  ?? '';
+                      ?>
+                      <label class="rc-label" style="--rc-color:<?= e($rColor) ?>">
+                        <input type="radio" name="module_roles[<?= e($mod['slug']) ?>]"
+                               value="<?= e($rKey) ?>" class="rc-radio"
+                               <?= $rKey === $firstRoleKey ? 'checked' : '' ?>>
+                        <div class="rc-inner">
+                          <div class="rc-icon-box" style="background:<?= e($rColor) ?>20;color:<?= e($rColor) ?>">
+                            <i class="fas <?= e($rIcon) ?>"></i>
+                          </div>
+                          <div class="rc-name"><?= e($rDef['name']) ?></div>
+                          <?php if ($rDesc): ?><div class="rc-desc"><?= e($rDesc) ?></div><?php endif; ?>
+                        </div>
+                      </label>
+                      <?php endforeach; ?>
+                    </div>
                   </div>
                 </div>
                 <?php endforeach; ?>
@@ -773,11 +871,11 @@ $allModuleRoleDefs = getModuleRoleDefinitions();
 
 <!-- ── Styles ─────────────────────────────────────────────────────────────── -->
 <style>
+/* ── Module permission card ───────────────────────────────── */
 .module-perm-card {
   border: 1.5px solid #e2e8f0;
   border-radius: 10px;
   padding: 10px 12px;
-  cursor: pointer;
   transition: border-color .15s, box-shadow .15s, background .15s;
   background: #fff;
 }
@@ -785,45 +883,97 @@ $allModuleRoleDefs = getModuleRoleDefinitions();
   border-color: var(--mod-color, #1A8A4E);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--mod-color, #1A8A4E) 12%, transparent);
 }
-.module-perm-card:has(input:checked) {
+.module-perm-card:has(input[type=checkbox]:checked) {
   border-color: var(--mod-color, #1A8A4E);
-  background: color-mix(in srgb, var(--mod-color, #1A8A4E) 6%, #fff);
+  background: color-mix(in srgb, var(--mod-color, #1A8A4E) 5%, #fff);
 }
 .module-perm-icon {
-  width: 34px;
-  height: 34px;
+  width: 34px; height: 34px;
   border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   font-size: .9rem;
 }
 .cursor-pointer { cursor: pointer; }
 
-/*
- * Fix: <form> wraps modal-body + modal-footer, breaking Bootstrap's
- * modal-dialog-scrollable flex layout. Make the form a proper flex
- * child of modal-content so body scrolls and footer stays visible.
- */
+/* ── Role cards grid ──────────────────────────────────────── */
+.role-cards-section {
+  padding-top: 10px;
+  padding-left: 46px; /* align under the module label */
+}
+.role-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 7px;
+}
+.rc-label {
+  display: block;
+  cursor: pointer;
+  position: relative;
+}
+.rc-radio {
+  position: absolute;
+  opacity: 0;
+  width: 0; height: 0;
+  pointer-events: none;
+}
+.rc-inner {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 6px;
+  text-align: center;
+  transition: border-color .15s, background .15s, box-shadow .15s;
+  background: #fff;
+  height: 100%;
+}
+.rc-label:hover .rc-inner {
+  border-color: var(--rc-color, #1A8A4E);
+  background: color-mix(in srgb, var(--rc-color, #1A8A4E) 5%, #fff);
+}
+.rc-label:has(input:checked) .rc-inner {
+  border-color: var(--rc-color, #1A8A4E);
+  background: color-mix(in srgb, var(--rc-color, #1A8A4E) 10%, #fff);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--rc-color, #1A8A4E) 30%, transparent);
+}
+.rc-icon-box {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 6px;
+  font-size: .82rem;
+}
+.rc-name {
+  font-size: .72rem;
+  font-weight: 700;
+  color: #0B2D4E;
+  margin-bottom: 2px;
+  line-height: 1.2;
+}
+.rc-desc {
+  font-size: .62rem;
+  color: #64748b;
+  line-height: 1.3;
+}
+@media (max-width: 480px) {
+  .role-cards-section { padding-left: 0; }
+  .role-cards-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Fix: <form> wraps modal-body + modal-footer, breaking Bootstrap's
+   modal-dialog-scrollable flex layout. */
 #addModal  .modal-content > form,
 #editModal .modal-content > form {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column; overflow: hidden;
 }
 #addModal  .modal-content > form > .modal-body,
 #editModal .modal-content > form > .modal-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+  flex: 1; min-height: 0; overflow-y: auto;
 }
 </style>
 
 <?php $extraJs = <<<'JS'
 <script>
-// ── Role toggle helpers ──────────────────────────────────────────────────────
+// ── System-role toggle (admin vs staff) ──────────────────────────────────────
 function onAddRoleChange() {
     const isAdmin = document.getElementById('addRole').value === 'client_admin';
     document.getElementById('addAdminNotice').classList.toggle('d-none', !isAdmin);
@@ -841,25 +991,17 @@ function onEditRoleChange() {
     document.getElementById('editModuleActions').classList.toggle('d-none', isAdmin);
 }
 
-// ── Show/hide role dropdown when a module checkbox is ticked ─────────────────
+// ── Show/hide role-cards section when module checkbox is ticked ──────────────
 function toggleRoleRow(cb, roleRowId) {
-    const row  = document.getElementById(roleRowId);
+    const row = document.getElementById(roleRowId);
     if (!row) return;
-    const slug   = cb.value;
-    const prefix = roleRowId.startsWith('edit') ? 'edit' : 'add';
-    const desc   = document.getElementById(prefix + 'RoleDesc_' + slug);
-    row.style.display  = cb.checked ? '' : 'none';
-    if (desc) desc.style.display = cb.checked ? '' : 'none';
-    if (cb.checked) updateRoleDesc(prefix, slug);
-}
-
-// ── Update description text when the role select changes ─────────────────────
-function updateRoleDesc(prefix, slug) {
-    const sel  = document.getElementById(prefix + 'RoleSel_' + slug);
-    const span = document.getElementById(prefix + 'RoleDescText_' + slug);
-    if (!sel || !span) return;
-    const opt = sel.options[sel.selectedIndex];
-    span.textContent = opt ? (opt.dataset.desc || '') : '';
+    row.style.display = cb.checked ? '' : 'none';
+    // Auto-select the first role card if nothing is selected yet
+    if (cb.checked) {
+        const radios = row.querySelectorAll('input[type="radio"]');
+        const anyChecked = Array.from(radios).some(r => r.checked);
+        if (!anyChecked && radios.length > 0) radios[0].checked = true;
+    }
 }
 
 // ── Select all / none ────────────────────────────────────────────────────────
@@ -878,21 +1020,24 @@ function openEdit(m) {
     document.getElementById('editPhone').value  = m.phone || '';
     document.getElementById('editRole').value   = m.role  || 'staff';
 
-    // Tick granted slugs, show role rows, and restore saved role selection
+    // Tick granted modules, reveal role cards, restore saved role selection
     document.querySelectorAll('#editModuleGrid input[type=checkbox]').forEach(cb => {
         const slug    = cb.value;
         const granted = Array.isArray(m.grants) && m.grants.includes(slug);
         cb.checked    = granted;
         toggleRoleRow(cb, 'editRole_' + slug);
+
+        // Restore saved role via radio button
         if (granted && m.roles && m.roles[slug]) {
-            const sel = document.getElementById('editRoleSel_' + slug);
-            if (sel) { sel.value = m.roles[slug]; updateRoleDesc('edit', slug); }
+            const saved  = m.roles[slug];
+            const radio  = document.querySelector(
+                '#editModal input[type="radio"][name="module_roles[' + slug + ']"][value="' + saved + '"]'
+            );
+            if (radio) radio.checked = true;
         }
     });
 
-    // Show/hide panels based on role
     onEditRoleChange();
-
     new bootstrap.Modal(document.getElementById('editModal')).show();
 }
 
