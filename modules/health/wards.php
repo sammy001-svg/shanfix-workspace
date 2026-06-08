@@ -280,13 +280,23 @@ require_once __DIR__ . '/../../includes/header-module.php';
     <div class="col-6 col-md-3">
       <div class="card border-0 shadow-sm">
         <div class="card-body text-center py-3">
-          <div class="fs-3 fw-bold" style="color:<?= $occupancyRate >= 90 ? '#dc3545' : ($occupancyRate >= 70 ? '#fd7e14' : '#198754') ?>"><?= $occupancyRate ?>%</div>
-          <small class="text-muted">Occupancy Rate</small>
+          <div class="text-warning fs-3 fw-bold"><?= $maintBeds ?></div>
+          <small class="text-muted">Maintenance / Cleaning</small>
           <div class="progress mt-1" style="height:4px">
-            <div class="progress-bar bg-<?= $occupancyRate >= 90 ? 'danger' : ($occupancyRate >= 70 ? 'warning' : 'success') ?>" style="width:<?= $occupancyRate ?>%"></div>
+            <div class="progress-bar bg-warning" style="width:<?= $totalBeds > 0 ? round($maintBeds/$totalBeds*100) : 0 ?>%"></div>
           </div>
         </div>
       </div>
+    </div>
+  </div>
+  <!-- Occupancy Rate bar -->
+  <div class="mb-3">
+    <div class="d-flex justify-content-between small text-muted mb-1">
+      <span>Occupancy Rate</span>
+      <span class="fw-bold" style="color:<?= $occupancyRate >= 90 ? '#dc3545' : ($occupancyRate >= 70 ? '#fd7e14' : '#198754') ?>"><?= $occupancyRate ?>%</span>
+    </div>
+    <div class="progress" style="height:6px">
+      <div class="progress-bar bg-<?= $occupancyRate >= 90 ? 'danger' : ($occupancyRate >= 70 ? 'warning' : 'success') ?>" style="width:<?= $occupancyRate ?>%"></div>
     </div>
   </div>
 
@@ -320,6 +330,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
     $wTotal = count($wBeds);
     $wAvail = count(array_filter($wBeds, fn($b) => $b['status'] === 'available'));
     $wOcc   = count(array_filter($wBeds, fn($b) => $b['status'] === 'occupied'));
+    $wMaint = count(array_filter($wBeds, fn($b) => in_array($b['status'], ['maintenance','cleaning'])));
     $wardTypeColors = ['icu'=>'danger','maternity'=>'pink','paediatric'=>'info','surgical'=>'warning','emergency'=>'dark','private'=>'secondary','general'=>'primary','other'=>'light'];
     $typeColor = $wardTypeColors[$ward['ward_type']] ?? 'primary';
   ?>
@@ -330,7 +341,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
         <strong><?= htmlspecialchars($ward['name']) ?></strong>
         <?php if ($ward['floor']): ?><small class="text-muted ms-2">Floor <?= htmlspecialchars($ward['floor']) ?></small><?php endif; ?>
       </div>
-      <small class="text-muted"><?= $wAvail ?> available / <?= $wOcc ?> occupied / <?= $wTotal ?> total</small>
+      <small class="text-muted"><?= $wAvail ?> available / <?= $wOcc ?> occupied<?= $wMaint ? ' / <span class="text-warning fw-semibold">'.$wMaint.' maintenance/cleaning</span>' : '' ?> / <?= $wTotal ?> total</small>
     </div>
     <div class="card-body">
       <?php if (empty($wBeds)): ?>

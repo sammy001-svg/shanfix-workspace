@@ -171,17 +171,26 @@ $orgId = (int)$user['org_id'];
 $tab   = in_array($_GET['tab'] ?? '', ['feedback','followups','campaigns','loyalty']) ? $_GET['tab'] : 'followups';
 
 // ── Shared dropdowns ──────────────────────────────────────────────
-$patientsSt = $pdo->prepare("SELECT id, CONCAT(first_name,' ',last_name) AS name, patient_no, loyalty_points FROM health_patients WHERE org_id=? AND status='active' ORDER BY first_name");
-$patientsSt->execute([$orgId]);
-$patients = $patientsSt->fetchAll(PDO::FETCH_ASSOC);
+$patients = [];
+try {
+    $patientsSt = $pdo->prepare("SELECT id, CONCAT(first_name,' ',last_name) AS name, patient_no, COALESCE(loyalty_points,0) AS loyalty_points FROM health_patients WHERE org_id=? AND status='active' ORDER BY first_name");
+    $patientsSt->execute([$orgId]);
+    $patients = $patientsSt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {}
 
-$doctorsSt = $pdo->prepare("SELECT id, CONCAT(first_name,' ',last_name) AS name FROM health_doctors WHERE org_id=? AND status='active' ORDER BY first_name");
-$doctorsSt->execute([$orgId]);
-$doctors = $doctorsSt->fetchAll(PDO::FETCH_ASSOC);
+$doctors = [];
+try {
+    $doctorsSt = $pdo->prepare("SELECT id, CONCAT(first_name,' ',last_name) AS name FROM health_doctors WHERE org_id=? AND status='active' ORDER BY first_name");
+    $doctorsSt->execute([$orgId]);
+    $doctors = $doctorsSt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {}
 
-$usersSt = $pdo->prepare("SELECT id, name FROM users WHERE org_id=? AND status='active' ORDER BY name");
-$usersSt->execute([$orgId]);
-$staffUsers = $usersSt->fetchAll(PDO::FETCH_ASSOC);
+$staffUsers = [];
+try {
+    $usersSt = $pdo->prepare("SELECT id, name FROM users WHERE org_id=? AND status='active' ORDER BY name");
+    $usersSt->execute([$orgId]);
+    $staffUsers = $usersSt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {}
 
 // ── Follow-ups ────────────────────────────────────────────────────
 $fuStatus = sanitize($_GET['fu_status'] ?? 'pending');
@@ -191,20 +200,23 @@ $fuParams = [$orgId];
 if ($fuStatus) { $fuWhere .= " AND f.status=?"; $fuParams[] = $fuStatus; }
 if ($fuPid)    { $fuWhere .= " AND f.patient_id=?"; $fuParams[] = $fuPid; }
 
-$fuSt = $pdo->prepare("
-    SELECT f.*, CONCAT(p.first_name,' ',p.last_name) AS patient_name, p.patient_no,
-           CONCAT(d.first_name,' ',d.last_name) AS doctor_name,
-           u.name AS assigned_name
-    FROM health_followups f
-    LEFT JOIN health_patients p ON p.id=f.patient_id
-    LEFT JOIN health_doctors d ON d.id=f.doctor_id
-    LEFT JOIN users u ON u.id=f.assigned_to
-    WHERE {$fuWhere}
-    ORDER BY f.due_date ASC, FIELD(f.priority,'urgent','high','normal','low')
-    LIMIT 200
-");
-$fuSt->execute($fuParams);
-$followups = $fuSt->fetchAll(PDO::FETCH_ASSOC);
+$followups = [];
+try {
+    $fuSt = $pdo->prepare("
+        SELECT f.*, CONCAT(p.first_name,' ',p.last_name) AS patient_name, p.patient_no,
+               CONCAT(d.first_name,' ',d.last_name) AS doctor_name,
+               u.name AS assigned_name
+        FROM health_followups f
+        LEFT JOIN health_patients p ON p.id=f.patient_id
+        LEFT JOIN health_doctors d ON d.id=f.doctor_id
+        LEFT JOIN users u ON u.id=f.assigned_to
+        WHERE {$fuWhere}
+        ORDER BY f.due_date ASC, FIELD(f.priority,'urgent','high','normal','low')
+        LIMIT 200
+    ");
+    $fuSt->execute($fuParams);
+    $followups = $fuSt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {}
 
 // ── Feedback ──────────────────────────────────────────────────────
 $fbPid = (int)($_GET['fb_patient'] ?? 0);
@@ -212,44 +224,49 @@ $fbWhere  = "f.org_id=?";
 $fbParams = [$orgId];
 if ($fbPid) { $fbWhere .= " AND f.patient_id=?"; $fbParams[] = $fbPid; }
 
-$fbSt = $pdo->prepare("
-    SELECT f.*, CONCAT(p.first_name,' ',p.last_name) AS patient_name, p.patient_no,
-           CONCAT(d.first_name,' ',d.last_name) AS doctor_name
-    FROM health_patient_feedback f
-    LEFT JOIN health_patients p ON p.id=f.patient_id
-    LEFT JOIN health_doctors d ON d.id=f.doctor_id
-    WHERE {$fbWhere}
-    ORDER BY f.created_at DESC LIMIT 100
-");
-$fbSt->execute($fbParams);
-$feedbacks = $fbSt->fetchAll(PDO::FETCH_ASSOC);
+$feedbacks = [];
+try {
+    $fbSt = $pdo->prepare("
+        SELECT f.*, CONCAT(p.first_name,' ',p.last_name) AS patient_name, p.patient_no,
+               CONCAT(d.first_name,' ',d.last_name) AS doctor_name
+        FROM health_patient_feedback f
+        LEFT JOIN health_patients p ON p.id=f.patient_id
+        LEFT JOIN health_doctors d ON d.id=f.doctor_id
+        WHERE {$fbWhere}
+        ORDER BY f.created_at DESC LIMIT 100
+    ");
+    $fbSt->execute($fbParams);
+    $feedbacks = $fbSt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {}
 
 // ── Campaigns ─────────────────────────────────────────────────────
-$campSt = $pdo->prepare("SELECT * FROM health_patient_campaigns WHERE org_id=? ORDER BY created_at DESC LIMIT 100");
-$campSt->execute([$orgId]);
-$campaigns = $campSt->fetchAll(PDO::FETCH_ASSOC);
+$campaigns = [];
+try {
+    $campSt = $pdo->prepare("SELECT * FROM health_patient_campaigns WHERE org_id=? ORDER BY created_at DESC LIMIT 100");
+    $campSt->execute([$orgId]);
+    $campaigns = $campSt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {}
 
 // ── Loyalty top patients ──────────────────────────────────────────
-$loyaltySt = $pdo->prepare("SELECT id, CONCAT(first_name,' ',last_name) AS name, patient_no, loyalty_points FROM health_patients WHERE org_id=? ORDER BY loyalty_points DESC LIMIT 50");
-$loyaltySt->execute([$orgId]);
-$loyaltyLeaders = $loyaltySt->fetchAll(PDO::FETCH_ASSOC);
+$loyaltyLeaders = [];
+try {
+    $loyaltySt = $pdo->prepare("SELECT id, CONCAT(first_name,' ',last_name) AS name, patient_no, COALESCE(loyalty_points,0) AS loyalty_points FROM health_patients WHERE org_id=? ORDER BY loyalty_points DESC LIMIT 50");
+    $loyaltySt->execute([$orgId]);
+    $loyaltyLeaders = $loyaltySt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {}
 
 // ── Stats ─────────────────────────────────────────────────────────
-$dueTodaySt = $pdo->prepare("SELECT COUNT(*) FROM health_followups WHERE org_id=? AND status='pending' AND due_date=CURDATE()");
-$dueTodaySt->execute([$orgId]);
-$dueToday = (int)$dueTodaySt->fetchColumn();
+$dueToday = 0;
+try { $dueTodaySt = $pdo->prepare("SELECT COUNT(*) FROM health_followups WHERE org_id=? AND status='pending' AND due_date=CURDATE()"); $dueTodaySt->execute([$orgId]); $dueToday = (int)$dueTodaySt->fetchColumn(); } catch (Throwable $e) {}
 
-$overdueStmt = $pdo->prepare("SELECT COUNT(*) FROM health_followups WHERE org_id=? AND status='pending' AND due_date < CURDATE()");
-$overdueStmt->execute([$orgId]);
-$overdue = (int)$overdueStmt->fetchColumn();
+$overdue = 0;
+try { $overdueStmt = $pdo->prepare("SELECT COUNT(*) FROM health_followups WHERE org_id=? AND status='pending' AND due_date < CURDATE()"); $overdueStmt->execute([$orgId]); $overdue = (int)$overdueStmt->fetchColumn(); } catch (Throwable $e) {}
 
-$avgRatingSt = $pdo->prepare("SELECT ROUND(AVG(overall_rating),1) FROM health_patient_feedback WHERE org_id=? AND overall_rating IS NOT NULL");
-$avgRatingSt->execute([$orgId]);
-$avgRating = $avgRatingSt->fetchColumn() ?: '—';
+$avgRating = '—';
+try { $avgRatingSt = $pdo->prepare("SELECT ROUND(AVG(overall_rating),1) FROM health_patient_feedback WHERE org_id=? AND overall_rating IS NOT NULL"); $avgRatingSt->execute([$orgId]); $avgRating = $avgRatingSt->fetchColumn() ?: '—'; } catch (Throwable $e) {}
 
-$campSentSt = $pdo->prepare("SELECT COUNT(*) FROM health_patient_campaigns WHERE org_id=? AND status='sent'");
-$campSentSt->execute([$orgId]);
-$campSent = (int)$campSentSt->fetchColumn();
+$campSent = 0;
+try { $campSentSt = $pdo->prepare("SELECT COUNT(*) FROM health_patient_campaigns WHERE org_id=? AND status='sent'"); $campSentSt->execute([$orgId]); $campSent = (int)$campSentSt->fetchColumn(); } catch (Throwable $e) {}
 
 require_once __DIR__ . '/../../includes/header-module.php';
 ?>

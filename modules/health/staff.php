@@ -65,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id            = (int)($_POST['id']              ?? 0);
         $firstName     = sanitize($_POST['first_name']   ?? '');
         $lastName      = sanitize($_POST['last_name']    ?? '');
-        $role          = in_array($_POST['role'] ?? '', ['lab_technician','pharmacist','receptionist','cashier','radiologist','admin','other']) ? $_POST['role'] : 'other';
+        $role          = in_array($_POST['role'] ?? '', ['lab_technician','pharmacist','receptionist','cashier','radiologist','admin','triage_nurse','anesthesia_nurse','other']) ? $_POST['role'] : 'other';
         $qualification = sanitize($_POST['qualification']?? '');
         $department    = sanitize($_POST['department']   ?? '');
         $phone         = sanitize($_POST['phone']        ?? '');
@@ -172,12 +172,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ── Helpers ───────────────────────────────────────────────────────
 function _staffDefaultModuleRole(string $staffRole): string {
     return match($staffRole) {
-        'lab_technician' => 'lab_technician',
-        'pharmacist'     => 'pharmacist',
-        'receptionist'   => 'receptionist',
-        'cashier'        => 'cashier',
-        'admin'          => 'receptionist',
-        default          => 'receptionist',
+        'lab_technician'  => 'lab_technician',
+        'pharmacist'      => 'pharmacist',
+        'receptionist'    => 'receptionist',
+        'cashier'         => 'cashier',
+        'admin'           => 'receptionist',
+        'triage_nurse'    => 'nurse',
+        'anesthesia_nurse'=> 'nurse',
+        default           => 'receptionist',
     };
 }
 
@@ -276,14 +278,14 @@ $orgId = (int)$user['org_id'];
 
 // Ensure qualification column + cashier/radiologist in ENUM exist
 try { $pdo->exec("ALTER TABLE health_staff ADD COLUMN IF NOT EXISTS qualification VARCHAR(100) DEFAULT NULL AFTER role"); } catch (Throwable $e) {}
-try { $pdo->exec("ALTER TABLE health_staff MODIFY COLUMN role ENUM('lab_technician','pharmacist','receptionist','cashier','radiologist','admin','nurse','other') NOT NULL DEFAULT 'other'"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE health_staff MODIFY COLUMN role ENUM('lab_technician','pharmacist','receptionist','cashier','radiologist','admin','nurse','triage_nurse','anesthesia_nurse','other') NOT NULL DEFAULT 'other'"); } catch (Throwable $e) {}
 
 // One-time credentials flash
 $flashCreds = null;
 if (!empty($_SESSION['_staff_creds'])) { $flashCreds = $_SESSION['_staff_creds']; unset($_SESSION['_staff_creds']); }
 
 // ── Active role filter tab ────────────────────────────────────────
-$allowedRoles = ['lab_technician','pharmacist','receptionist','cashier','radiologist','admin','other',''];
+$allowedRoles = ['lab_technician','pharmacist','receptionist','cashier','radiologist','admin','triage_nurse','anesthesia_nurse','other',''];
 $activeRole   = in_array($_GET['role'] ?? '', $allowedRoles) ? ($_GET['role'] ?? '') : '';
 
 // ── Staff list ────────────────────────────────────────────────────
@@ -326,13 +328,15 @@ try {
 
 // Role display config
 $roleConfig = [
-    'lab_technician' => ['Lab Technicians',  'fas fa-flask',          'warning', 'lab_technician',  'e.g. Diploma in Medical Lab Sciences'],
-    'pharmacist'     => ['Pharmacists',       'fas fa-pills',          'success', 'pharmacist',      'e.g. Bachelor of Pharmacy (B.Pharm)'],
-    'receptionist'   => ['Receptionists',     'fas fa-concierge-bell', 'info',    'receptionist',    'e.g. Certificate in Front Office Management'],
-    'cashier'        => ['Cashiers',          'fas fa-cash-register',  'dark',    'cashier',         'e.g. Certificate in Accounting'],
-    'radiologist'    => ['Radiologists',      'fas fa-x-ray',          'primary', 'nurse',           'e.g. Diploma in Radiography'],
-    'admin'          => ['Administrative',    'fas fa-user-tie',       'secondary','receptionist',   'e.g. Diploma in Business Administration'],
-    'other'          => ['Other',             'fas fa-user-cog',       'secondary','receptionist',   ''],
+    'lab_technician'  => ['Lab Technicians',    'fas fa-flask',            'warning',  'lab_technician', 'e.g. Diploma in Medical Lab Sciences'],
+    'pharmacist'      => ['Pharmacists',         'fas fa-pills',            'success',  'pharmacist',     'e.g. Bachelor of Pharmacy (B.Pharm)'],
+    'receptionist'    => ['Receptionists',       'fas fa-concierge-bell',   'info',     'receptionist',   'e.g. Certificate in Front Office Management'],
+    'cashier'         => ['Cashiers',            'fas fa-cash-register',    'dark',     'cashier',        'e.g. Certificate in Accounting'],
+    'radiologist'     => ['Radiologists',        'fas fa-x-ray',            'primary',  'nurse',          'e.g. Diploma in Radiography'],
+    'triage_nurse'    => ['Triage Nurses',       'fas fa-notes-medical',    'danger',   'nurse',          'e.g. Registered Nurse – Emergency/Triage'],
+    'anesthesia_nurse'=> ['Anesthesia Nurses',   'fas fa-syringe',          'secondary','nurse',          'e.g. Certified Registered Nurse Anesthetist (CRNA)'],
+    'admin'           => ['Administrative',      'fas fa-user-tie',         'secondary','receptionist',   'e.g. Diploma in Business Administration'],
+    'other'           => ['Other',               'fas fa-user-cog',         'secondary','receptionist',   ''],
 ];
 
 require_once __DIR__ . '/../../includes/header-module.php';
@@ -545,6 +549,8 @@ require_once __DIR__ . '/../../includes/header-module.php';
               <option value="receptionist">Receptionist</option>
               <option value="cashier">Cashier</option>
               <option value="radiologist">Radiologist</option>
+              <option value="triage_nurse">Triage Nurse</option>
+              <option value="anesthesia_nurse">Anesthesia Nurse</option>
               <option value="admin">Administrative</option>
               <option value="other">Other</option>
             </select>
@@ -644,22 +650,26 @@ require_once __DIR__ . '/../../includes/header-module.php';
 $extraJs = <<<'JS'
 <script>
 const ROLE_MODULE_MAP = {
-  lab_technician: 'lab_technician',
-  pharmacist:     'pharmacist',
-  receptionist:   'receptionist',
-  cashier:        'cashier',
-  radiologist:    'nurse',
-  admin:          'admin',
-  other:          'receptionist',
+  lab_technician:   'lab_technician',
+  pharmacist:       'pharmacist',
+  receptionist:     'receptionist',
+  cashier:          'cashier',
+  radiologist:      'nurse',
+  triage_nurse:     'nurse',
+  anesthesia_nurse: 'nurse',
+  admin:            'admin',
+  other:            'receptionist',
 };
 const ROLE_QUAL_HINT = {
-  lab_technician: 'e.g. Diploma in Medical Lab Sciences',
-  pharmacist:     'e.g. Bachelor of Pharmacy (B.Pharm)',
-  receptionist:   'e.g. Certificate in Front Office Management',
-  cashier:        'e.g. Certificate in Accounting',
-  radiologist:    'e.g. Diploma in Radiography',
-  admin:          'e.g. Diploma in Business Administration',
-  other:          '',
+  lab_technician:   'e.g. Diploma in Medical Lab Sciences',
+  pharmacist:       'e.g. Bachelor of Pharmacy (B.Pharm)',
+  receptionist:     'e.g. Certificate in Front Office Management',
+  cashier:          'e.g. Certificate in Accounting',
+  radiologist:      'e.g. Diploma in Radiography',
+  triage_nurse:     'e.g. Registered Nurse – Emergency/Triage',
+  anesthesia_nurse: 'e.g. Certified Registered Nurse Anesthetist (CRNA)',
+  admin:            'e.g. Diploma in Business Administration',
+  other:            '',
 };
 
 function openAddStaff(defaultRole) {

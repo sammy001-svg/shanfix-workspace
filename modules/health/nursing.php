@@ -1072,7 +1072,7 @@ function openNoteModal(id) {
             if (d.admission_id) document.getElementById('noteAdmission').value = d.admission_id;
         });
     }
-    new bootstrap.Modal(document.getElementById('noteModal')).show();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('noteModal')).show();
 }
 function viewNote(text, patient) {
     document.getElementById('viewNoteTitle').textContent = 'Note — ' + patient;
@@ -1105,7 +1105,7 @@ function openMarModal(id) {
         document.getElementById('marEnd').value       = d.end_date      || '';
         document.getElementById('marNotes').value     = d.notes         || '';
     });
-    new bootstrap.Modal(document.getElementById('marModal')).show();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('marModal')).show();
 }
 
 // ── Nursing Staff ─────────────────────────────────────────────────
@@ -1157,7 +1157,7 @@ function openEditNurse(id) {
             document.getElementById('nurseCreateBlock').classList.remove('d-none');
             document.getElementById('nurseExistingBlock').classList.add('d-none');
         }
-        new bootstrap.Modal(document.getElementById('nurseModal')).show();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('nurseModal')).show();
     });
 }
 
@@ -1207,6 +1207,24 @@ function nCopyField(id) {
         setTimeout(() => btn.innerHTML = orig, 1800);
     });
 }
+
+// Re-init select2 inside noteModal with correct dropdownParent so the
+// dropdown doesn't escape the modal and lock the backdrop.
+document.getElementById('noteModal').addEventListener('shown.bs.modal', function () {
+    if (typeof $.fn.select2 !== 'undefined') {
+        $('#noteModal .select2').each(function () {
+            if ($(this).data('select2')) $(this).select2('destroy');
+            $(this).select2({ theme: 'bootstrap-5', dropdownParent: $('#noteModal'), width: '100%' });
+        });
+    }
+});
+document.getElementById('noteModal').addEventListener('hidden.bs.modal', function () {
+    if (typeof $.fn.select2 !== 'undefined') {
+        $('#noteModal .select2').each(function () {
+            if ($(this).data('select2')) $(this).select2('destroy');
+        });
+    }
+});
 </script>
 JS;
 

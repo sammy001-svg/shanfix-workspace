@@ -25,6 +25,23 @@ $moduleNav   = [
     ['url'=>'reports.php',       'icon'=>'fas fa-chart-bar',           'label'=>'Reports'],
 ];
 
+// ── AJAX: fetch record for edit/print ────────────────────────────
+if (isset($_GET['fetch_details'])) {
+    session_start();
+    require_once __DIR__ . '/../../config/database.php';
+    require_once __DIR__ . '/../../includes/functions.php';
+    requireLogin();
+    $orgId = (int)currentUser()['org_id'];
+    $rid   = (int)$_GET['fetch_details'];
+    header('Content-Type: application/json');
+    try {
+        $st = $pdo->prepare("SELECT * FROM health_records WHERE id=? AND org_id=?");
+        $st->execute([$rid, $orgId]);
+        echo json_encode($st->fetch(PDO::FETCH_ASSOC) ?: (object)[]);
+    } catch (Exception $e) { echo '{}'; }
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once __DIR__ . '/../../config/database.php';
     require_once __DIR__ . '/../../includes/functions.php';
@@ -125,20 +142,6 @@ try {
     $appointmentsList = $stmt->fetchAll();
 } catch (Exception $e) {}
 
-// Detail mapping for AJAX edit
-if (isset($_GET['fetch_details'])) {
-    $rid = (int)$_GET['fetch_details'];
-    try {
-        $stmt = $pdo->prepare("SELECT * FROM health_records WHERE id = ? AND org_id = ?");
-        $stmt->execute([$rid, $orgId]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($row) {
-            header('Content-Type: application/json');
-            echo json_encode($row);
-            exit;
-        }
-    } catch (Exception $e) {}
-}
 ?>
 
 <div class="page-header d-flex align-items-center justify-content-between mb-4">

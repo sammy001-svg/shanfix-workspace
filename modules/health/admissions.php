@@ -372,8 +372,8 @@ require_once __DIR__ . '/../../includes/header-module.php';
           <?php else: foreach ($admissions as $a):
             $typeBadge = match($a['admission_type']) {
                 'emergency' => 'danger',
-                'maternity' => 'pink',
-                'referral'  => 'info',
+                'maternity' => 'info text-dark',
+                'referral'  => 'primary',
                 default     => 'secondary'
             };
           ?>
