@@ -133,7 +133,7 @@ $relColors=['father'=>'primary','mother'=>'danger','guardian'=>'success','other'
 <!-- Search -->
 <div class="card mb-3"><div class="card-body py-2">
   <form method="GET" class="row g-2 align-items-end">
-    <div class="col-sm-5"><label class="form-label small fw-semibold mb-1">Search</label><input type="text" name="q" class="form-control form-control-sm" value="<?=e($search)?>" placeholder="Name, phone or emailâ€¦"></div>
+    <div class="col-sm-5"><label class="form-label small fw-semibold mb-1">Search</label><input type="text" name="q" class="form-control form-control-sm" value="<?=e($search)?>" placeholder="Name, phone or email..."></div>
     <div class="col-auto"><button class="btn btn-sm btn-success">Search</button><a href="parents.php" class="btn btn-sm btn-outline-secondary ms-1">Clear</a></div>
   </form>
 </div></div>
@@ -149,8 +149,8 @@ $relColors=['father'=>'primary','mother'=>'danger','guardian'=>'success','other'
     <tr>
       <td class="fw-semibold"><a href="parents.php?view=<?=$p['id']?>" class="text-decoration-none" style="color:<?=$moduleColor?>"><?=e($p['first_name'].' '.$p['last_name'])?></a></td>
       <td><span class="badge bg-<?=$rc?>"><?=ucfirst($p['relationship'])?></span></td>
-      <td><?=e($p['phone']??'â€”')?></td>
-      <td class="small"><?=e($p['email']??'â€”')?></td>
+      <td><?=e($p['phone']??'&mdash;')?></td>
+      <td class=”small”><?=e($p['email']??'&mdash;')?></td>
       <td class="text-center"><span class="badge bg-secondary"><?=$p['linked_count']?></span></td>
       <td><?=$p['status']==='active'?'<span class="badge bg-success">Active</span>':'<span class="badge bg-secondary">Inactive</span>'?></td>
       <td class="text-end">
@@ -259,7 +259,7 @@ $relColors=['father'=>'primary','mother'=>'danger','guardian'=>'success','other'
         <form method="POST">
           <?=csrfField()?><input type="hidden" name="action" value="link_student"><input type="hidden" name="parent_id" value="<?=$viewParent['id']?>">
           <div class="mb-2"><label class="form-label small fw-semibold">Student</label>
-            <select name="student_id" class="form-select form-select-sm"><option value="">â€” Select student â€”</option><?php foreach($allStudents as $st):?><option value="<?=$st['id']?>"><?=e($st['name'])?> (<?=e($st['admission_no']??'')?>)</option><?php endforeach;?></select>
+            <select name=”student_id” class=”form-select form-select-sm”><option value=””>-- Select student --</option><?php foreach($allStudents as $st):?><option value="<?=$st['id']?>"><?=e($st['name'])?> (<?=e($st['admission_no']??'')?>)</option><?php endforeach;?></select>
           </div>
           <div class="mb-2 form-check"><input type="checkbox" name="is_primary" value="1" class="form-check-input" id="isPrimary"><label class="form-check-label small" for="isPrimary">Primary guardian</label></div>
           <button type="submit" class="btn btn-sm text-white w-100" style="background:<?=$moduleColor?>"><i class="fas fa-link me-1"></i>Link</button>

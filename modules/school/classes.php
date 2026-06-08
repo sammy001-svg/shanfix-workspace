@@ -24,25 +24,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $academicYearId = (int)($_POST['academic_year_id'] ?? 0) ?: null;
         $status = in_array($_POST['status'] ?? '', ['active', 'inactive']) ? $_POST['status'] : 'active';
 
-        if ($id > 0) {
-            requireOrgOwnership('sch_classes', $id, $orgId);
-            $stmt = $pdo->prepare("UPDATE sch_classes SET name = ?, level = ?, capacity = ?, class_teacher_id = ?, room = ?, curriculum = ?, academic_year_id = ?, status = ? WHERE id = ? AND org_id = ?");
-            $stmt->execute([$name, $level, $capacity, $classTeacherId, $room, $curriculum, $academicYearId, $status, $id, $orgId]);
-            setFlash('success', 'Class details updated successfully.');
-        } else {
-            $stmt = $pdo->prepare("INSERT INTO sch_classes (org_id, name, level, capacity, class_teacher_id, room, curriculum, academic_year_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$orgId, $name, $level, $capacity, $classTeacherId, $room, $curriculum, $academicYearId, $status]);
-            setFlash('success', "Academic class '$name' created successfully.");
+        try {
+            if ($id > 0) {
+                requireOrgOwnership('sch_classes', $id, $orgId);
+                $stmt = $pdo->prepare("UPDATE sch_classes SET name = ?, level = ?, capacity = ?, class_teacher_id = ?, room = ?, curriculum = ?, academic_year_id = ?, status = ? WHERE id = ? AND org_id = ?");
+                $stmt->execute([$name, $level, $capacity, $classTeacherId, $room, $curriculum, $academicYearId, $status, $id, $orgId]);
+                setFlash('success', 'Class details updated successfully.');
+            } else {
+                $stmt = $pdo->prepare("INSERT INTO sch_classes (org_id, name, level, capacity, class_teacher_id, room, curriculum, academic_year_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$orgId, $name, $level, $capacity, $classTeacherId, $room, $curriculum, $academicYearId, $status]);
+                setFlash('success', "Academic class '$name' created successfully.");
+            }
+            logActivity($id > 0 ? 'update' : 'create', 'school', "Class: $name");
+        } catch (Throwable $e) {
+            error_log('[school/classes save] ' . $e->getMessage());
+            setFlash('danger', 'Could not save class. Please run the school module database migration (database/school_module_migration.sql) and try again.');
         }
-        logActivity($id > 0 ? 'update' : 'create', 'school', "Class: $name");
         redirect('classes.php');
     }
 
     if ($action === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
-        requireOrgOwnership('sch_classes', $id, $orgId);
-        $pdo->prepare("DELETE FROM sch_classes WHERE id = ? AND org_id = ?")->execute([$id, $orgId]);
-        setFlash('success', 'Class removed successfully.');
+        try {
+            requireOrgOwnership('sch_classes', $id, $orgId);
+            $pdo->prepare("DELETE FROM sch_classes WHERE id = ? AND org_id = ?")->execute([$id, $orgId]);
+            setFlash('success', 'Class removed successfully.');
+        } catch (Throwable $e) {
+            setFlash('danger', 'Could not delete class.');
+        }
         redirect('classes.php');
     }
 }
@@ -111,45 +120,42 @@ require_once __DIR__ . '/../../includes/header-module.php';
       <table class="table table-hover data-table mb-0">
         <thead class="table-light">
           <tr>
-            <th>Class Name</th>
+            <th>Class</th>
             <th>Curriculum</th>
-            <th>Education Level</th>
-            <th>Class Room</th>
-            <th>Class Teacher</th>
-            <th>Student Enrollment</th>
-            <th>Remaining Capacity</th>
+            <th>Level</th>
+            <th>Room</th>
+            <th>Teacher</th>
+            <th>Enrolled</th>
             <th>Status</th>
             <th class="text-center">Actions</th>
           </tr>
         </thead>
         <tbody>
           <?php if (empty($classesList)): ?>
-          <tr><td colspan="9" class="text-center text-muted py-5"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>No academic classes created yet.</td></tr>
-          <?php else: foreach ($classesList as $c): 
+          <tr><td colspan="8" class="text-center text-muted py-5"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>No academic classes created yet.</td></tr>
+          <?php else: foreach ($classesList as $c):
             $pct = $c['capacity'] > 0 ? ($c['student_count'] / $c['capacity']) * 100 : 0;
             $progressColor = 'success';
             if ($pct >= 90) $progressColor = 'danger';
             elseif ($pct >= 75) $progressColor = 'warning';
+            $rem = $c['capacity'] - $c['student_count'];
           ?>
           <tr>
             <td class="fw-semibold text-dark"><?= e($c['name']) ?></td>
             <td><span class="badge bg-primary"><?= e($c['curriculum'] ?: 'IB') ?></span></td>
             <td><span class="badge bg-light text-dark border"><?= e($c['level'] ?: '—') ?></span></td>
-            <td><span class="fw-semibold text-muted"><?= e($c['room'] ?: '—') ?></span></td>
-            <td class="fw-semibold"><?= e($c['teacher_name'] ?: 'Not Assigned') ?></td>
+            <td class="text-muted small"><?= e($c['room'] ?: '—') ?></td>
+            <td class="small"><?= e($c['teacher_name'] ?: '—') ?></td>
             <td>
-              <div class="d-flex align-items-center gap-2">
-                <span class="fw-bold"><?= $c['student_count'] ?></span> / <span class="text-muted"><?= $c['capacity'] ?></span>
-                <div class="progress flex-grow-1" style="height:6px; min-width:80px;">
-                  <div class="progress-bar bg-<?= $progressColor ?>" style="width: <?= min($pct, 100) ?>%"></div>
+              <div class="d-flex align-items-center gap-1 flex-wrap">
+                <span class="fw-semibold small"><?= $c['student_count'] ?>/<?= $c['capacity'] ?></span>
+                <?php if ($rem <= 0): ?><span class="badge bg-danger small">FULL</span>
+                <?php else: ?>
+                <div class="progress" style="width:50px;height:5px">
+                  <div class="progress-bar bg-<?= $progressColor ?>" style="width:<?= min($pct,100) ?>%"></div>
                 </div>
+                <?php endif; ?>
               </div>
-            </td>
-            <td>
-              <?php $rem = $c['capacity'] - $c['student_count']; 
-              if ($rem <= 0) echo '<span class="text-danger fw-bold"><i class="fas fa-exclamation-circle me-1"></i>FULL</span>';
-              else echo "<strong class='text-success'>$rem slots</strong>";
-              ?>
             </td>
             <td>
               <span class="badge bg-<?= $c['status'] === 'active' ? 'success' : 'secondary' ?>"><?= ucfirst($c['status']) ?></span>

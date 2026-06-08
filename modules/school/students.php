@@ -55,43 +55,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        if ($id > 0) {
-            requireOrgOwnership('sch_students', $id, $orgId);
-            $photoSet = $photoPath ? ", photo=?" : "";
-            $params = [
-                $admNo, $firstName, $lastName, $gender, $dob, $classId, 
-                $parentName, $parentPhone, $parentEmail, $address, $status, $admittedOn,
-                $nationality, $passportNo, $visaExpiry, $curriculum, $motherTongue, $prevSchool,
-                $medNotes, $learningSupport, $emergName, $emergPhone, $id, $orgId
-            ];
-            if ($photoPath) array_splice($params, 22, 0, [$photoPath]);
-
-            $sql = "UPDATE sch_students SET 
-                    admission_no = ?, first_name = ?, last_name = ?, gender = ?, dob = ?, class_id = ?, 
-                    parent_name = ?, parent_phone = ?, parent_email = ?, address = ?, status = ?, admitted_on = ?,
-                    nationality = ?, passport_no = ?, visa_expiry = ?, curriculum = ?, mother_tongue = ?, previous_school = ?,
-                    medical_conditions = ?, learning_support = ?, emergency_contact = ?, emergency_phone = ? {$photoSet} 
-                    WHERE id = ? AND org_id = ?";
-            
-            $pdo->prepare($sql)->execute($params);
-            setFlash('success', 'Student details updated successfully.');
-        } else {
-            $sql = "INSERT INTO sch_students (
-                        org_id, admission_no, first_name, last_name, gender, dob, class_id, 
-                        parent_name, parent_phone, parent_email, address, status, admitted_on,
-                        nationality, passport_no, visa_expiry, curriculum, mother_tongue, previous_school,
-                        medical_conditions, learning_support, emergency_contact, emergency_phone, photo
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            
-            $pdo->prepare($sql)->execute([
-                $orgId, $admNo, $firstName, $lastName, $gender, $dob, $classId, 
-                $parentName, $parentPhone, $parentEmail, $address, $status, $admittedOn,
-                $nationality, $passportNo, $visaExpiry, $curriculum, $motherTongue, $prevSchool,
-                $medNotes, $learningSupport, $emergName, $emergPhone, $photoPath
-            ]);
-            setFlash('success', "Student '$firstName $lastName' enrolled successfully.");
+        try {
+            if ($id > 0) {
+                requireOrgOwnership('sch_students', $id, $orgId);
+                $photoSet = $photoPath ? ", photo=?" : "";
+                $params = [
+                    $admNo, $firstName, $lastName, $gender, $dob, $classId,
+                    $parentName, $parentPhone, $parentEmail, $address, $status, $admittedOn,
+                    $nationality, $passportNo, $visaExpiry, $curriculum, $motherTongue, $prevSchool,
+                    $medNotes, $learningSupport, $emergName, $emergPhone, $id, $orgId
+                ];
+                if ($photoPath) array_splice($params, 22, 0, [$photoPath]);
+                $sql = "UPDATE sch_students SET
+                        admission_no=?, first_name=?, last_name=?, gender=?, dob=?, class_id=?,
+                        parent_name=?, parent_phone=?, parent_email=?, address=?, status=?, admitted_on=?,
+                        nationality=?, passport_no=?, visa_expiry=?, curriculum=?, mother_tongue=?, previous_school=?,
+                        medical_conditions=?, learning_support=?, emergency_contact=?, emergency_phone=? {$photoSet}
+                        WHERE id=? AND org_id=?";
+                $pdo->prepare($sql)->execute($params);
+                setFlash('success', 'Student details updated successfully.');
+            } else {
+                $sql = "INSERT INTO sch_students (
+                            org_id, admission_no, first_name, last_name, gender, dob, class_id,
+                            parent_name, parent_phone, parent_email, address, status, admitted_on,
+                            nationality, passport_no, visa_expiry, curriculum, mother_tongue, previous_school,
+                            medical_conditions, learning_support, emergency_contact, emergency_phone, photo
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $pdo->prepare($sql)->execute([
+                    $orgId, $admNo, $firstName, $lastName, $gender, $dob, $classId,
+                    $parentName, $parentPhone, $parentEmail, $address, $status, $admittedOn,
+                    $nationality, $passportNo, $visaExpiry, $curriculum, $motherTongue, $prevSchool,
+                    $medNotes, $learningSupport, $emergName, $emergPhone, $photoPath
+                ]);
+                setFlash('success', "Student '$firstName $lastName' enrolled successfully.");
+            }
+            logActivity($id > 0 ? 'update' : 'create', 'school', "Student: $firstName $lastName (Adm: $admNo)");
+        } catch (Throwable $e) {
+            error_log('[school/students save] ' . $e->getMessage());
+            setFlash('danger', 'Could not save student. Please run database/school_module_migration.sql first, then try again.');
         }
-        logActivity($id > 0 ? 'update' : 'create', 'school', "Student: $firstName $lastName (Adm: $admNo)");
         redirect('students.php');
     }
 

@@ -20,14 +20,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $end      = $_POST['end_date'] ?? '';
         $isCurrent= (int)($_POST['is_current'] ?? 0);
         if (!$yearName || !$start || !$end) { setFlash('danger','Year name and dates required.'); redirect('academic.php'); }
-        if ($isCurrent) $pdo->prepare("UPDATE sch_academic_years SET is_current=0 WHERE org_id=?")->execute([$orgId]);
-        if ($id > 0) {
-            requireOrgOwnership('sch_academic_years', $id, $orgId);
-            $pdo->prepare("UPDATE sch_academic_years SET name=?,start_date=?,end_date=?,is_current=? WHERE id=? AND org_id=?")->execute([$yearName,$start,$end,$isCurrent,$id,$orgId]);
-            setFlash('success','Academic year updated.');
-        } else {
-            $pdo->prepare("INSERT INTO sch_academic_years (org_id,name,start_date,end_date,is_current) VALUES (?,?,?,?,?)")->execute([$orgId,$yearName,$start,$end,$isCurrent]);
-            setFlash('success',"Academic year '$yearName' created.");
+        try {
+            if ($isCurrent) $pdo->prepare("UPDATE sch_academic_years SET is_current=0 WHERE org_id=?")->execute([$orgId]);
+            if ($id > 0) {
+                requireOrgOwnership('sch_academic_years', $id, $orgId);
+                $pdo->prepare("UPDATE sch_academic_years SET name=?,start_date=?,end_date=?,is_current=? WHERE id=? AND org_id=?")->execute([$yearName,$start,$end,$isCurrent,$id,$orgId]);
+                setFlash('success','Academic year updated.');
+            } else {
+                $pdo->prepare("INSERT INTO sch_academic_years (org_id,name,start_date,end_date,is_current) VALUES (?,?,?,?,?)")->execute([$orgId,$yearName,$start,$end,$isCurrent]);
+                setFlash('success',"Academic year '$yearName' created.");
+            }
+        } catch (Throwable $e) {
+            error_log('[school/academic save_year] ' . $e->getMessage());
+            setFlash('danger', 'Could not save academic year. Please run database/school_module_migration.sql and try again.');
         }
         redirect('academic.php');
     }
@@ -43,39 +48,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $status   = in_array($_POST['status']??'',['upcoming','active','completed'])?$_POST['status']:'upcoming';
         $notes    = sanitize($_POST['notes'] ?? '');
         if (!$name || !$start || !$end) { setFlash('danger','Term name and dates required.'); redirect('academic.php'); }
-        if ($isCurrent) { $pdo->prepare("UPDATE sch_terms SET is_current=0 WHERE org_id=?")->execute([$orgId]); $status='active'; }
-        if ($id > 0) {
-            requireOrgOwnership('sch_terms', $id, $orgId);
-            $pdo->prepare("UPDATE sch_terms SET academic_year_id=?,name=?,term_type=?,start_date=?,end_date=?,is_current=?,status=?,notes=? WHERE id=? AND org_id=?")->execute([$yearId,$name,$type,$start,$end,$isCurrent,$status,$notes,$id,$orgId]);
-            setFlash('success','Term updated.');
-        } else {
-            $pdo->prepare("INSERT INTO sch_terms (org_id,academic_year_id,name,term_type,start_date,end_date,is_current,status,notes) VALUES (?,?,?,?,?,?,?,?,?)")->execute([$orgId,$yearId,$name,$type,$start,$end,$isCurrent,$status,$notes]);
-            setFlash('success',"Term '$name' created.");
+        try {
+            if ($isCurrent) { $pdo->prepare("UPDATE sch_terms SET is_current=0 WHERE org_id=?")->execute([$orgId]); $status='active'; }
+            if ($id > 0) {
+                requireOrgOwnership('sch_terms', $id, $orgId);
+                $pdo->prepare("UPDATE sch_terms SET academic_year_id=?,name=?,term_type=?,start_date=?,end_date=?,is_current=?,status=?,notes=? WHERE id=? AND org_id=?")->execute([$yearId,$name,$type,$start,$end,$isCurrent,$status,$notes,$id,$orgId]);
+                setFlash('success','Term updated.');
+            } else {
+                $pdo->prepare("INSERT INTO sch_terms (org_id,academic_year_id,name,term_type,start_date,end_date,is_current,status,notes) VALUES (?,?,?,?,?,?,?,?,?)")->execute([$orgId,$yearId,$name,$type,$start,$end,$isCurrent,$status,$notes]);
+                setFlash('success',"Term '$name' created.");
+            }
+        } catch (Throwable $e) {
+            error_log('[school/academic save_term] ' . $e->getMessage());
+            setFlash('danger', 'Could not save term. Please run database/school_module_migration.sql and try again.');
         }
         redirect('academic.php');
     }
 
     if ($action === 'delete_year') {
         $id = (int)($_POST['id'] ?? 0);
-        requireOrgOwnership('sch_academic_years', $id, $orgId);
-        $pdo->prepare("DELETE FROM sch_terms WHERE academic_year_id=? AND org_id=?")->execute([$id,$orgId]);
-        $pdo->prepare("DELETE FROM sch_academic_years WHERE id=? AND org_id=?")->execute([$id,$orgId]);
-        setFlash('success','Academic year and its terms deleted.'); redirect('academic.php');
+        try {
+            requireOrgOwnership('sch_academic_years', $id, $orgId);
+            $pdo->prepare("DELETE FROM sch_terms WHERE academic_year_id=? AND org_id=?")->execute([$id,$orgId]);
+            $pdo->prepare("DELETE FROM sch_academic_years WHERE id=? AND org_id=?")->execute([$id,$orgId]);
+            setFlash('success','Academic year and its terms deleted.');
+        } catch (Throwable $e) {
+            setFlash('danger', 'Could not delete academic year.');
+        }
+        redirect('academic.php');
     }
 
     if ($action === 'delete_term') {
         $id = (int)($_POST['id'] ?? 0);
-        requireOrgOwnership('sch_terms', $id, $orgId);
-        $pdo->prepare("DELETE FROM sch_terms WHERE id=? AND org_id=?")->execute([$id,$orgId]);
-        setFlash('success','Term deleted.'); redirect('academic.php');
+        try {
+            requireOrgOwnership('sch_terms', $id, $orgId);
+            $pdo->prepare("DELETE FROM sch_terms WHERE id=? AND org_id=?")->execute([$id,$orgId]);
+            setFlash('success','Term deleted.');
+        } catch (Throwable $e) {
+            setFlash('danger', 'Could not delete term.');
+        }
+        redirect('academic.php');
     }
 
     if ($action === 'set_current_term') {
         $id = (int)($_POST['id'] ?? 0);
-        requireOrgOwnership('sch_terms', $id, $orgId);
-        $pdo->prepare("UPDATE sch_terms SET is_current=0 WHERE org_id=?")->execute([$orgId]);
-        $pdo->prepare("UPDATE sch_terms SET is_current=1, status='active' WHERE id=? AND org_id=?")->execute([$id,$orgId]);
-        setFlash('success','Current term updated.'); redirect('academic.php');
+        try {
+            requireOrgOwnership('sch_terms', $id, $orgId);
+            $pdo->prepare("UPDATE sch_terms SET is_current=0 WHERE org_id=?")->execute([$orgId]);
+            $pdo->prepare("UPDATE sch_terms SET is_current=1, status='active' WHERE id=? AND org_id=?")->execute([$id,$orgId]);
+            setFlash('success','Current term updated.');
+        } catch (Throwable $e) {
+            setFlash('danger', 'Could not update current term. Please run the school module migration.');
+        }
+        redirect('academic.php');
     }
 }
 

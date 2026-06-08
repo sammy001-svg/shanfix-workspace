@@ -12,22 +12,36 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         $dept=sanitize($_POST['department']??'');$desc=sanitize($_POST['description']??'');
         $elective=(int)($_POST['is_elective']??0);$pass=(float)($_POST['pass_mark']??50);
         $status=in_array($_POST['status']??'',['active','inactive'])?$_POST['status']:'active';
-        if(!$name){setFlash('error','Subject name required.');redirect('subjects.php');}
-        if($id){$pdo->prepare("UPDATE sch_subjects SET code=?,name=?,department=?,description=?,is_elective=?,pass_mark=?,status=? WHERE id=? AND org_id=?")->execute([$code,$name,$dept,$desc,$elective,$pass,$status,$id,$orgId]);setFlash('success','Subject updated.');}
-        else{$pdo->prepare("INSERT INTO sch_subjects (org_id,code,name,department,description,is_elective,pass_mark,status) VALUES (?,?,?,?,?,?,?,?)")->execute([$orgId,$code,$name,$dept,$desc,$elective,$pass,$status]);setFlash('success','Subject added.');}
+        if(!$name){setFlash('danger','Subject name required.');redirect('subjects.php');}
+        try {
+            if($id){$pdo->prepare("UPDATE sch_subjects SET code=?,name=?,department=?,description=?,is_elective=?,pass_mark=?,status=? WHERE id=? AND org_id=?")->execute([$code,$name,$dept,$desc,$elective,$pass,$status,$id,$orgId]);setFlash('success','Subject updated.');}
+            else{$pdo->prepare("INSERT INTO sch_subjects (org_id,code,name,department,description,is_elective,pass_mark,status) VALUES (?,?,?,?,?,?,?,?)")->execute([$orgId,$code,$name,$dept,$desc,$elective,$pass,$status]);setFlash('success','Subject added.');}
+        } catch (Throwable $e) {
+            error_log('[school/subjects save] ' . $e->getMessage());
+            setFlash('danger','Could not save subject. Please run database/school_module_migration.sql and try again.');
+        }
         redirect('subjects.php');
     }
-    if($action==='delete'){$id=(int)($_POST['id']??0);$pdo->prepare("DELETE FROM sch_subjects WHERE id=? AND org_id=?")->execute([$id,$orgId]);setFlash('success','Subject deleted.');redirect('subjects.php');}
+    if($action==='delete'){
+        $id=(int)($_POST['id']??0);
+        try{$pdo->prepare("DELETE FROM sch_subjects WHERE id=? AND org_id=?")->execute([$id,$orgId]);setFlash('success','Subject deleted.');}
+        catch(Throwable $e){setFlash('danger','Could not delete subject.');}
+        redirect('subjects.php');
+    }
     if($action==='assign'){
         $classId=(int)($_POST['class_id']??0);$subjectId=(int)($_POST['subject_id']??0);
         $staffId=(int)($_POST['staff_id']??0)||null;$periods=(int)($_POST['periods_week']??1);
         if($classId&&$subjectId){
             try{$pdo->prepare("INSERT INTO sch_class_subjects (org_id,class_id,subject_id,staff_id,periods_week) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE staff_id=VALUES(staff_id),periods_week=VALUES(periods_week)")->execute([$orgId,$classId,$subjectId,$staffId,$periods]);setFlash('success','Subject assigned to class.');}
-            catch(Exception $e){setFlash('error','Already assigned or error.');}
+            catch(Exception $e){setFlash('danger','Assignment failed. Run database/school_module_migration.sql if this is a new install.');}
         }
         redirect('subjects.php');
     }
-    if($action==='unassign'){$id=(int)($_POST['id']??0);$pdo->prepare("DELETE FROM sch_class_subjects WHERE id=? AND org_id=?")->execute([$id,$orgId]);redirect('subjects.php');}
+    if($action==='unassign'){
+        $id=(int)($_POST['id']??0);
+        try{$pdo->prepare("DELETE FROM sch_class_subjects WHERE id=? AND org_id=?")->execute([$id,$orgId]);}catch(Throwable $e){}
+        redirect('subjects.php');
+    }
 }
 require_once __DIR__.'/../../includes/header-module.php';
 $user=currentUser();$orgId=(int)$user['org_id'];
@@ -70,9 +84,9 @@ try{$s=$pdo->prepare("SELECT cs.*,sub.name AS subject_name,cl.name AS class_name
         <?php if(empty($subjects)):?><tr><td colspan="7" class="text-center text-muted py-4">No subjects found.</td></tr>
         <?php else:foreach($subjects as $sub):?>
         <tr>
-          <td><code><?=e($sub['code']??'â€”')?></code></td>
+          <td><code><?=e($sub['code']??'&mdash;')?></code></td>
           <td class="fw-semibold"><?=e($sub['name'])?></td>
-          <td class="small"><?=e($sub['department']??'â€”')?></td>
+          <td class=”small”><?=e($sub['department']??'&mdash;')?></td>
           <td><?=$sub['pass_mark']?>%</td>
           <td><?=$sub['is_elective']?'<span class="badge bg-info">Elective</span>':'<span class="badge bg-secondary">Core</span>'?></td>
           <td><?=statusBadge($sub['status'])?></td>
@@ -98,10 +112,10 @@ try{$s=$pdo->prepare("SELECT cs.*,sub.name AS subject_name,cl.name AS class_name
       <div class="card-body">
         <form method="POST">
           <?=csrfField()?><input type="hidden" name="action" value="assign">
-          <div class="mb-3"><label class="form-label fw-semibold">Class</label><select name="class_id" class="form-select" required><option value="">â€” Select class â€”</option><?php foreach($classes as $c):?><option value="<?=$c['id']?>"><?=e($c['name'])?></option><?php endforeach;?></select></div>
-          <div class="mb-3"><label class="form-label fw-semibold">Subject</label><select name="subject_id" class="form-select" required><option value="">â€” Select subject â€”</option><?php foreach($subjects as $s):if($s['status']==='active'):?><option value="<?=$s['id']?>"><?=e($s['name'])?></option><?php endif;endforeach;?></select></div>
-          <div class="row g-2 mb-3">
-            <div class="col-7"><label class="form-label fw-semibold">Teacher</label><select name="staff_id" class="form-select"><option value="">â€” Unassigned â€”</option><?php foreach($staff as $st):?><option value="<?=$st['id']?>"><?=e($st['name'])?></option><?php endforeach;?></select></div>
+          <div class=”mb-3”><label class=”form-label fw-semibold”>Class</label><select name=”class_id” class=”form-select” required><option value=””>-- Select class --</option><?php foreach($classes as $c):?><option value=”<?=$c['id']?>”><?=e($c['name'])?></option><?php endforeach;?></select></div>
+          <div class=”mb-3”><label class=”form-label fw-semibold”>Subject</label><select name=”subject_id” class=”form-select” required><option value=””>-- Select subject --</option><?php foreach($subjects as $s):if($s['status']==='active'):?><option value=”<?=$s['id']?>”><?=e($s['name'])?></option><?php endif;endforeach;?></select></div>
+          <div class=”row g-2 mb-3”>
+            <div class=”col-7”><label class=”form-label fw-semibold”>Teacher</label><select name=”staff_id” class=”form-select”><option value=””>-- Unassigned --</option><?php foreach($staff as $st):?><option value=”<?=$st['id']?>”><?=e($st['name'])?></option><?php endforeach;?></select></div>
             <div class="col-5"><label class="form-label fw-semibold">Periods/Week</label><input type="number" name="periods_week" class="form-control" min="1" max="20" value="4"></div>
           </div>
           <button type="submit" class="btn btn-sm text-white" style="background:<?=$moduleColor?>"><i class="fas fa-link me-1"></i>Assign</button>
@@ -118,7 +132,7 @@ try{$s=$pdo->prepare("SELECT cs.*,sub.name AS subject_name,cl.name AS class_name
         <tr>
           <td><?=e($a['class_name'])?></td>
           <td class="fw-semibold"><?=e($a['subject_name'])?></td>
-          <td><?=$a['first_name']?e($a['first_name'].' '.$a['last_name']):'â€”'?></td>
+          <td><?=$a['first_name']?e($a['first_name'].' '.$a['last_name']):'&mdash;'?></td>
           <td><?=$a['periods_week']?>/wk</td>
           <td><form method="POST" class="d-inline"><?=csrfField()?><input type="hidden" name="action" value="unassign"><input type="hidden" name="id" value="<?=$a['id']?>"><button type="submit" class="btn btn-xs btn-outline-danger btn-confirm" data-msg="Remove this assignment?"><i class="fas fa-times"></i></button></form></td>
         </tr>
