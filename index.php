@@ -342,25 +342,25 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
 .od-hero {
   position: relative;
   min-height: 100vh;
-  /* Photo background */
-  background-image: url('assets/images/Gemini_Generated_Image_dt5jpmdt5jpmdt5j.png');
+  /* Team photo background */
+  background-image: url('group-afro-americans-working-together-scaled.jpg');
   background-size: cover;
-  background-position: center 30%;
+  background-position: center 22%;
   background-attachment: fixed; /* subtle parallax on scroll */
   display: flex; align-items: center;
   padding: 120px 0 80px;
   overflow: hidden;
 }
 
-/* Layer 1 – deep navy colour wash over the photo */
+/* Layer 1 – deep navy colour wash over the photo (left denser for text, right lighter to show faces) */
 .od-hero::before {
   content: '';
   position: absolute; inset: 0; z-index: 0;
   background: linear-gradient(
-    120deg,
-    rgba(5,15,31,.88)  0%,
-    rgba(7,25,52,.82)  40%,
-    rgba(5,15,31,.70)  100%
+    115deg,
+    rgba(5,15,31,.90)  0%,
+    rgba(7,25,52,.80)  45%,
+    rgba(5,15,31,.52)  100%
   );
 }
 
