@@ -432,6 +432,9 @@ require_once __DIR__ . '/../../includes/header-module.php';
                   </form>
                   <?php endif; ?>
                   <button class="btn btn-outline-primary btn-sm" onclick="openPayModal(<?= $b['id'] ?>)" title="Update Payment"><i class="fas fa-money-bill-wave"></i></button>
+                  <?php if ($balance > 0 && !in_array($b['status'], ['paid','cancelled'])): ?>
+                  <button class="btn btn-outline-success btn-sm" onclick="openMpesaPay(<?= $b['id'] ?>,<?= round($balance,2) ?>,'<?= e($b['patient_name']) ?>')" title="Pay via M-Pesa"><i class="fab fa-cc-mastercard"></i> M-Pesa</button>
+                  <?php endif; ?>
                   <button class="btn btn-outline-secondary btn-sm" onclick="printBill(<?= $b['id'] ?>)" title="Print"><i class="fas fa-print"></i></button>
                 </div>
               </td>
@@ -722,6 +725,31 @@ require_once __DIR__ . '/../../includes/header-module.php';
   </div>
 </div>
 
+<!-- M-Pesa STK Push Modal -->
+<div class="modal fade" id="mpesaPayModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h6 class="modal-title"><i class="fas fa-mobile-alt me-2"></i>Pay via M-Pesa</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3" id="mpesaPayDesc"></p>
+        <label class="form-label fw-semibold">Patient Phone (07xx)</label>
+        <input type="tel" id="mpesaPhone" class="form-control" placeholder="07XXXXXXXX" maxlength="15">
+        <div class="mt-2"><strong class="text-success" id="mpesaAmtLabel"></strong></div>
+        <div id="mpesaStatus" class="mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success btn-sm" id="mpesaSendBtn" onclick="submitMpesaStk()">
+          <i class="fas fa-paper-plane me-1"></i>Send STK Push
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <?php
 $extraJs = <<<'JS'
 <script>
@@ -897,6 +925,40 @@ function openSvcModal(id) {
         });
     }
     new bootstrap.Modal(document.getElementById('svcModal')).show();
+}
+
+let _mpesaBillId = 0, _mpesaAmount = 0;
+function openMpesaPay(billId, amount, patientName) {
+    _mpesaBillId = billId;
+    _mpesaAmount = amount;
+    document.getElementById('mpesaPayDesc').textContent = 'Sending STK push to ' + patientName + '\'s phone.';
+    document.getElementById('mpesaAmtLabel').textContent = 'Amount: KES ' + amount.toLocaleString();
+    document.getElementById('mpesaPhone').value = '';
+    document.getElementById('mpesaStatus').innerHTML = '';
+    document.getElementById('mpesaSendBtn').disabled = false;
+    new bootstrap.Modal(document.getElementById('mpesaPayModal')).show();
+}
+function submitMpesaStk() {
+    const phone = document.getElementById('mpesaPhone').value.trim();
+    if (!phone) { document.getElementById('mpesaStatus').innerHTML = '<span class="text-danger">Phone number required.</span>'; return; }
+    document.getElementById('mpesaSendBtn').disabled = true;
+    document.getElementById('mpesaStatus').innerHTML = '<div class="spinner-border spinner-border-sm text-success"></div> Sending push...';
+    const fd = new FormData();
+    fd.append('phone', phone); fd.append('amount', _mpesaAmount); fd.append('invoice_id', '0');
+    fetch('../../api/mpesa-stk.php', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) {
+                document.getElementById('mpesaStatus').innerHTML = '<div class="alert alert-success p-2 mb-0"><i class="fas fa-check me-1"></i>' + d.message + '</div>';
+            } else {
+                document.getElementById('mpesaStatus').innerHTML = '<div class="alert alert-danger p-2 mb-0">' + (d.message || 'Failed.') + '</div>';
+                document.getElementById('mpesaSendBtn').disabled = false;
+            }
+        })
+        .catch(() => {
+            document.getElementById('mpesaStatus').innerHTML = '<div class="alert alert-danger p-2 mb-0">Network error.</div>';
+            document.getElementById('mpesaSendBtn').disabled = false;
+        });
 }
 
 $(document).ready(function () {

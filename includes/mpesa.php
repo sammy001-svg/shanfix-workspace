@@ -44,7 +44,7 @@ class Mpesa
             CURLOPT_TIMEOUT        => 30,
         ]);
         $response = curl_exec($ch);
-        curl_close($ch);
+        unset($ch);
 
         if (!$response) return null;
         $data = json_decode($response, true);
@@ -216,7 +216,7 @@ class Mpesa
             CURLOPT_TIMEOUT        => 30,
         ]);
         $response = curl_exec($ch);
-        curl_close($ch);
+        unset($ch);
         return json_decode($response ?: '{}', true) ?? [];
     }
 }

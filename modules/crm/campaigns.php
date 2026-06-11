@@ -74,6 +74,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         setFlash('success', 'Campaign stats updated.');
         redirect('campaigns.php');
     }
+
+    // Dispatch email campaign to contacts
+    if ($action === 'send_campaign') {
+        $id = (int)($_POST['id'] ?? 0);
+
+        $cStmt = $pdo->prepare("SELECT * FROM crm_campaigns WHERE id=? AND org_id=? AND type='email'");
+        $cStmt->execute([$id, $orgId]);
+        $camp = $cStmt->fetch();
+
+        if (!$camp) {
+            setFlash('danger', 'Email campaign not found.');
+            redirect('campaigns.php');
+        }
+
+        // Build contact query based on target_type
+        $target = $camp['target_type'];
+        if ($target === 'all') {
+            $cq = $pdo->prepare("SELECT email, name FROM crm_contacts WHERE org_id=? AND status='active' AND email IS NOT NULL AND email != ''");
+            $cq->execute([$orgId]);
+        } else {
+            // customers→customer, leads→lead, partners→partner, vendors→vendor
+            $typeMap = ['customers'=>'customer','leads'=>'lead','partners'=>'partner','vendors'=>'vendor'];
+            $contactType = $typeMap[$target] ?? rtrim($target, 's');
+            $cq = $pdo->prepare("SELECT email, name FROM crm_contacts WHERE org_id=? AND status='active' AND type=? AND email IS NOT NULL AND email != ''");
+            $cq->execute([$orgId, $contactType]);
+        }
+        $contacts = $cq->fetchAll();
+
+        $sent = 0;
+        $mailInst = mailer();
+        foreach ($contacts as $c) {
+            $cName = e($c['name'] ?? 'Valued Customer');
+            $body  = '<p>Dear ' . $cName . ',</p>' . nl2br(e($camp['content'])) . '<br><br><small style="color:#888;">You are receiving this because you are a contact of ' . e(APP_NAME) . '.</small>';
+            try {
+                $mailInst->send($c['email'], $camp['subject'], $body);
+                $sent++;
+            } catch (Throwable $ex) {}
+        }
+
+        $pdo->prepare("UPDATE crm_campaigns SET sent_count=sent_count+?, status='active' WHERE id=? AND org_id=?")
+            ->execute([$sent, $id, $orgId]);
+
+        setFlash('success', "Campaign dispatched to {$sent} contact(s).");
+        logActivity('send', 'crm', "Email campaign '{$camp['name']}' dispatched to {$sent} contacts");
+        redirect('campaigns.php');
+    }
 }
 
 require_once __DIR__ . '/../../includes/header-module.php';
@@ -283,6 +329,9 @@ if (isset($_GET['view'])) {
             <td class="text-center" style="white-space:nowrap">
               <a href="?view=<?= $camp['id'] ?>" class="btn btn-sm btn-outline-info" title="View"><i class="fas fa-eye"></i></a>
               <button class="btn btn-sm btn-outline-primary ms-1" onclick='openEdit(<?= htmlspecialchars(json_encode($camp), ENT_QUOTES) ?>)' title="Edit"><i class="fas fa-edit"></i></button>
+              <?php if ($camp['type'] === 'email' && !in_array($camp['status'], ['cancelled','completed']) && $camp['subject']): ?>
+              <button class="btn btn-sm btn-outline-success ms-1" onclick="sendCampaign(<?= $camp['id'] ?>,'<?= e($camp['name']) ?>')" title="Send Email Campaign"><i class="fas fa-paper-plane"></i></button>
+              <?php endif; ?>
               <button class="btn btn-sm btn-outline-danger ms-1" onclick="delCampaign(<?= $camp['id'] ?>,'<?= e($camp['name']) ?>')" title="Delete"><i class="fas fa-trash"></i></button>
             </td>
           </tr>
@@ -401,6 +450,18 @@ function openEdit(c) {
 function delCampaign(id, name) {
   Swal.fire({title:'Delete Campaign?',text:'"'+name+'" will be permanently removed.',icon:'warning',showCancelButton:true,confirmButtonColor:'#e74c3c',confirmButtonText:'Yes, delete'})
     .then(r => { if (r.isConfirmed) { document.getElementById('delCampId').value = id; document.getElementById('delCampForm').submit(); } });
+}
+
+function sendCampaign(id, name) {
+  Swal.fire({title:'Send Campaign?',html:'Dispatch <strong>"'+name+'"</strong> by email to all matching contacts?',icon:'question',showCancelButton:true,confirmButtonColor:'#198754',confirmButtonText:'<i class="fas fa-paper-plane me-1"></i>Send Now'})
+    .then(r => {
+      if (r.isConfirmed) {
+        const f = document.createElement('form');
+        f.method = 'POST'; f.action = 'campaigns.php';
+        f.innerHTML = `<?= csrfField() ?><input name="action" value="send_campaign"><input name="id" value="${id}">`;
+        document.body.appendChild(f); f.submit();
+      }
+    });
 }
 </script>
 JS;

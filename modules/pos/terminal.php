@@ -105,6 +105,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $pdo->commit();
             logActivity('sale', 'pos', "Sale $receiptNo — KES " . number_format($total, 2));
+
+            // Auto-post journal entry to Accounting
+            try {
+                $debitName = match($payMethod) {
+                    'mpesa'  => 'M-Pesa Receipts',
+                    'card'   => 'Card Receipts',
+                    'credit' => 'Accounts Receivable',
+                    default  => 'Cash',
+                };
+                $da = $pdo->prepare("SELECT id FROM acc_accounts WHERE org_id=? AND LOWER(name) LIKE ? LIMIT 1");
+                $da->execute([$orgId, '%' . strtolower($debitName) . '%']);
+                $debitAccId = $da->fetchColumn();
+                if (!$debitAccId) {
+                    $da->execute([$orgId, '%cash%']);
+                    $debitAccId = $da->fetchColumn();
+                }
+                $salesAccId = false;
+                foreach (['%sales%revenue%', '%sales%', '%revenue%'] as $pat) {
+                    $sa = $pdo->prepare("SELECT id FROM acc_accounts WHERE org_id=? AND LOWER(name) LIKE ? LIMIT 1");
+                    $sa->execute([$orgId, $pat]);
+                    $salesAccId = $sa->fetchColumn();
+                    if ($salesAccId) break;
+                }
+                if ($debitAccId && $salesAccId) {
+                    $txRef = 'POS-' . $receiptNo;
+                    $desc  = 'POS Sale: ' . $receiptNo . ($custName ? ' — ' . $custName : '');
+                    $pdo->prepare("INSERT INTO acc_transactions (org_id,ref_no,date,description,type,status,created_by) VALUES (?,?,NOW(),?,?,?,?)")
+                        ->execute([$orgId, $txRef, $desc, 'sales', 'posted', $user['id']]);
+                    $txId = (int)$pdo->lastInsertId();
+                    $li = $pdo->prepare("INSERT INTO acc_transaction_lines (transaction_id,account_id,debit,credit) VALUES (?,?,?,?)");
+                    $li->execute([$txId, $debitAccId, $total, 0]);
+                    $li->execute([$txId, $salesAccId, 0, $total]);
+                    $pdo->prepare("UPDATE acc_accounts SET balance = balance + ? WHERE id=?")->execute([$total, $debitAccId]);
+                    $pdo->prepare("UPDATE acc_accounts SET balance = balance + ? WHERE id=?")->execute([$total, $salesAccId]);
+                }
+            } catch (Throwable $e) {}
+
             $receiptData = compact('receiptNo','custName','payMethod','mpesaRcpt',
                                    'subtotal','discount','tax','total','amtPaid','change','cart');
 

@@ -70,6 +70,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int)($_POST['id'] ?? 0);
         $stmt = $pdo->prepare("UPDATE sacco_loans SET status='approved', approved_by=? WHERE id=? AND org_id=? AND status='pending'");
         $stmt->execute([$user['id'], $id, $orgId]);
+
+        // SMS notification to member
+        try {
+            $ml = $pdo->prepare("SELECT m.phone, m.full_name, l.loan_no, l.amount FROM sacco_loans l JOIN sacco_members m ON l.member_id=m.id WHERE l.id=? AND l.org_id=?");
+            $ml->execute([$id, $orgId]);
+            $mData = $ml->fetch();
+            if ($mData && !empty($mData['phone'])) {
+                $amt = number_format((float)$mData['amount'], 2);
+                notifySms($mData['phone'], APP_NAME . ": Hi {$mData['full_name']}, your loan {$mData['loan_no']} of KES {$amt} has been APPROVED. Await disbursement.", $orgId, 'loan_approved');
+            }
+        } catch (Throwable $e) {}
+
         setFlash('success', 'Loan approved successfully.');
         logActivity('update', 'sacco', "Approved loan #$id");
         redirect('loans.php');
@@ -130,6 +142,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $pdo->commit();
+
+            // SMS notification to member on disbursement
+            try {
+                $ml = $pdo->prepare("SELECT m.phone, m.full_name FROM sacco_members m JOIN sacco_loans l ON m.id=l.member_id WHERE l.id=? AND l.org_id=?");
+                $ml->execute([$id, $orgId]);
+                $member = $ml->fetch();
+                if ($member && !empty($member['phone'])) {
+                    $disbAmt   = number_format((float)$loanData['amount'], 2);
+                    $firstDate = $firstDueDate ? date('d/m/Y', strtotime($firstDueDate)) : 'N/A';
+                    notifySms($member['phone'], APP_NAME . ": Hi {$member['full_name']}, loan {$loanData['loan_no']} of KES {$disbAmt} has been disbursed. First repayment due: {$firstDate}.", $orgId, 'loan_disbursed');
+                }
+            } catch (Throwable $e) {}
+
             setFlash('success', 'Loan disbursed. Amortization schedule of ' . $term . ' installments generated.');
         } catch (Throwable $e) {
             $pdo->rollBack();

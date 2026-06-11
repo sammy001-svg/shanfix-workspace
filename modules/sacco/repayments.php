@@ -300,7 +300,16 @@ try {
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">Payment Reference / Code (M-Pesa / Bank Slip)</label>
-            <input type="text" name="reference" class="form-control" placeholder="e.g. MPESA-ABCDE12">
+            <input type="text" name="reference" id="repayReference" class="form-control" placeholder="e.g. MPESA-ABCDE12">
+          </div>
+          <!-- M-Pesa STK push section -->
+          <div class="border rounded p-3 bg-light mb-2">
+            <div class="fw-semibold small mb-2"><i class="fas fa-mobile-alt text-success me-1"></i>Send M-Pesa STK Push (optional)</div>
+            <div class="input-group input-group-sm">
+              <input type="tel" id="stkPhone" class="form-control" placeholder="07XXXXXXXX" maxlength="15">
+              <button type="button" class="btn btn-success btn-sm" onclick="sendSaccoStk()"><i class="fas fa-paper-plane me-1"></i>Send</button>
+            </div>
+            <div id="stkResult" class="mt-2 small"></div>
           </div>
         </div>
         <div class="modal-footer">

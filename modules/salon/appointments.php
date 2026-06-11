@@ -54,6 +54,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("INSERT INTO salon_appointments (org_id, client_id, service_id, staff_id, appointment_date, appointment_time, status, total_amount, paid, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([$orgId, $clientId, $serviceId, $staffId, $date, $time, $status, $amount, $paid, $notes]);
             setFlash('success', 'Appointment booked successfully.');
+
+            // SMS confirmation to client on new appointment
+            try {
+                $cl = $pdo->prepare("SELECT phone, name FROM salon_clients WHERE id = ? AND org_id = ?");
+                $cl->execute([$clientId, $orgId]);
+                $client = $cl->fetch();
+                if ($client && !empty($client['phone'])) {
+                    $apptDT = date('d/m/Y', strtotime($date)) . ' at ' . date('H:i', strtotime($time));
+                    notifySms($client['phone'], APP_NAME . ": Hi {$client['name']}, your appointment on {$apptDT} is confirmed. Please arrive 5 mins early.", $orgId, 'appointment_confirmed');
+                }
+            } catch (Throwable $e) {}
         }
         logActivity($id > 0 ? 'update' : 'create', 'salon', "Appointment ID: $id / Client ID: $clientId");
         redirect('appointments.php');

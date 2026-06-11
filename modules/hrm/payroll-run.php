@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── HRM: Bulk Payroll Run ──────────────────────────────────────
 $moduleSlug  = 'hrm';
 $moduleName  = 'HRM System';
@@ -154,6 +154,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             setFlash('success', "All draft payslips for $period have been approved.");
             logActivity('approve', 'hrm', "Approved all payroll drafts for $period");
+
+            // Sync approved payroll to acc_payroll_journal and post aggregate journal entry
+            try {
+                $aSql = $deptId
+                    ? "SELECT p.*, CONCAT(e.first_name,' ',e.last_name) AS emp_name, d.name AS dept_name FROM hrm_payroll p JOIN hrm_employees e ON p.employee_id=e.id LEFT JOIN hrm_departments d ON e.department_id=d.id WHERE p.org_id=? AND p.period=? AND e.department_id=? AND p.status='approved'"
+                    : "SELECT p.*, CONCAT(e.first_name,' ',e.last_name) AS emp_name, d.name AS dept_name FROM hrm_payroll p JOIN hrm_employees e ON p.employee_id=e.id LEFT JOIN hrm_departments d ON e.department_id=d.id WHERE p.org_id=? AND p.period=? AND p.status='approved'";
+                $aprSt = $pdo->prepare($aSql);
+                $aprSt->execute($deptId ? [$orgId, $period, $deptId] : [$orgId, $period]);
+                $approved = $aprSt->fetchAll();
+
+                // Ensure acc_payroll_journal table exists
+                $pdo->exec("CREATE TABLE IF NOT EXISTS acc_payroll_journal (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    org_id INT NOT NULL,
+                    period VARCHAR(10) NOT NULL,
+                    employee_name VARCHAR(200),
+                    department VARCHAR(100),
+                    gross_salary DECIMAL(12,2) DEFAULT 0,
+                    tax_deductions DECIMAL(12,2) DEFAULT 0,
+                    nssf_deduction DECIMAL(12,2) DEFAULT 0,
+                    nhif_deduction DECIMAL(12,2) DEFAULT 0,
+                    other_deductions DECIMAL(12,2) DEFAULT 0,
+                    net_salary DECIMAL(12,2) DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+                $totGross = 0; $totNet = 0; $totDed = 0;
+                foreach ($approved as $pr) {
+                    // Skip if already journalled for this employee/period
+                    $ex = $pdo->prepare("SELECT COUNT(*) FROM acc_payroll_journal WHERE org_id=? AND period=? AND employee_name=?");
+                    $ex->execute([$orgId, $period, $pr['emp_name']]);
+                    if ((int)$ex->fetchColumn() > 0) continue;
+
+                    $other = max(0, (float)$pr['total_deductions'] - (float)$pr['paye'] - (float)$pr['nssf'] - (float)$pr['nhif']);
+                    $pdo->prepare("INSERT INTO acc_payroll_journal (org_id,period,employee_name,department,gross_salary,tax_deductions,nssf_deduction,nhif_deduction,other_deductions,net_salary) VALUES (?,?,?,?,?,?,?,?,?,?)")
+                        ->execute([$orgId, $period, $pr['emp_name'], $pr['dept_name'] ?? '', $pr['gross_salary'], $pr['paye'], $pr['nssf'], $pr['nhif'], $other, $pr['net_salary']]);
+
+                    $totGross += (float)$pr['gross_salary'];
+                    $totNet   += (float)$pr['net_salary'];
+                    $totDed   += (float)$pr['total_deductions'];
+                }
+
+                // Post aggregate journal entry to acc_transactions
+                if ($totGross > 0) {
+                    $expAcc = $pdo->prepare("SELECT id FROM acc_accounts WHERE org_id=? AND LOWER(name) LIKE '%salary%' LIMIT 1");
+                    $expAcc->execute([$orgId]);
+                    $expAccId = $expAcc->fetchColumn();
+                    if (!$expAccId) {
+                        $expAcc->execute([$orgId]); // second try: any expense account
+                        $expAcc2 = $pdo->prepare("SELECT id FROM acc_accounts WHERE org_id=? AND type='expense' LIMIT 1");
+                        $expAcc2->execute([$orgId]);
+                        $expAccId = $expAcc2->fetchColumn();
+                    }
+                    $payAcc = $pdo->prepare("SELECT id FROM acc_accounts WHERE org_id=? AND LOWER(name) LIKE '%payable%' LIMIT 1");
+                    $payAcc->execute([$orgId]);
+                    $payAccId = $payAcc->fetchColumn();
+                    if (!$payAccId) {
+                        $bankAcc = $pdo->prepare("SELECT id FROM acc_accounts WHERE org_id=? AND LOWER(name) LIKE '%bank%' LIMIT 1");
+                        $bankAcc->execute([$orgId]);
+                        $payAccId = $bankAcc->fetchColumn();
+                    }
+                    if ($expAccId && $payAccId) {
+                        $txRef = 'PAY-' . preg_replace('/[^0-9]/', '', $period);
+                        $txDesc = "Payroll expense — period $period";
+                        $pdo->prepare("INSERT INTO acc_transactions (org_id,ref_no,date,description,type,status,created_by) VALUES (?,?,NOW(),?,?,?,?)")
+                            ->execute([$orgId, $txRef, $txDesc, 'payroll', 'posted', $user['id']]);
+                        $txId = (int)$pdo->lastInsertId();
+                        $li = $pdo->prepare("INSERT INTO acc_transaction_lines (transaction_id,account_id,debit,credit) VALUES (?,?,?,?)");
+                        $li->execute([$txId, $expAccId, $totGross, 0]);
+                        $li->execute([$txId, $payAccId, 0, $totGross]);
+                        $pdo->prepare("UPDATE acc_accounts SET balance = balance + ? WHERE id=?")->execute([$totGross, $expAccId]);
+                        $pdo->prepare("UPDATE acc_accounts SET balance = balance + ? WHERE id=?")->execute([$totGross, $payAccId]);
+                    }
+                }
+            } catch (Throwable $ex2) {}
+
         } catch (Exception $ex) {
             setFlash('danger', 'Approval failed: ' . $ex->getMessage());
         }
@@ -190,7 +266,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         require_once __DIR__ . '/../../includes/pdf.php';
-        $cols    = ['Employee', 'Emp No', 'Department', 'Gross', 'PAYE', 'NHIF', 'NSSF', 'Total Ded.', 'Net Pay'];
+        $cols    = [
+            ['label' => 'Employee',    'width' => 40, 'align' => 'L'],
+            ['label' => 'Emp No',      'width' => 20, 'align' => 'L'],
+            ['label' => 'Department',  'width' => 28, 'align' => 'L'],
+            ['label' => 'Gross',       'width' => 22, 'align' => 'R'],
+            ['label' => 'PAYE',        'width' => 18, 'align' => 'R'],
+            ['label' => 'NHIF',        'width' => 16, 'align' => 'R'],
+            ['label' => 'NSSF',        'width' => 16, 'align' => 'R'],
+            ['label' => 'Total Ded.',  'width' => 22, 'align' => 'R'],
+            ['label' => 'Net Pay',     'width' => 22, 'align' => 'R'],
+        ];
         $pdfRows = [];
         foreach ($rows as $r) {
             $pdfRows[] = [
@@ -209,11 +295,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $totalDed   = array_sum(array_column($rows, 'total_deductions'));
         $totalNet   = array_sum(array_column($rows, 'net_salary'));
         $summary    = [
-            'Period'       => $period,
-            'Employees'    => count($rows),
-            'Total Gross'  => 'KES ' . number_format($totalGross, 2),
-            'Total Deductions' => 'KES ' . number_format($totalDed, 2),
-            'Total Net Pay'=> 'KES ' . number_format($totalNet, 2),
+            ['label' => 'Period',           'value' => $period],
+            ['label' => 'Employees',        'value' => (string) count($rows)],
+            ['label' => 'Total Gross',      'value' => 'KES ' . number_format($totalGross, 2)],
+            ['label' => 'Total Deductions', 'value' => 'KES ' . number_format($totalDed, 2)],
+            ['label' => 'Total Net Pay',    'value' => 'KES ' . number_format($totalNet, 2)],
         ];
         generateModuleReportPDF(
             'Payroll Run — ' . $period,
@@ -222,7 +308,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $cols,
             $pdfRows,
             'payroll-run-' . $period . '.pdf',
-            '#2c3e50'
+            [44, 62, 80]  // RGB equivalent of #2c3e50
         );
         exit;
     }
