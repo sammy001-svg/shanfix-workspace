@@ -887,8 +887,8 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
         <a href="#features">Features</a>
         <a href="#modules">Modules</a>
         <a href="#how">How it Works</a>
-        <a href="#pricing">Pricing</a>
-        <a href="#contact">Contact</a>
+        <a href="pricing.php">Pricing</a>
+        <a href="contact.php">Contact</a>
       </div>
       <!-- CTAs -->
       <div class="d-flex align-items-center gap-2">
@@ -905,8 +905,8 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
         <a href="#features"><i class="fas fa-bolt me-2"></i>Features</a>
         <a href="#modules"><i class="fas fa-th me-2"></i>Modules</a>
         <a href="#how"><i class="fas fa-route me-2"></i>How it Works</a>
-        <a href="#pricing"><i class="fas fa-tags me-2"></i>Pricing</a>
-        <a href="#contact"><i class="fas fa-envelope me-2"></i>Contact</a>
+        <a href="pricing.php"><i class="fas fa-tags me-2"></i>Pricing</a>
+        <a href="contact.php"><i class="fas fa-envelope me-2"></i>Contact</a>
         <hr class="mob-divider">
         <a href="<?= APP_URL ?>/auth/login.php"><i class="fas fa-sign-in-alt me-2"></i>Login</a>
         <a href="<?= APP_URL ?>/auth/register.php" style="background:var(--od-green);color:white;text-align:center;font-weight:700">Start Free Trial</a>
