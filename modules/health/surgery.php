@@ -78,6 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $theatreId     = (int)($_POST['theatre_id']  ?? 0) ?: null;
         $surgeonId     = (int)($_POST['surgeon_id']  ?? 0) ?: null;
         $anaestId      = (int)($_POST['anaesthetist_id'] ?? 0) ?: null;
+        $anaestNurseId = (int)($_POST['anesthesia_nurse_id'] ?? 0) ?: null;
         $procedure     = sanitize($_POST['procedure_name'] ?? '');
         $procType      = in_array($_POST['procedure_type'] ?? '', ['elective','emergency','urgent']) ? $_POST['procedure_type'] : 'elective';
         $priority      = in_array($_POST['priority'] ?? '', ['routine','urgent','emergency']) ? $_POST['priority'] : 'routine';
@@ -92,8 +93,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($id > 0) {
-            $pdo->prepare("UPDATE health_surgeries SET patient_id=?,admission_id=?,theatre_id=?,surgeon_id=?,anaesthetist_id=?,procedure_name=?,procedure_type=?,priority=?,scheduled_at=?,estimated_duration_min=?,anaesthesia_type=?,pre_op_notes=? WHERE id=? AND org_id=?")
-                ->execute([$patientId,$admissionId,$theatreId,$surgeonId,$anaestId,$procedure,$procType,$priority,$scheduledAt,$estMin,$anaesthType,$preOpNotes,$id,$orgId]);
+            $pdo->prepare("UPDATE health_surgeries SET patient_id=?,admission_id=?,theatre_id=?,surgeon_id=?,anaesthetist_id=?,anesthesia_nurse_id=?,procedure_name=?,procedure_type=?,priority=?,scheduled_at=?,estimated_duration_min=?,anaesthesia_type=?,pre_op_notes=? WHERE id=? AND org_id=?")
+                ->execute([$patientId,$admissionId,$theatreId,$surgeonId,$anaestId,$anaestNurseId,$procedure,$procType,$priority,$scheduledAt,$estMin,$anaesthType,$preOpNotes,$id,$orgId]);
             setFlash('success', 'Surgery record updated.');
         } else {
             $yr     = date('Y');
@@ -101,8 +102,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $seqSt->execute([$orgId, $yr]);
             $surgNo = 'SURG-' . $yr . '-' . str_pad((int)$seqSt->fetchColumn(), 4, '0', STR_PAD_LEFT);
 
-            $pdo->prepare("INSERT INTO health_surgeries (org_id,surgery_no,patient_id,admission_id,theatre_id,surgeon_id,anaesthetist_id,procedure_name,procedure_type,priority,scheduled_at,estimated_duration_min,anaesthesia_type,pre_op_notes,status,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'scheduled',?)")
-                ->execute([$orgId,$surgNo,$patientId,$admissionId,$theatreId,$surgeonId,$anaestId,$procedure,$procType,$priority,$scheduledAt,$estMin,$anaesthType,$preOpNotes,$uid]);
+            $pdo->prepare("INSERT INTO health_surgeries (org_id,surgery_no,patient_id,admission_id,theatre_id,surgeon_id,anaesthetist_id,anesthesia_nurse_id,procedure_name,procedure_type,priority,scheduled_at,estimated_duration_min,anaesthesia_type,pre_op_notes,status,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'scheduled',?)")
+                ->execute([$orgId,$surgNo,$patientId,$admissionId,$theatreId,$surgeonId,$anaestId,$anaestNurseId,$procedure,$procType,$priority,$scheduledAt,$estMin,$anaesthType,$preOpNotes,$uid]);
             setFlash('success', "Surgery scheduled — Ref: {$surgNo}");
         }
         logActivity($id > 0 ? 'update' : 'create', 'health', 'Surgery ' . ($id > 0 ? "updated #$id" : "scheduled: $procedure"));
@@ -203,6 +204,7 @@ try {
         `theatre_id`             INT UNSIGNED DEFAULT NULL,
         `surgeon_id`             INT UNSIGNED DEFAULT NULL,
         `anaesthetist_id`        INT UNSIGNED DEFAULT NULL,
+        `anesthesia_nurse_id`    INT UNSIGNED DEFAULT NULL,
         `procedure_name`         VARCHAR(200) NOT NULL,
         `procedure_type`         ENUM('elective','emergency','urgent') NOT NULL DEFAULT 'elective',
         `priority`               ENUM('routine','urgent','emergency') NOT NULL DEFAULT 'routine',
@@ -227,7 +229,12 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 } catch (Throwable $e) {}
 
-$activeTab = ($_GET['tab'] ?? '') === 'theatres' ? 'theatres' : 'schedule';
+// Ensure anesthesia_nurse_id column exists (idempotent)
+try {
+    $pdo->exec("ALTER TABLE health_surgeries ADD COLUMN anesthesia_nurse_id INT UNSIGNED DEFAULT NULL");
+} catch (Throwable $e) {}
+
+$activeTab = in_array($_GET['tab'] ?? '', ['theatres','team']) ? $_GET['tab'] : 'schedule';
 $today     = date('Y-m-d');
 
 // ── Stats ─────────────────────────────────────────────────────────
@@ -259,13 +266,15 @@ try {
             t.name AS theatre_name, t.theatre_type,
             CONCAT(d1.first_name,' ',d1.last_name) AS surgeon_name, d1.specialization AS surgeon_spec,
             CONCAT(d2.first_name,' ',d2.last_name) AS anaest_name,
+            CONCAT(sn.first_name,' ',sn.last_name) AS anaest_nurse_name,
             a.admission_no
         FROM health_surgeries s
-        JOIN  health_patients  p  ON s.patient_id       = p.id
-        LEFT JOIN health_theatres  t  ON s.theatre_id       = t.id
-        LEFT JOIN health_doctors   d1 ON s.surgeon_id       = d1.id
-        LEFT JOIN health_doctors   d2 ON s.anaesthetist_id  = d2.id
-        LEFT JOIN health_admissions a ON s.admission_id     = a.id
+        JOIN  health_patients  p  ON s.patient_id          = p.id
+        LEFT JOIN health_theatres  t  ON s.theatre_id          = t.id
+        LEFT JOIN health_doctors   d1 ON s.surgeon_id          = d1.id
+        LEFT JOIN health_doctors   d2 ON s.anaesthetist_id     = d2.id
+        LEFT JOIN health_staff     sn ON s.anesthesia_nurse_id = sn.id
+        LEFT JOIN health_admissions a ON s.admission_id        = a.id
         WHERE s.org_id=?
         ORDER BY s.scheduled_at DESC
         LIMIT 200
@@ -309,6 +318,14 @@ try {
     $aq = $pdo->prepare("SELECT a.id, a.admission_no, CONCAT(p.first_name,' ',p.last_name) AS patient_name FROM health_admissions a JOIN health_patients p ON a.patient_id=p.id WHERE a.org_id=? AND a.status='admitted' ORDER BY a.admitted_at DESC");
     $aq->execute([$orgId]);
     $admittedPts = $aq->fetchAll();
+} catch (Throwable $e) {}
+
+// Anesthesia nurses for team panel and form
+$anaestNurses = [];
+try {
+    $nq = $pdo->prepare("SELECT id, first_name, last_name, qualification FROM health_staff WHERE org_id=? AND role='anesthesia_nurse' AND status='active' ORDER BY first_name");
+    $nq->execute([$orgId]);
+    $anaestNurses = $nq->fetchAll();
 } catch (Throwable $e) {}
 ?>
 
@@ -393,6 +410,11 @@ try {
       <span class="badge bg-secondary ms-1"><?= count($theatres) ?></span>
     </a>
   </li>
+  <li class="nav-item">
+    <a class="nav-link <?= $activeTab === 'team' ? 'active' : '' ?>" href="?tab=team">
+      <i class="fas fa-user-md me-1"></i>Surgical Team
+    </a>
+  </li>
 </ul>
 
 <?php if ($activeTab === 'schedule'): ?>
@@ -468,9 +490,12 @@ try {
             <td>
               <?php if ($s['surgeon_name'] && trim($s['surgeon_name']) !== ' '): ?>
               <div class="small fw-semibold"><?= e($s['surgeon_name']) ?></div>
-              <small class="text-muted"><?= e($s['surgeon_spec'] ?? '') ?></small>
+              <?php if ($s['surgeon_spec']): ?><small class="text-muted"><?= e($s['surgeon_spec']) ?></small><?php endif; ?>
               <?php else: ?>
               <span class="text-muted small">— TBA</span>
+              <?php endif; ?>
+              <?php if (!empty($s['anaest_nurse_name']) && trim($s['anaest_nurse_name']) !== ' '): ?>
+              <div class="small text-muted mt-1"><i class="fas fa-syringe me-1" style="color:#6c3483"></i><?= e($s['anaest_nurse_name']) ?></div>
               <?php endif; ?>
             </td>
             <td>
@@ -565,6 +590,75 @@ try {
 </div>
 <?php endif; ?>
 
+<?php if ($activeTab === 'team'): ?>
+<!-- ── Surgical Team Tab ──────────────────────────────────────── -->
+<div class="row g-4">
+
+  <!-- Surgeons Panel -->
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm border-0">
+      <div class="card-header" style="background:#2c3e50;color:#fff">
+        <i class="fas fa-user-md me-2"></i><strong>Surgeons</strong>
+        <span class="badge bg-light text-dark ms-2"><?= count($doctors) ?></span>
+      </div>
+      <div class="card-body p-0">
+        <?php if (empty($doctors)): ?>
+          <p class="text-center text-muted py-4">No doctors added yet. Go to <a href="doctors.php">Doctors</a> to add surgeons.</p>
+        <?php else: ?>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr><th>Name</th><th>Specialization</th></tr>
+            </thead>
+            <tbody>
+            <?php foreach ($doctors as $d): ?>
+              <tr>
+                <td class="fw-semibold"><?= e($d['first_name'].' '.$d['last_name']) ?></td>
+                <td><small class="text-muted"><?= e($d['specialization'] ?: '—') ?></small></td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+        <?php endif; ?>
+      </div>
+    </div>
+  </div>
+
+  <!-- Anesthesia Nurses Panel -->
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm border-0">
+      <div class="card-header" style="background:#6c3483;color:#fff">
+        <i class="fas fa-syringe me-2"></i><strong>Anesthesia Nurses (CRNAs)</strong>
+        <span class="badge bg-light text-dark ms-2"><?= count($anaestNurses) ?></span>
+      </div>
+      <div class="card-body p-0">
+        <?php if (empty($anaestNurses)): ?>
+          <p class="text-center text-muted py-4">No anesthesia nurses on record. Go to <a href="staff.php">Clinical Staff</a> and add staff with the <strong>Anesthesia Nurse</strong> role.</p>
+        <?php else: ?>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr><th>Name</th><th>Qualification</th></tr>
+            </thead>
+            <tbody>
+            <?php foreach ($anaestNurses as $n): ?>
+              <tr>
+                <td class="fw-semibold"><?= e($n['first_name'].' '.$n['last_name']) ?></td>
+                <td><small class="text-muted"><?= e($n['qualification'] ?? '—') ?></small></td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+        <?php endif; ?>
+      </div>
+    </div>
+  </div>
+
+</div>
+<?php endif; ?>
+
 
 <!-- ── Schedule Surgery Modal ──────────────────────────────────── -->
 <div class="modal fade" id="surgeryModal" tabindex="-1" data-bs-backdrop="static">
@@ -649,13 +743,25 @@ try {
             </select>
           </div>
           <div class="col-md-6">
-            <label class="form-label fw-semibold">Anaesthetist</label>
+            <label class="form-label fw-semibold">Anaesthetist (Doctor)</label>
             <select name="anaesthetist_id" id="surgAnaest" class="form-select">
               <option value="">— select anaesthetist —</option>
               <?php foreach ($doctors as $d): ?>
               <option value="<?= $d['id'] ?>"><?= e($d['first_name'].' '.$d['last_name']) ?><?= $d['specialization'] ? ' ('.e($d['specialization']).')' : '' ?></option>
               <?php endforeach; ?>
             </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Anesthesia Nurse (CRNA)</label>
+            <select name="anesthesia_nurse_id" id="surgAnaestNurse" class="form-select">
+              <option value="">— select anesthesia nurse —</option>
+              <?php foreach ($anaestNurses as $n): ?>
+              <option value="<?= $n['id'] ?>"><?= e($n['first_name'].' '.$n['last_name']) ?><?= !empty($n['qualification']) ? ' ('.e($n['qualification']).')' : '' ?></option>
+              <?php endforeach; ?>
+            </select>
+            <?php if (empty($anaestNurses)): ?>
+            <div class="form-text text-warning"><i class="fas fa-exclamation-triangle me-1"></i>No anesthesia nurses in Clinical Staff. <a href="staff.php">Add one</a>.</div>
+            <?php endif; ?>
           </div>
           <div class="col-md-6">
             <label class="form-label fw-semibold">Scheduled Date &amp; Time <span class="text-danger">*</span></label>
@@ -833,9 +939,10 @@ function openAddSurgery() {
   document.getElementById('surgAnaesthType').value= 'general';
   document.getElementById('surgTheatre').value    = '';
   document.getElementById('surgDuration').value   = '60';
-  document.getElementById('surgSurgeon').value    = '';
-  document.getElementById('surgAnaest').value     = '';
-  document.getElementById('surgPreOp').value      = '';
+  document.getElementById('surgSurgeon').value      = '';
+  document.getElementById('surgAnaest').value       = '';
+  document.getElementById('surgAnaestNurse').value  = '';
+  document.getElementById('surgPreOp').value        = '';
   const now = new Date();
   now.setMinutes(0,0,0);
   now.setDate(now.getDate() + 1);
@@ -856,8 +963,9 @@ function openEditSurgery(id) {
       document.getElementById('surgAnaesthType').value    = s.anaesthesia_type||'general';
       document.getElementById('surgTheatre').value        = s.theatre_id    || '';
       document.getElementById('surgDuration').value       = s.estimated_duration_min||60;
-      document.getElementById('surgSurgeon').value        = s.surgeon_id    || '';
-      document.getElementById('surgAnaest').value         = s.anaesthetist_id||'';
+      document.getElementById('surgSurgeon').value        = s.surgeon_id          || '';
+      document.getElementById('surgAnaest').value         = s.anaesthetist_id     || '';
+      document.getElementById('surgAnaestNurse').value    = s.anesthesia_nurse_id || '';
       document.getElementById('surgScheduledAt').value    = s.scheduled_at  ? s.scheduled_at.replace(' ','T').substring(0,16) : '';
       document.getElementById('surgPreOp').value          = s.pre_op_notes  || '';
       new bootstrap.Modal(document.getElementById('surgeryModal')).show();

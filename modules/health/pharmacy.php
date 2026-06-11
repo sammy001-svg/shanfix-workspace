@@ -83,6 +83,23 @@ if (isset($_GET['med_price'])) {
     exit;
 }
 
+// ── AJAX: check bill approval for patient ─────────────────────────
+if (isset($_GET['check_approval'])) {
+    session_start();
+    require_once __DIR__ . '/../../config/database.php';
+    require_once __DIR__ . '/../../includes/functions.php';
+    requireLogin();
+    $orgId = (int)currentUser()['org_id'];
+    $pid   = (int)$_GET['check_approval'];
+    header('Content-Type: application/json');
+    try {
+        $st = $pdo->prepare("SELECT COUNT(*) FROM health_bills WHERE patient_id=? AND org_id=? AND status IN ('approved','paid')");
+        $st->execute([$pid, $orgId]);
+        echo json_encode(['approved' => (int)$st->fetchColumn() > 0]);
+    } catch (Exception $e) { echo json_encode(['approved' => false]); }
+    exit;
+}
+
 // ── POST handlers ─────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once __DIR__ . '/../../config/database.php';
@@ -168,6 +185,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             setFlash('error', "Insufficient stock. Available: {$stock} units.");
             redirect('pharmacy.php?tab=dispense');
         }
+
+        // Require approved or paid bill before dispensing
+        try {
+            $billChk = $pdo->prepare("SELECT COUNT(*) FROM health_bills WHERE patient_id=? AND org_id=? AND status IN ('approved','paid')");
+            $billChk->execute([$patientId, $orgId]);
+            if ((int)$billChk->fetchColumn() === 0) {
+                setFlash('error', 'Cannot dispense: this patient has no approved bill. Please ask billing staff to approve the bill first.');
+                redirect('pharmacy.php?tab=dispense');
+            }
+        } catch (Exception $e) {}
 
         $total = $qty * $unitPrice;
 
@@ -469,12 +496,13 @@ require_once __DIR__ . '/../../includes/header-module.php';
             <input type="hidden" name="action" value="dispense">
             <div class="mb-3">
               <label class="form-label fw-semibold">Patient <span class="text-danger">*</span></label>
-              <select name="patient_id" class="form-select select2" required>
+              <select name="patient_id" id="dispensePatient" class="form-select select2" required onchange="checkBillApproval(this.value)">
                 <option value="">Select Patient</option>
                 <?php foreach ($patients as $p): ?>
                   <option value="<?= $p['id'] ?>"><?= htmlspecialchars($p['name']) ?> (<?= htmlspecialchars($p['patient_no']) ?>)</option>
                 <?php endforeach; ?>
               </select>
+              <div id="billApprovalStatus" class="mt-1"></div>
             </div>
             <div class="mb-3">
               <label class="form-label fw-semibold">Medicine <span class="text-danger">*</span></label>
@@ -811,6 +839,22 @@ function calcTotal() {
     const qty   = parseFloat(document.getElementById('qtyInput').value)   || 0;
     const price = parseFloat(document.getElementById('priceInput').value)  || 0;
     document.getElementById('totalDisplay').textContent = 'KES ' + (qty * price).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+function checkBillApproval(pid) {
+    const el = document.getElementById('billApprovalStatus');
+    if (!pid) { el.innerHTML = ''; return; }
+    el.innerHTML = '<small class="text-muted"><i class="fas fa-spinner fa-spin me-1"></i>Checking billing status…</small>';
+    fetch('pharmacy.php?check_approval=' + pid)
+        .then(r => r.json())
+        .then(d => {
+            if (d.approved) {
+                el.innerHTML = '<small class="text-success"><i class="fas fa-check-circle me-1"></i>Bill approved — dispensing is allowed.</small>';
+            } else {
+                el.innerHTML = '<small class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i><strong>No approved bill found.</strong> Please ask billing staff to approve the bill before dispensing.</small>';
+            }
+        })
+        .catch(() => { el.innerHTML = ''; });
 }
 
 // ── DataTables ────────────────────────────────────────────────────

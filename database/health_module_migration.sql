@@ -1,24 +1,57 @@
 -- ── Health Module Migration ───────────────────────────────────────────────────
--- Compatible with MySQL 5.7+ / MariaDB / cPanel.
--- HOW TO RUN:
+-- Compatible with MySQL 5.7+ / MariaDB / cPanel shared hosting.
+-- HOW TO IMPORT (one-shot, safe to run multiple times):
 --   1. Select your database in the phpMyAdmin left sidebar.
---   2. Open the SQL tab.
---   3. Copy and paste ONE statement at a time (or one section at a time), click Go.
---   4. If you get "#1060 - Duplicate column name" or "Table already exists", skip it.
---   5. Do NOT add USE <dbname>; — select your database from the left sidebar first.
+--   2. Click Import → choose this file → click Go.
+--   OR open the SQL tab, paste the entire file, click Go.
+--   All statements are idempotent — duplicate column / table errors will NOT occur.
+--   Do NOT add USE <dbname>; — select the database from the sidebar first.
 -- ─────────────────────────────────────────────────────────────────────────────
+
+
+-- ════════════════════════════════════════════════════════════════
+-- HELPER: safe ADD COLUMN (skips if column already exists)
+-- MySQL 5.7 does not support ALTER TABLE ... ADD COLUMN IF NOT EXISTS,
+-- so we use a short-lived stored procedure instead.
+-- ════════════════════════════════════════════════════════════════
+DROP PROCEDURE IF EXISTS _hms_add_col;
+
+DELIMITER $$
+CREATE PROCEDURE _hms_add_col(IN p_table VARCHAR(128),
+                               IN p_col   VARCHAR(128),
+                               IN p_def   TEXT)
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM   information_schema.COLUMNS
+        WHERE  TABLE_SCHEMA = DATABASE()
+          AND  TABLE_NAME   = p_table
+          AND  COLUMN_NAME  = p_col
+    ) THEN
+        SET @_s = CONCAT('ALTER TABLE `', p_table, '` ADD COLUMN `', p_col, '` ', p_def);
+        PREPARE _st FROM @_s;
+        EXECUTE _st;
+        DEALLOCATE PREPARE _st;
+    END IF;
+END $$
+DELIMITER ;
 
 
 -- ════════════════════════════════════════════════════════════════
 -- SECTION 1: health_patients — add loyalty_points column
 -- ════════════════════════════════════════════════════════════════
-ALTER TABLE health_patients ADD COLUMN loyalty_points INT NOT NULL DEFAULT 0;
+CALL _hms_add_col('health_patients', 'loyalty_points', 'INT NOT NULL DEFAULT 0');
 
 
 -- ════════════════════════════════════════════════════════════════
 -- SECTION 2: health_staff — expand role ENUM to include new roles
+-- (MODIFY COLUMN is idempotent — safe to run repeatedly)
 -- ════════════════════════════════════════════════════════════════
-ALTER TABLE health_staff MODIFY COLUMN role ENUM('lab_technician','pharmacist','receptionist','cashier','radiologist','admin','nurse','triage_nurse','anesthesia_nurse','other') NOT NULL DEFAULT 'other';
+ALTER TABLE health_staff
+    MODIFY COLUMN role ENUM(
+        'lab_technician','pharmacist','receptionist','cashier',
+        'radiologist','admin','nurse','triage_nurse','anesthesia_nurse','other'
+    ) NOT NULL DEFAULT 'other';
 
 
 -- ════════════════════════════════════════════════════════════════
@@ -219,3 +252,25 @@ CREATE TABLE IF NOT EXISTS health_lab_orders (
     INDEX idx_hlo_pat  (patient_id),
     INDEX idx_hlo_stat (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- ════════════════════════════════════════════════════════════════
+-- SECTION 12: health_bills — add 'approved' status (billing workflow)
+-- (MODIFY COLUMN is idempotent — safe to run repeatedly)
+-- ════════════════════════════════════════════════════════════════
+ALTER TABLE health_bills
+    MODIFY COLUMN status ENUM(
+        'draft','sent','approved','partial','paid','cancelled'
+    ) NOT NULL DEFAULT 'draft';
+
+
+-- ════════════════════════════════════════════════════════════════
+-- SECTION 13: health_surgeries — add anesthesia_nurse_id column
+-- ════════════════════════════════════════════════════════════════
+CALL _hms_add_col('health_surgeries', 'anesthesia_nurse_id', 'INT UNSIGNED DEFAULT NULL');
+
+
+-- ════════════════════════════════════════════════════════════════
+-- CLEANUP: remove the helper procedure
+-- ════════════════════════════════════════════════════════════════
+DROP PROCEDURE IF EXISTS _hms_add_col;

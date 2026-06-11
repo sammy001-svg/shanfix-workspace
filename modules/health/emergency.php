@@ -77,6 +77,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $pdo->prepare("INSERT INTO health_triage (org_id,triage_no,patient_id,patient_name,patient_phone,age,gender,triage_level,chief_complaint,bp_systolic,bp_diastolic,pulse,temperature,spo2,gcs,status,triaged_by,doctor_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'waiting',?,?)")
             ->execute([$orgId,$trNo,$patientId,$patName,$patPhone,$age,$gender,$level,$complaint,$bpSys,$bpDia,$pulse,$temp,$spo2,$gcs,$uid,$doctorId]);
+
+        // Mirror vitals to health_vitals for trend tracking (known patients only)
+        if ($patientId && ($bpSys || $bpDia || $pulse || $temp || $spo2)) {
+            try {
+                $pdo->prepare("INSERT INTO health_vitals (org_id,patient_id,bp_systolic,bp_diastolic,pulse,temperature,spo2,notes,recorded_at,recorded_by) VALUES (?,?,?,?,?,?,?,?,NOW(),?)")
+                    ->execute([$orgId,$patientId,$bpSys,$bpDia,$pulse,$temp,$spo2,'[Triage: '.$trNo.']',$uid]);
+            } catch (Throwable $e) {}
+        }
+
         setFlash('success', "Triage registered: {$trNo}");
         redirect('emergency.php');
     }

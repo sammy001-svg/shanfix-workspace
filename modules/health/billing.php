@@ -120,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $insurancePr = sanitize($_POST['insurance_provider'] ?? '');
         $insuranceNo = sanitize($_POST['insurance_no']   ?? '');
         $notes       = sanitize($_POST['notes']          ?? '');
-        $status      = in_array($_POST['status'] ?? '', ['draft','sent','partial','paid','cancelled']) ? $_POST['status'] : 'draft';
+        $status      = in_array($_POST['status'] ?? '', ['draft','sent','approved','partial','paid','cancelled']) ? $_POST['status'] : 'draft';
 
         // Items
         $descriptions = $_POST['item_description'] ?? [];
@@ -172,7 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'update_bill') {
         $id         = (int)($_POST['id']             ?? 0);
         $paidAmount = (float)($_POST['paid_amount']  ?? 0);
-        $status     = in_array($_POST['status'] ?? '', ['draft','sent','partial','paid','cancelled']) ? $_POST['status'] : 'draft';
+        $status     = in_array($_POST['status'] ?? '', ['draft','sent','approved','partial','paid','cancelled']) ? $_POST['status'] : 'draft';
         $payMethod  = sanitize($_POST['payment_method'] ?? '');
         $notes      = sanitize($_POST['notes']       ?? '');
         $paidAt     = ($status === 'paid') ? 'NOW()' : 'NULL';
@@ -180,6 +180,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare("UPDATE health_bills SET paid_amount=?,status=?,payment_method=?,notes=?,paid_at=IF(status='paid',COALESCE(paid_at,NOW()),NULL) WHERE id=? AND org_id=?")
             ->execute([$paidAmount,$status,$payMethod,$notes,$id,$orgId]);
         setFlash('success', 'Bill updated.');
+        redirect('billing.php');
+    }
+
+    // ── Approve bill ──────────────────────────────────────────────
+    if ($action === 'approve_bill') {
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id) {
+            $pdo->prepare("UPDATE health_bills SET status='approved' WHERE id=? AND org_id=? AND status IN ('draft','sent')")
+                ->execute([$id, $orgId]);
+            setFlash('success', 'Bill approved — pharmacy can now dispense for this patient.');
+        }
         redirect('billing.php');
     }
 
@@ -265,7 +276,7 @@ $todayRevSt = $pdo->prepare("SELECT COALESCE(SUM(paid_amount),0) FROM health_bil
 $todayRevSt->execute([$orgId]);
 $todayRev = (float)$todayRevSt->fetchColumn();
 
-$outstandSt = $pdo->prepare("SELECT COALESCE(SUM(total - paid_amount),0) FROM health_bills WHERE org_id=? AND status IN ('sent','partial','draft')");
+$outstandSt = $pdo->prepare("SELECT COALESCE(SUM(total - paid_amount),0) FROM health_bills WHERE org_id=? AND status IN ('draft','sent','approved','partial')");
 $outstandSt->execute([$orgId]);
 $outstanding = (float)$outstandSt->fetchColumn();
 
@@ -273,7 +284,7 @@ $totalBillsSt = $pdo->prepare("SELECT COUNT(*) FROM health_bills WHERE org_id=? 
 $totalBillsSt->execute([$orgId]);
 $todayBills = (int)$totalBillsSt->fetchColumn();
 
-$unpaidSt = $pdo->prepare("SELECT COUNT(*) FROM health_bills WHERE org_id=? AND status IN ('sent','partial')");
+$unpaidSt = $pdo->prepare("SELECT COUNT(*) FROM health_bills WHERE org_id=? AND status IN ('sent','approved','partial')");
 $unpaidSt->execute([$orgId]);
 $unpaidCount = (int)$unpaidSt->fetchColumn();
 
@@ -357,6 +368,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
             <option value="">All Status</option>
             <option value="draft"     <?= $filterStatus==='draft'    ?'selected':'' ?>>Draft</option>
             <option value="sent"      <?= $filterStatus==='sent'     ?'selected':'' ?>>Sent</option>
+            <option value="approved"  <?= $filterStatus==='approved' ?'selected':'' ?>>Approved</option>
             <option value="partial"   <?= $filterStatus==='partial'  ?'selected':'' ?>>Partial</option>
             <option value="paid"      <?= $filterStatus==='paid'     ?'selected':'' ?>>Paid</option>
             <option value="cancelled" <?= $filterStatus==='cancelled'?'selected':'' ?>>Cancelled</option>
@@ -391,6 +403,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
             $balance = $b['total'] - $b['paid_amount'];
             $stBadge = match($b['status']) {
                 'paid'      => 'success',
+                'approved'  => 'primary',
                 'partial'   => 'info',
                 'sent'      => 'warning text-dark',
                 'draft'     => 'secondary',
@@ -412,6 +425,12 @@ require_once __DIR__ . '/../../includes/header-module.php';
               <td><small><?= date('d M Y', strtotime($b['created_at'])) ?></small></td>
               <td>
                 <div class="btn-group btn-group-sm">
+                  <?php if (in_array($b['status'], ['draft','sent'])): ?>
+                  <form method="POST" class="d-inline" onsubmit="return confirm('Approve this bill? Pharmacy will be able to dispense medicines for this patient.')">
+                    <?= csrfField() ?><input type="hidden" name="action" value="approve_bill"><input type="hidden" name="id" value="<?= $b['id'] ?>">
+                    <button type="submit" class="btn btn-outline-success btn-sm" title="Approve for Pharmacy"><i class="fas fa-check-circle"></i></button>
+                  </form>
+                  <?php endif; ?>
                   <button class="btn btn-outline-primary btn-sm" onclick="openPayModal(<?= $b['id'] ?>)" title="Update Payment"><i class="fas fa-money-bill-wave"></i></button>
                   <button class="btn btn-outline-secondary btn-sm" onclick="printBill(<?= $b['id'] ?>)" title="Print"><i class="fas fa-print"></i></button>
                 </div>
@@ -580,6 +599,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
               <select name="status" class="form-select">
                 <option value="draft">Draft</option>
                 <option value="sent">Sent</option>
+                <option value="approved">Approved (pharmacy can dispense)</option>
                 <option value="paid">Paid</option>
               </select>
             </div>
@@ -787,7 +807,7 @@ function openPayModal(id) {
                 <div class="col-12 col-md-6">
                   <label class="form-label fw-semibold">Status</label>
                   <select name="status" class="form-select">
-                    ${['draft','sent','partial','paid','cancelled'].map(s=>`<option value="${s}" ${b.status===s?'selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('')}
+                    ${['draft','sent','approved','partial','paid','cancelled'].map(s=>`<option value="${s}" ${b.status===s?'selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('')}
                   </select>
                 </div>
                 <div class="col-12">
