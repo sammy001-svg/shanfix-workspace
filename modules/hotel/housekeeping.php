@@ -14,6 +14,7 @@ $moduleNav   = [
     ['url' => 'housekeeping.php', 'icon' => 'fas fa-broom',          'label' => 'Housekeeping'],
     ['url' => 'restaurant.php',   'icon' => 'fas fa-utensils',       'label' => 'Restaurant'],
     ['url' => 'invoices.php',     'icon' => 'fas fa-file-invoice',   'label' => 'Invoices'],
+    ['url' => 'calendar.php',     'icon' => 'fas fa-calendar-alt',   'label' => 'Availability'],
     ['url' => 'reports.php',      'icon' => 'fas fa-chart-bar',      'label' => 'Reports'],
 ];
 
@@ -59,7 +60,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare("UPDATE hotel_housekeeping SET status='done', completed_at=NOW(), updated_at=NOW() WHERE id=? AND org_id=?")
             ->execute([$id, $orgId]);
         setFlash('success', 'Task marked as done.');
-        redirect('housekeeping.php');
+        redirect('housekeeping.php?view=' . sanitize($_POST['view'] ?? 'board') . '&date=' . sanitize($_POST['date'] ?? ''));
+    }
+
+    if ($action === 'set_status') {
+        $id  = (int)($_POST['id'] ?? 0);
+        $st  = in_array($_POST['status'] ?? '', ['pending','in_progress','done','skipped']) ? $_POST['status'] : '';
+        if ($id && $st) {
+            $completedClause = $st === 'done' ? ', completed_at=NOW()' : '';
+            $pdo->prepare("UPDATE hotel_housekeeping SET status=?, updated_at=NOW(){$completedClause} WHERE id=? AND org_id=?")
+                ->execute([$st, $id, $orgId]);
+        }
+        redirect('housekeeping.php?view=' . sanitize($_POST['view'] ?? 'board') . '&date=' . sanitize($_POST['date'] ?? ''));
     }
 
     if ($action === 'generate_daily') {
@@ -91,6 +103,7 @@ $orgId = (int)$user['org_id'];
 
 $fDate   = $_GET['date']   ?? date('Y-m-d');
 $fStatus = $_GET['status'] ?? '';
+$view    = in_array($_GET['view'] ?? '', ['board', 'list']) ? $_GET['view'] : 'board';
 
 $where  = 'h.org_id = ?';
 $params = [$orgId];
@@ -128,13 +141,22 @@ $taskTypes = ['daily_clean'=>'Daily Clean','deep_clean'=>'Deep Clean','turndown'
     <h4 class="mb-1"><i class="fas fa-broom me-2" style="color:<?= $moduleColor ?>"></i>Housekeeping</h4>
     <p class="text-muted mb-0">Assign and track room cleaning tasks, inspections and turndown service</p>
   </div>
-  <div class="d-flex gap-2">
+  <div class="d-flex gap-2 align-items-center">
+    <!-- View toggle -->
+    <div class="btn-group btn-group-sm" role="group">
+      <a href="?view=board&date=<?= urlencode($fDate) ?>" class="btn <?= $view==='board' ? 'btn-secondary' : 'btn-outline-secondary' ?>">
+        <i class="fas fa-columns me-1"></i>Board
+      </a>
+      <a href="?view=list&date=<?= urlencode($fDate) ?>" class="btn <?= $view==='list' ? 'btn-secondary' : 'btn-outline-secondary' ?>">
+        <i class="fas fa-list me-1"></i>List
+      </a>
+    </div>
     <form method="POST" class="d-inline">
       <?= csrfField() ?><input type="hidden" name="action" value="generate_daily">
       <input type="hidden" name="gen_date" value="<?= $fDate ?>">
-      <button class="btn btn-outline-warning"><i class="fas fa-magic me-1"></i>Auto-Generate</button>
+      <button class="btn btn-outline-warning btn-sm"><i class="fas fa-magic me-1"></i>Auto-Generate</button>
     </form>
-    <button class="btn text-white" style="background:<?= $moduleColor ?>" data-bs-toggle="modal" data-bs-target="#hkModal" onclick="openAdd()">
+    <button class="btn text-white btn-sm" style="background:<?= $moduleColor ?>" data-bs-toggle="modal" data-bs-target="#hkModal" onclick="openAdd()">
       <i class="fas fa-plus me-1"></i>Add Task
     </button>
   </div>
@@ -173,6 +195,80 @@ $taskTypes = ['daily_clean'=>'Daily Clean','deep_clean'=>'Deep Clean','turndown'
   </form>
 </div></div>
 
+<?php if ($view === 'board'):
+  // Group tasks by status
+  $byStatus = ['pending' => [], 'in_progress' => [], 'done' => [], 'skipped' => []];
+  foreach ($tasks as $t) { $byStatus[$t['status']][] = $t; }
+  $columns = [
+    'pending'    => ['label' => 'Pending',     'icon' => 'fas fa-clock',    'color' => '#fd7e14', 'bg' => '#fff3e0'],
+    'in_progress'=> ['label' => 'In Progress', 'icon' => 'fas fa-spinner',  'color' => '#1565c0', 'bg' => '#e3f2fd'],
+    'done'       => ['label' => 'Done',         'icon' => 'fas fa-check',    'color' => '#2e7d32', 'bg' => '#e8f5e9'],
+    'skipped'    => ['label' => 'Skipped',      'icon' => 'fas fa-forward',  'color' => '#6c757d', 'bg' => '#f8f9fa'],
+  ];
+?>
+<div class="row g-3">
+  <?php foreach ($columns as $colStatus => $col): ?>
+  <div class="col-12 col-md-6 col-xl-3">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header py-2 fw-bold small" style="background:<?= $col['bg'] ?>;color:<?= $col['color'] ?>;border-bottom:3px solid <?= $col['color'] ?>">
+        <i class="<?= $col['icon'] ?> me-2"></i><?= $col['label'] ?>
+        <span class="badge ms-2" style="background:<?= $col['color'] ?>;color:#fff"><?= count($byStatus[$colStatus]) ?></span>
+      </div>
+      <div class="card-body p-2" style="max-height:520px;overflow-y:auto">
+        <?php if (empty($byStatus[$colStatus])): ?>
+        <div class="text-center text-muted py-4 small"><i class="fas fa-inbox fa-2x mb-2 d-block opacity-25"></i>No tasks</div>
+        <?php else: foreach ($byStatus[$colStatus] as $t): ?>
+        <div class="card border mb-2 shadow-sm" style="border-radius:10px">
+          <div class="card-body p-2">
+            <div class="d-flex justify-content-between align-items-start mb-1">
+              <span class="fw-bold" style="font-size:.95rem">Room <?= e($t['room_no']) ?></span>
+              <span class="badge bg-<?= $priorityColors[$t['priority']] ?? 'secondary' ?> ms-1" style="font-size:.68rem"><?= ucfirst($t['priority']) ?></span>
+            </div>
+            <div class="mb-1">
+              <span class="badge bg-light text-dark border" style="font-size:.7rem"><?= $taskTypes[$t['task_type']] ?? e($t['task_type']) ?></span>
+              <span class="text-muted small ms-1">Fl.<?= e($t['floor']) ?></span>
+            </div>
+            <?php if ($t['assigned_to']): ?>
+            <div class="small text-muted mb-1"><i class="fas fa-user me-1"></i><?= e($t['assigned_to']) ?></div>
+            <?php endif; ?>
+            <?php if ($t['completed_at']): ?>
+            <div class="small text-success mb-1"><i class="fas fa-check-circle me-1"></i><?= date('h:i A', strtotime($t['completed_at'])) ?></div>
+            <?php endif; ?>
+            <div class="d-flex gap-1 mt-2 flex-wrap">
+              <?php if ($colStatus === 'pending'): ?>
+              <form method="POST" class="d-inline">
+                <?= csrfField() ?>
+                <input type="hidden" name="action" value="set_status">
+                <input type="hidden" name="id" value="<?= $t['id'] ?>">
+                <input type="hidden" name="status" value="in_progress">
+                <input type="hidden" name="view" value="board">
+                <input type="hidden" name="date" value="<?= e($fDate) ?>">
+                <button type="submit" class="btn btn-xs btn-outline-primary" style="font-size:.7rem;padding:2px 7px"><i class="fas fa-play me-1"></i>Start</button>
+              </form>
+              <?php endif; ?>
+              <?php if ($colStatus === 'in_progress'): ?>
+              <form method="POST" class="d-inline">
+                <?= csrfField() ?>
+                <input type="hidden" name="action" value="mark_done">
+                <input type="hidden" name="id" value="<?= $t['id'] ?>">
+                <input type="hidden" name="view" value="board">
+                <input type="hidden" name="date" value="<?= e($fDate) ?>">
+                <button type="submit" class="btn btn-xs btn-outline-success" style="font-size:.7rem;padding:2px 7px"><i class="fas fa-check me-1"></i>Done</button>
+              </form>
+              <?php endif; ?>
+              <button class="btn btn-xs btn-outline-secondary" style="font-size:.7rem;padding:2px 7px"
+                      onclick='openEdit(<?= htmlspecialchars(json_encode($t), ENT_QUOTES) ?>)'><i class="fas fa-edit"></i></button>
+            </div>
+          </div>
+        </div>
+        <?php endforeach; endif; ?>
+      </div>
+    </div>
+  </div>
+  <?php endforeach; ?>
+</div>
+
+<?php else: ?>
 <div class="card border-0 shadow-sm"><div class="card-body p-0">
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0 data-table">
@@ -196,6 +292,7 @@ $taskTypes = ['daily_clean'=>'Daily Clean','deep_clean'=>'Deep Clean','turndown'
             <?php if ($t['status'] !== 'done'): ?>
             <form method="POST" class="d-inline">
               <?= csrfField() ?><input type="hidden" name="action" value="mark_done"><input type="hidden" name="id" value="<?= $t['id'] ?>">
+              <input type="hidden" name="view" value="list"><input type="hidden" name="date" value="<?= e($fDate) ?>">
               <button class="btn btn-sm btn-outline-success ms-1" title="Mark Done"><i class="fas fa-check"></i></button>
             </form>
             <?php endif; ?>
@@ -206,6 +303,7 @@ $taskTypes = ['daily_clean'=>'Daily Clean','deep_clean'=>'Deep Clean','turndown'
     </table>
   </div>
 </div></div>
+<?php endif; ?>
 
 <!-- Housekeeping Modal -->
 <div class="modal fade" id="hkModal" tabindex="-1" data-bs-backdrop="static">

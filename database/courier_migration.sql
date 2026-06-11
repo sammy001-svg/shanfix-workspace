@@ -112,6 +112,8 @@ CREATE TABLE IF NOT EXISTS courier_tracking_history (
     stage_name VARCHAR(100),
     location VARCHAR(200),
     notes TEXT,
+    lat DECIMAL(9,6) DEFAULT NULL,
+    lng DECIMAL(9,6) DEFAULT NULL,
     created_by INT DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

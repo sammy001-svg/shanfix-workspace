@@ -32,10 +32,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stageName = sanitize($_POST['stage_name'] ?? $stageCode);
         $location  = sanitize($_POST['location'] ?? '');
         $notes     = sanitize($_POST['notes'] ?? '');
+        $lat       = !empty($_POST['lat']) && is_numeric($_POST['lat']) ? round((float)$_POST['lat'], 6) : null;
+        $lng       = !empty($_POST['lng']) && is_numeric($_POST['lng']) ? round((float)$_POST['lng'], 6) : null;
 
         // Insert tracking history
-        $pdo->prepare("INSERT INTO courier_tracking_history (org_id, courier_id, stage_code, stage_name, location, notes, created_by)
-            VALUES (?,?,?,?,?,?,?)")->execute([$orgId, $courierId, $stageCode, $stageName, $location, $notes, $user['id']]);
+        $pdo->prepare("INSERT INTO courier_tracking_history (org_id, courier_id, stage_code, stage_name, location, notes, lat, lng, created_by)
+            VALUES (?,?,?,?,?,?,?,?,?)")->execute([$orgId, $courierId, $stageCode, $stageName, $location, $notes, $lat, $lng, $user['id']]);
 
         // Update courier status
         $pdo->prepare("UPDATE couriers SET status=? WHERE id=? AND org_id=?")->execute([$stageCode, $courierId, $orgId]);
@@ -63,6 +65,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 require_once __DIR__ . '/../../includes/header-module.php';
 $user  = currentUser();
 $orgId = (int)$user['org_id'];
+
+// Idempotent: add GPS coordinate columns to tracking history
+foreach ([['lat', 'DECIMAL(9,6) DEFAULT NULL'], ['lng', 'DECIMAL(9,6) DEFAULT NULL']] as [$col, $def]) {
+    try { $pdo->exec("ALTER TABLE courier_tracking_history ADD COLUMN {$col} {$def}"); } catch (Throwable $e) {}
+}
+
+$gpsPoints = [];
 
 // Load tracking stages for dropdown
 $stages = [];
@@ -110,6 +119,18 @@ if ($selectedCourierId > 0) {
             WHERE h.courier_id=? AND h.org_id=? ORDER BY h.created_at DESC");
         $stmt->execute([$selectedCourierId, $orgId]);
         $history = $stmt->fetchAll();
+        // Build GPS points oldest-first for polyline route
+        foreach (array_reverse($history) as $h) {
+            if (!empty($h['lat']) && !empty($h['lng'])) {
+                $gpsPoints[] = [
+                    'lat'  => (float)$h['lat'],
+                    'lng'  => (float)$h['lng'],
+                    'name' => htmlspecialchars($h['stage_name'] ?: $h['stage_code'], ENT_QUOTES),
+                    'loc'  => htmlspecialchars($h['location'] ?? '', ENT_QUOTES),
+                    'time' => date('d M Y H:i', strtotime($h['created_at'])),
+                ];
+            }
+        }
     } catch (Exception $e) {}
 }
 
@@ -197,6 +218,27 @@ $statusColors = ['pending'=>'warning','processing'=>'info','picked_up'=>'primary
       </div>
     </div>
 
+    <!-- GPS Map Panel -->
+    <?php if (!empty($gpsPoints)): ?>
+    <script>window._gpsPoints = <?= json_encode($gpsPoints) ?>;</script>
+    <div class="card mb-3" id="mapCard">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <h6 class="mb-0 fw-bold"><i class="fas fa-map me-2 text-success"></i>GPS Route Map</h6>
+        <small class="text-muted"><?= count($gpsPoints) ?> GPS point<?= count($gpsPoints) !== 1 ? 's' : '' ?> recorded &nbsp;
+          <i class="fas fa-sync-alt text-muted" id="mapRefreshIcon" title="Auto-refreshes every 45 s"></i>
+        </small>
+      </div>
+      <div class="card-body p-0">
+        <div id="courierMap" style="height:280px;width:100%"></div>
+      </div>
+    </div>
+    <?php else: ?>
+    <div class="alert alert-light border mb-3 py-2 small">
+      <i class="fas fa-map-marker-alt me-2 text-muted"></i>
+      No GPS coordinates recorded yet. Use <strong>📍 Capture GPS</strong> when adding a tracking update.
+    </div>
+    <?php endif; ?>
+
     <!-- Add Tracking Update -->
     <div class="card mb-3">
       <div class="card-header"><h6 class="mb-0 fw-bold"><i class="fas fa-plus-circle me-2 text-success"></i>Add Tracking Update</h6></div>
@@ -226,6 +268,17 @@ $statusColors = ['pending'=>'warning','processing'=>'info','picked_up'=>'primary
             <div class="col-12">
               <label class="form-label fw-semibold small">Notes</label>
               <input type="text" name="notes" class="form-control form-control-sm" placeholder="Optional delivery notes...">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold small">GPS Coordinates <span class="text-muted">(optional)</span></label>
+              <div class="input-group input-group-sm">
+                <input type="number" name="lat" id="trackLat" class="form-control form-control-sm" placeholder="Latitude" step="0.000001" min="-90" max="90" style="max-width:150px">
+                <input type="number" name="lng" id="trackLng" class="form-control form-control-sm" placeholder="Longitude" step="0.000001" min="-180" max="180" style="max-width:150px">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="captureGPS()" title="Use device GPS">
+                  <i class="fas fa-crosshairs me-1"></i>Capture GPS
+                </button>
+                <span class="input-group-text small text-muted" id="gpsStatus" style="font-size:.75rem;min-width:110px"></span>
+              </div>
             </div>
           </div>
         </form>
@@ -296,11 +349,84 @@ $statusColors = ['pending'=>'warning','processing'=>'info','picked_up'=>'primary
 
 <?php
 $extraJs = <<<'JS'
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 function fillStageName(sel) {
   const opt = sel.options[sel.selectedIndex];
   document.getElementById('stageName').value = opt.getAttribute('data-name') || opt.value;
 }
+
+function captureGPS() {
+  const status = document.getElementById('gpsStatus');
+  if (!navigator.geolocation) { status.textContent = 'GPS not supported'; return; }
+  status.textContent = 'Locating…';
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      document.getElementById('trackLat').value = pos.coords.latitude.toFixed(6);
+      document.getElementById('trackLng').value = pos.coords.longitude.toFixed(6);
+      status.textContent = '✓ Captured';
+      status.classList.remove('text-muted');
+      status.classList.add('text-success');
+    },
+    err => {
+      status.textContent = 'GPS denied';
+      status.classList.add('text-danger');
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+// Initialize Leaflet GPS map
+(function () {
+  const pts = window._gpsPoints;
+  if (!pts || !pts.length) return;
+
+  const map = L.map('courierMap', { zoomControl: true });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19
+  }).addTo(map);
+
+  const latlngs = pts.map(p => [p.lat, p.lng]);
+
+  // Draw route polyline
+  if (latlngs.length > 1) {
+    L.polyline(latlngs, { color: '#1565c0', weight: 3, opacity: 0.75, dashArray: '6 4' }).addTo(map);
+  }
+
+  // Add markers
+  pts.forEach((p, i) => {
+    const isLast = (i === pts.length - 1);
+    const color  = isLast ? '#1565c0' : '#64b5f6';
+    const size   = isLast ? 14 : 10;
+    const icon   = L.divIcon({
+      html: `<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:2px solid #fff;box-shadow:0 2px 5px rgba(0,0,0,.4)"></div>`,
+      className: '', iconSize: [size, size], iconAnchor: [size/2, size/2]
+    });
+    const popup = `<strong>${p.name}</strong>${p.loc ? '<br><i class="fas fa-map-pin"></i> ' + p.loc : ''}<br><small>${p.time}</small>`;
+    const m = L.marker([p.lat, p.lng], { icon }).addTo(map).bindPopup(popup);
+    if (isLast) m.openPopup();
+  });
+
+  if (latlngs.length === 1) {
+    map.setView(latlngs[0], 13);
+  } else {
+    map.fitBounds(latlngs, { padding: [30, 30] });
+  }
+
+  // Auto-refresh the map data every 45 seconds
+  const courierId = new URLSearchParams(window.location.search).get('courier_id');
+  if (courierId) {
+    setInterval(() => {
+      const icon = document.getElementById('mapRefreshIcon');
+      if (icon) { icon.classList.add('fa-spin'); }
+      fetch('tracking.php?courier_id=' + courierId, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(() => { if (icon) icon.classList.remove('fa-spin'); })
+        .catch(() => { if (icon) icon.classList.remove('fa-spin'); });
+    }, 45000);
+  }
+})();
 </script>
 JS;
 require_once __DIR__ . '/../../includes/footer.php';

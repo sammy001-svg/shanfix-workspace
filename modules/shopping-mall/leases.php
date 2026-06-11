@@ -88,6 +88,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         redirect('leases.php');
     }
+
+    if ($action === 'renew') {
+        $id          = (int)($_POST['id'] ?? 0);
+        $newStart    = sanitize($_POST['new_start_date'] ?? '');
+        $newEnd      = sanitize($_POST['new_end_date']   ?? '');
+        $newRent     = (float)($_POST['new_monthly_rent'] ?? 0);
+        $escalation  = (float)($_POST['escalation_pct']  ?? 0);
+        $renewTerms  = sanitize($_POST['renew_terms']    ?? '');
+
+        if (!$id || !$newStart || !$newEnd || $newRent <= 0) {
+            setFlash('danger', 'New start date, end date and monthly rent are required.');
+            redirect('leases.php');
+        }
+
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM mall_leases WHERE id=? AND org_id=?");
+            $stmt->execute([$id, $orgId]);
+            $old = $stmt->fetch();
+
+            if (!$old) {
+                setFlash('danger', 'Lease not found.');
+                redirect('leases.php');
+            }
+
+            $pdo->beginTransaction();
+
+            // Mark old lease as expired
+            $pdo->prepare("UPDATE mall_leases SET status='expired', updated_at=NOW() WHERE id=? AND org_id=?")
+                ->execute([$id, $orgId]);
+
+            // Generate new lease number
+            $seq = $pdo->query("SELECT COUNT(*) FROM mall_leases WHERE org_id=$orgId")->fetchColumn() + 1;
+            $newLeaseNo = 'LS-' . date('Y') . '-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
+
+            $escNote = $escalation > 0 ? " Renewed with {$escalation}% rent escalation." : '';
+            $finalTerms = trim(($renewTerms ?: '') . $escNote);
+
+            $pdo->prepare("INSERT INTO mall_leases (org_id, lease_no, shop_id, tenant_id, start_date, end_date, monthly_rent, deposit, terms, status)
+                VALUES (?,?,?,?,?,?,?,?,?,'active')")
+                ->execute([
+                    $orgId, $newLeaseNo,
+                    $old['shop_id'], $old['tenant_id'],
+                    $newStart, $newEnd,
+                    $newRent,
+                    $old['deposit'],
+                    $finalTerms ?: $old['terms'],
+                ]);
+
+            $pdo->commit();
+            setFlash('success', "Lease renewed successfully. New lease: {$newLeaseNo}" . ($escalation > 0 ? " (rent escalated by {$escalation}%)" : '') . '.');
+            logActivity('create', 'shopping-mall', "Lease {$old['lease_no']} renewed as {$newLeaseNo}");
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            setFlash('danger', 'Error renewing lease: ' . $e->getMessage());
+        }
+        redirect('leases.php');
+    }
 }
 
 require_once __DIR__ . '/../../includes/header-module.php';
@@ -206,11 +263,15 @@ $statusColors = ['active' => 'success', 'expired' => 'secondary', 'terminated' =
             <td class="text-end text-muted"><?= formatCurrency((float)$l['deposit']) ?></td>
             <td class="text-center"><span class="badge bg-<?= $statusColors[$l['status']] ?? 'secondary' ?>"><?= ucfirst($l['status']) ?></span></td>
             <td class="text-center" style="white-space:nowrap">
-              <button class="btn btn-sm btn-outline-primary" onclick='openEdit(<?= htmlspecialchars(json_encode($l), ENT_QUOTES) ?>)'><i class="fas fa-edit"></i></button>
+              <button class="btn btn-sm btn-outline-primary" onclick='openEdit(<?= htmlspecialchars(json_encode($l), ENT_QUOTES) ?>)' title="Edit"><i class="fas fa-edit"></i></button>
               <?php if ($l['status'] === 'active'): ?>
+              <button class="btn btn-sm btn-outline-success ms-1" title="Renew Lease"
+                      onclick='openRenew(<?= htmlspecialchars(json_encode($l), ENT_QUOTES) ?>)'>
+                <i class="fas fa-redo-alt"></i>
+              </button>
               <form method="POST" class="d-inline" onsubmit="return confirm('Terminate this lease? The shop will be marked vacant.')">
                 <?= csrfField() ?><input type="hidden" name="action" value="terminate"><input type="hidden" name="id" value="<?= $l['id'] ?>">
-                <button class="btn btn-sm btn-outline-danger ms-1"><i class="fas fa-ban"></i></button>
+                <button class="btn btn-sm btn-outline-danger ms-1" title="Terminate"><i class="fas fa-ban"></i></button>
               </form>
               <?php endif; ?>
             </td>
@@ -294,6 +355,70 @@ $statusColors = ['active' => 'success', 'expired' => 'secondary', 'terminated' =
   </div>
 </div>
 
+<!-- Renew Modal -->
+<div class="modal fade" id="renewModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST">
+        <?= csrfField() ?>
+        <input type="hidden" name="action" value="renew">
+        <input type="hidden" name="id" id="renewId" value="0">
+        <div class="modal-header text-white" style="background:#27ae60">
+          <h5 class="modal-title"><i class="fas fa-redo-alt me-2"></i>Renew Lease</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Current lease summary -->
+          <div class="alert alert-light border mb-3 py-2">
+            <div class="small text-muted fw-semibold mb-1">Renewing Lease</div>
+            <div id="renewSummary" class="fw-semibold"></div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">New Start Date <span class="text-danger">*</span></label>
+              <input type="date" name="new_start_date" id="renewStart" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">New End Date <span class="text-danger">*</span></label>
+              <input type="date" name="new_end_date" id="renewEnd" class="form-control" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Current Monthly Rent</label>
+              <div class="form-control bg-light text-muted" id="renewOldRent"></div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Escalation <small class="text-muted">(%)</small></label>
+              <input type="number" name="escalation_pct" id="renewEsc" class="form-control"
+                     min="0" max="100" step="0.1" value="0" placeholder="0" oninput="calcRenewalRent()">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">New Monthly Rent <span class="text-danger">*</span></label>
+              <input type="number" name="new_monthly_rent" id="renewNewRent" class="form-control"
+                     min="0" step="0.01" required oninput="renewEscSync()">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Renewal Notes / Updated Terms</label>
+              <textarea name="renew_terms" id="renewTerms" class="form-control" rows="2"
+                        placeholder="e.g. Rate escalated per CPI, new parking allocation..."></textarea>
+            </div>
+          </div>
+          <div class="text-muted small mt-2">
+            <i class="fas fa-info-circle me-1"></i>
+            The current lease will be marked <strong>Expired</strong> and a new lease record will be created.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success">
+            <i class="fas fa-redo-alt me-1"></i>Renew Lease
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <?php $extraJs = <<<'JS'
 <script>
 function openAdd() {
@@ -317,6 +442,40 @@ function openEdit(l) {
     document.getElementById('leaseStatus').value  = l.status;
     document.getElementById('leaseTerms').value   = l.terms || '';
     new bootstrap.Modal(document.getElementById('leaseModal')).show();
+}
+
+let _renewBaseRent = 0;
+function openRenew(l) {
+    document.getElementById('renewId').value     = l.id;
+    document.getElementById('renewSummary').textContent =
+        l.lease_no + ' — ' + l.shop_name + ' (' + l.shop_no + ') / ' + l.business_name +
+        ' | Current end: ' + l.end_date;
+
+    // New start = day after old end
+    const oldEnd   = new Date(l.end_date);
+    const newStart = new Date(oldEnd.getTime() + 86400000);
+    document.getElementById('renewStart').value  = newStart.toISOString().slice(0, 10);
+
+    // Default new end = 12 months after new start
+    const newEnd = new Date(newStart);
+    newEnd.setFullYear(newEnd.getFullYear() + 1);
+    document.getElementById('renewEnd').value    = newEnd.toISOString().slice(0, 10);
+
+    _renewBaseRent = parseFloat(l.monthly_rent) || 0;
+    document.getElementById('renewOldRent').textContent = 'KES ' + _renewBaseRent.toFixed(2);
+    document.getElementById('renewEsc').value       = '0';
+    document.getElementById('renewNewRent').value   = _renewBaseRent.toFixed(2);
+    document.getElementById('renewTerms').value     = '';
+    new bootstrap.Modal(document.getElementById('renewModal')).show();
+}
+function calcRenewalRent() {
+    const esc  = parseFloat(document.getElementById('renewEsc').value) || 0;
+    const newR = _renewBaseRent * (1 + esc / 100);
+    document.getElementById('renewNewRent').value = newR.toFixed(2);
+}
+function renewEscSync() {
+    // If user manually edits new rent, clear escalation field
+    document.getElementById('renewEsc').value = '';
 }
 </script>
 JS;

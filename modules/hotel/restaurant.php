@@ -14,6 +14,7 @@ $moduleNav   = [
     ['url' => 'housekeeping.php', 'icon' => 'fas fa-broom',          'label' => 'Housekeeping'],
     ['url' => 'restaurant.php',   'icon' => 'fas fa-utensils',       'label' => 'Restaurant'],
     ['url' => 'invoices.php',     'icon' => 'fas fa-file-invoice',   'label' => 'Invoices'],
+    ['url' => 'calendar.php',     'icon' => 'fas fa-calendar-alt',   'label' => 'Availability'],
     ['url' => 'reports.php',      'icon' => 'fas fa-chart-bar',      'label' => 'Reports'],
 ];
 
@@ -63,8 +64,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare("INSERT INTO hotel_restaurant_items (order_id, item_name, qty, unit_price, total) VALUES (?,?,?,?,?)")
                     ->execute([$orderId, $name, $qty, $price, $total]);
             }
+
+            // Auto-post to room folio when payment_mode = room_charge
+            $folioMsg = '';
+            if ($paymentMode === 'room_charge' && $roomId) {
+                $bkSt = $pdo->prepare(
+                    "SELECT id, guest_id FROM hotel_bookings
+                     WHERE org_id=? AND room_id=? AND status IN ('confirmed','checked_in')
+                     ORDER BY check_in DESC LIMIT 1"
+                );
+                $bkSt->execute([$orgId, $roomId]);
+                $booking = $bkSt->fetch();
+
+                if ($booking) {
+                    $invSt = $pdo->prepare(
+                        "SELECT id, restaurant_charges, total_amount FROM hotel_invoices
+                         WHERE org_id=? AND booking_id=? AND status IN ('draft','partial')
+                         ORDER BY id DESC LIMIT 1"
+                    );
+                    $invSt->execute([$orgId, $booking['id']]);
+                    $inv = $invSt->fetch();
+
+                    if ($inv) {
+                        $newRest = (float)$inv['restaurant_charges'] + $grand;
+                        $pdo->prepare(
+                            "UPDATE hotel_invoices
+                             SET restaurant_charges=?, total_amount=total_amount+?, updated_at=NOW()
+                             WHERE id=?"
+                        )->execute([$newRest, $grand, $inv['id']]);
+                        $folioMsg = " — charged to folio HINV#{$inv['id']}";
+                    } else {
+                        // Create a new draft invoice for this booking
+                        $invSeq = (int)$pdo->query("SELECT COUNT(*)+1 FROM hotel_invoices WHERE org_id=$orgId")->fetchColumn();
+                        $invNo  = 'HINV-' . date('Y') . '-' . str_pad($invSeq, 4, '0', STR_PAD_LEFT);
+                        $pdo->prepare(
+                            "INSERT INTO hotel_invoices
+                             (org_id, invoice_no, guest_id, booking_id, restaurant_charges, total_amount, status)
+                             VALUES (?,?,?,?,?,?,'draft')"
+                        )->execute([$orgId, $invNo, $booking['guest_id'], $booking['id'], $grand, $grand]);
+                        $folioMsg = " — new folio {$invNo} created";
+                    }
+                } else {
+                    $folioMsg = " — no active booking found for this room";
+                }
+            }
+
             $pdo->commit();
-            setFlash('success', "Order {$orderNo} placed — Total: " . formatCurrency($grand));
+            setFlash('success', "Order {$orderNo} placed — Total: " . formatCurrency($grand) . $folioMsg);
             logActivity('create', 'hotel', "Restaurant order {$orderNo}");
         } catch (Exception $e) { $pdo->rollBack(); setFlash('danger', 'Error: ' . $e->getMessage()); }
         redirect('restaurant.php');
@@ -185,7 +231,12 @@ $statusColors = ['pending'=>'secondary','preparing'=>'warning','served'=>'info',
             <?= (!$o['room_no'] && !$o['guest_name']) ? '<span class="text-muted">Walk-in</span>' : '' ?>
           </td>
           <td class="text-end fw-bold"><?= formatCurrency((float)$o['grand_total']) ?></td>
-          <td class="small"><?= ucfirst(str_replace('_',' ',$o['payment_mode'])) ?></td>
+          <td class="small">
+            <?= ucfirst(str_replace('_',' ',$o['payment_mode'])) ?>
+            <?php if ($o['payment_mode'] === 'room_charge'): ?>
+            <span class="badge bg-primary ms-1" style="font-size:.65rem" title="Charged to room folio">FOLIO</span>
+            <?php endif; ?>
+          </td>
           <td class="text-center"><span class="badge bg-<?= $statusColors[$o['status']] ?? 'secondary' ?>"><?= ucfirst($o['status']) ?></span></td>
           <td class="small text-muted"><?= date('h:i A', strtotime($o['ordered_at'])) ?></td>
           <td class="text-center">

@@ -81,21 +81,62 @@ try {
     $collectionTable = $stmt->fetchAll();
 } catch (Exception $e) {}
 
-// Lease expiry list (next 60 days)
-$expiryDate = date('Y-m-d', strtotime('+60 days'));
+// Lease expiry list (next 90 days) — from mall_leases (authoritative source)
+$expiryDate = date('Y-m-d', strtotime('+90 days'));
 $expiringLeases = [];
 try {
     $stmt = $pdo->prepare("
-        SELECT t.business_name, t.contact_person, t.phone, t.lease_end,
-               s.shop_no, s.name AS shop_name
-        FROM mall_tenants t
-        LEFT JOIN mall_shops s ON t.shop_id = s.id
-        WHERE t.org_id = ? AND t.status = 'active'
-          AND t.lease_end IS NOT NULL AND t.lease_end <= ?
-        ORDER BY t.lease_end ASC
+        SELECT l.lease_no, l.end_date AS lease_end, l.monthly_rent,
+               s.shop_no, s.name AS shop_name,
+               t.business_name, t.contact_person, t.phone
+        FROM mall_leases l
+        JOIN mall_shops s ON s.id = l.shop_id
+        JOIN mall_tenants t ON t.id = l.tenant_id
+        WHERE l.org_id = ? AND l.status = 'active'
+          AND l.end_date <= ?
+        ORDER BY l.end_date ASC
     ");
     $stmt->execute([$orgId, $expiryDate]);
     $expiringLeases = $stmt->fetchAll();
+} catch (Exception $e) {}
+
+// Floor occupancy breakdown
+$floorOccupancy = [];
+try {
+    $stmt = $pdo->prepare("
+        SELECT
+            COALESCE(floor, 'Unassigned') AS floor,
+            COUNT(*) AS total,
+            SUM(CASE WHEN status='occupied' THEN 1 ELSE 0 END) AS occupied,
+            SUM(CASE WHEN status='vacant' THEN 1 ELSE 0 END) AS vacant,
+            COALESCE(SUM(CASE WHEN status='occupied' THEN monthly_rent ELSE 0 END), 0) AS rent_value
+        FROM mall_shops
+        WHERE org_id = ?
+        GROUP BY floor
+        ORDER BY floor ASC
+    ");
+    $stmt->execute([$orgId]);
+    $floorOccupancy = $stmt->fetchAll();
+} catch (Exception $e) {}
+
+// Top 5 tenants by total rent paid (all time)
+$topTenants = [];
+try {
+    $stmt = $pdo->prepare("
+        SELECT t.business_name, t.contact_person,
+               s.shop_no, s.name AS shop_name,
+               COALESCE(SUM(p.amount), 0) AS total_paid,
+               COUNT(p.id) AS payment_count
+        FROM mall_tenants t
+        JOIN mall_shops s ON s.id = t.shop_id AND s.org_id = t.org_id
+        LEFT JOIN mall_rent_payments p ON p.shop_id = s.id AND p.org_id = t.org_id AND p.status IN ('paid','partial')
+        WHERE t.org_id = ? AND t.status = 'active'
+        GROUP BY t.id
+        ORDER BY total_paid DESC
+        LIMIT 5
+    ");
+    $stmt->execute([$orgId]);
+    $topTenants = $stmt->fetchAll();
 } catch (Exception $e) {}
 ?>
 
@@ -223,10 +264,101 @@ try {
   </div>
 </div>
 
+<!-- Floor Occupancy & Top Tenants row -->
+<div class="row g-4 mb-4">
+  <!-- Floor breakdown -->
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <h6 class="mb-0"><i class="fas fa-layer-group me-2" style="color:<?= $moduleColor ?>"></i>Occupancy by Floor / Wing</h6>
+      </div>
+      <div class="card-body p-0">
+        <?php if (empty($floorOccupancy)): ?>
+        <div class="text-center py-5 text-muted">
+          <i class="fas fa-layer-group fa-2x mb-2 d-block"></i>No floor data available.
+        </div>
+        <?php else: ?>
+        <div class="table-responsive">
+          <table class="table table-hover table-sm mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Floor / Wing</th>
+                <th class="text-center">Total</th>
+                <th class="text-center">Occupied</th>
+                <th class="text-center">Vacant</th>
+                <th class="text-end">Rent Value</th>
+                <th>Occupancy</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($floorOccupancy as $f):
+                $rate = $f['total'] > 0 ? round($f['occupied'] / $f['total'] * 100) : 0;
+                $barColor = $rate >= 80 ? '#2ecc71' : ($rate >= 50 ? '#f39c12' : '#e74c3c');
+              ?>
+              <tr>
+                <td class="fw-semibold"><?= e($f['floor']) ?></td>
+                <td class="text-center"><?= $f['total'] ?></td>
+                <td class="text-center text-success fw-bold"><?= $f['occupied'] ?></td>
+                <td class="text-center text-warning"><?= $f['vacant'] ?></td>
+                <td class="text-end small"><?= formatCurrency((float)$f['rent_value']) ?></td>
+                <td style="min-width:100px">
+                  <div class="d-flex align-items-center gap-2">
+                    <div class="progress flex-grow-1" style="height:8px">
+                      <div class="progress-bar" style="width:<?= $rate ?>%;background:<?= $barColor ?>"></div>
+                    </div>
+                    <small class="fw-bold" style="color:<?= $barColor ?>;min-width:32px"><?= $rate ?>%</small>
+                  </div>
+                </td>
+              </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+        <?php endif; ?>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top tenants -->
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="fas fa-star me-2" style="color:<?= $moduleColor ?>"></i>Top Tenants by Rent Paid</h6>
+      </div>
+      <div class="card-body p-0">
+        <?php if (empty($topTenants)): ?>
+        <div class="text-center py-5 text-muted">
+          <i class="fas fa-user-tie fa-2x mb-2 d-block"></i>No payment data yet.
+        </div>
+        <?php else: ?>
+        <?php
+        $maxPaid = max(array_column($topTenants, 'total_paid')) ?: 1;
+        foreach ($topTenants as $i => $tt):
+          $pct = round($tt['total_paid'] / $maxPaid * 100);
+          $medals = ['🥇','🥈','🥉','',''];
+        ?>
+        <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom">
+          <div class="fw-bold text-muted" style="width:24px;flex-shrink:0"><?= $medals[$i] ?: ($i+1) ?></div>
+          <div class="flex-grow-1">
+            <div class="fw-semibold small"><?= e($tt['business_name']) ?></div>
+            <div class="text-muted" style="font-size:.7rem"><?= e($tt['shop_no']) ?> · <?= $tt['payment_count'] ?> payments</div>
+            <div class="progress mt-1" style="height:5px">
+              <div class="progress-bar" style="width:<?= $pct ?>%;background:<?= $moduleColor ?>"></div>
+            </div>
+          </div>
+          <div class="fw-bold text-end small" style="min-width:70px"><?= formatCurrency((float)$tt['total_paid']) ?></div>
+        </div>
+        <?php endforeach; ?>
+        <?php endif; ?>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Lease Expiry -->
 <div class="card">
   <div class="card-header d-flex align-items-center justify-content-between">
-    <h6 class="mb-0"><i class="fas fa-calendar-times me-2 text-warning"></i>Leases Expiring (Next 60 Days)</h6>
+    <h6 class="mb-0"><i class="fas fa-calendar-times me-2 text-warning"></i>Leases Expiring (Next 90 Days)</h6>
     <span class="badge bg-warning text-dark"><?= count($expiringLeases) ?></span>
   </div>
   <div class="card-body p-0">
@@ -240,12 +372,14 @@ try {
       <table class="table table-hover table-sm mb-0">
         <thead class="table-light">
           <tr>
+            <th>Lease #</th>
             <th>Shop</th>
             <th>Business Name</th>
             <th>Contact</th>
-            <th>Phone</th>
+            <th class="text-end">Monthly Rent</th>
             <th>Lease End</th>
             <th>Days Left</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
@@ -254,12 +388,14 @@ try {
             $urgency  = $daysLeft <= 7 ? 'danger' : ($daysLeft <= 30 ? 'warning' : 'secondary');
           ?>
           <tr class="<?= $daysLeft <= 7 ? 'table-danger' : ($daysLeft <= 30 ? 'table-warning' : '') ?>">
-            <td class="fw-bold" style="color:<?= $moduleColor ?>"><?= e($lease['shop_no']) ?></td>
+            <td class="fw-semibold small"><?= e($lease['lease_no'] ?? '—') ?></td>
+            <td class="fw-bold" style="color:<?= $moduleColor ?>"><?= e($lease['shop_no']) ?> <small class="text-muted"><?= e($lease['shop_name']) ?></small></td>
             <td><?= e($lease['business_name']) ?></td>
-            <td><?= e($lease['contact_person'] ?? '—') ?></td>
-            <td><?= e($lease['phone'] ?? '—') ?></td>
+            <td class="small"><?= e($lease['contact_person'] ?? '—') ?><br><span class="text-muted"><?= e($lease['phone'] ?? '') ?></span></td>
+            <td class="text-end"><?= formatCurrency((float)($lease['monthly_rent'] ?? 0)) ?></td>
             <td><?= formatDate($lease['lease_end']) ?></td>
             <td><span class="badge bg-<?= $urgency ?>"><?= $daysLeft >= 0 ? $daysLeft . ' days' : 'Expired' ?></span></td>
+            <td><a href="leases.php" class="btn btn-xs btn-outline-success btn-sm py-0 px-1" title="Go to Leases to Renew"><i class="fas fa-redo-alt"></i></a></td>
           </tr>
           <?php endforeach; ?>
         </tbody>
