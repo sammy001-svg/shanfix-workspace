@@ -215,9 +215,9 @@ require_once __DIR__ . '/../../includes/header-module.php';
     </div>
     <div class="modal-body">
       <ul class="nav nav-tabs mb-3" id="tchTabs">
-        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-personal">Personal</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-professional">Professional</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-contact">Contact & Emergency</button></li>
+        <li class="nav-item"><button type="button" class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-personal">Personal</button></li>
+        <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-professional">Professional</button></li>
+        <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-contact">Contact &amp; Emergency</button></li>
       </ul>
       <div class="tab-content">
         <!-- Personal Tab -->
