@@ -14,18 +14,28 @@ try {
          WHERE n.org_id=?
            AND (n.audience='all' OR n.audience='parents'
                 OR n.class_id IS NULL OR n.class_id=?)
-         ORDER BY n.created_at DESC LIMIT 50"
+           AND (n.expiry_date IS NULL OR n.expiry_date >= CURDATE())
+         ORDER BY n.is_pinned DESC, n.created_at DESC
+         LIMIT 60"
     );
     $s->execute([$parOrgId, $classId]);
     $notices = $s->fetchAll();
 } catch (Throwable $e) {}
 
-$audienceIcons = ['all'=>'fa-globe','parents'=>'fa-users','students'=>'fa-graduation-cap','staff'=>'fa-user-tie'];
+$priorityConfig = [
+    'urgent'    => ['bg'=>'#fde8e8','border'=>'#e74c3c','badge'=>'danger',   'icon'=>'fa-exclamation-circle'],
+    'important' => ['bg'=>'#fff3cd','border'=>'#f39c12','badge'=>'warning',   'icon'=>'fa-exclamation-triangle'],
+    'normal'    => ['bg'=>'#fff',   'border'=>'#dee2e6','badge'=>'secondary', 'icon'=>'fa-info-circle'],
+];
+$audienceIcons = ['all'=>'fa-globe','parents'=>'fa-users','students'=>'fa-graduation-cap','staff'=>'fa-user-tie','class'=>'fa-chalkboard'];
+
+$pinned  = array_filter($notices, fn($n) => !empty($n['is_pinned']));
+$regular = array_filter($notices, fn($n) => empty($n['is_pinned']));
 ?>
 
-<div class="d-flex align-items-center mb-4">
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
   <h5 class="fw-bold mb-0"><i class="fas fa-bullhorn me-2" style="color:#f39c12"></i>School Notices</h5>
-  <span class="badge bg-warning text-dark ms-2"><?= count($notices) ?></span>
+  <span class="badge bg-warning text-dark"><?= count($notices) ?> notice<?= count($notices) !== 1 ? 's' : '' ?></span>
 </div>
 
 <?php if (empty($notices)): ?>
@@ -37,29 +47,77 @@ $audienceIcons = ['all'=>'fa-globe','parents'=>'fa-users','students'=>'fa-gradua
   </div>
 </div>
 <?php else: ?>
+
+<?php if (!empty($pinned)): ?>
+<!-- Pinned notices -->
+<div class="mb-2" style="font-size:.7rem;font-weight:700;color:#6c757d;text-transform:uppercase;letter-spacing:.5px">
+  <i class="fas fa-thumbtack me-1"></i>Pinned
+</div>
+<?php foreach ($pinned as $n):
+  $pri = strtolower($n['priority'] ?? 'normal');
+  $pc  = $priorityConfig[$pri] ?? $priorityConfig['normal'];
+  $aud = strtolower($n['audience'] ?? 'all');
+  $aIcon = $audienceIcons[$aud] ?? 'fa-globe';
+?>
+<div class="card border-0 shadow-sm mb-3" style="border-left:4px solid <?= $pc['border'] ?>!important;background:<?= $pc['bg'] ?>">
+  <div class="card-body">
+    <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+      <div class="d-flex align-items-center gap-2">
+        <i class="fas fa-thumbtack text-warning" style="font-size:.8rem"></i>
+        <h6 class="fw-bold mb-0"><?= e($n['title']) ?></h6>
+      </div>
+      <div class="d-flex gap-2 flex-shrink-0 align-items-center">
+        <?php if ($pri !== 'normal'): ?>
+        <span class="badge bg-<?= $pc['badge'] ?>" style="font-size:.68rem">
+          <i class="fas <?= $pc['icon'] ?> me-1"></i><?= ucfirst($pri) ?>
+        </span>
+        <?php endif; ?>
+        <?php if (!empty($n['class_name'])): ?>
+        <span class="badge bg-success bg-opacity-25 text-success" style="font-size:.68rem">
+          <i class="fas fa-chalkboard me-1"></i><?= e($n['class_name']) ?>
+        </span>
+        <?php endif; ?>
+        <span class="text-muted" style="font-size:.7rem;white-space:nowrap"><?= date('d M Y', strtotime($n['created_at'])) ?></span>
+      </div>
+    </div>
+    <p class="text-muted mb-0" style="font-size:.875rem;line-height:1.65"><?= nl2br(e($n['content'] ?? '')) ?></p>
+  </div>
+</div>
+<?php endforeach; ?>
+<?php endif; ?>
+
+<?php if (!empty($pinned) && !empty($regular)): ?>
+<div class="mb-2 mt-4" style="font-size:.7rem;font-weight:700;color:#6c757d;text-transform:uppercase;letter-spacing:.5px">
+  All Notices
+</div>
+<?php endif; ?>
+
+<!-- Regular notices -->
 <div class="row g-3">
-  <?php foreach ($notices as $n):
+  <?php foreach ($regular as $n):
+    $pri = strtolower($n['priority'] ?? 'normal');
+    $pc  = $priorityConfig[$pri] ?? $priorityConfig['normal'];
     $aud = strtolower($n['audience'] ?? 'all');
     $aIcon = $audienceIcons[$aud] ?? 'fa-globe';
   ?>
   <div class="col-12">
-    <div class="card border-0 shadow-sm" style="border-left:3px solid #f39c12!important">
-      <div class="card-body">
-        <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
-          <h6 class="fw-bold mb-0"><?= e($n['title']) ?></h6>
-          <div class="d-flex gap-2 flex-shrink-0">
+    <div class="card border-0 shadow-sm" style="border-left:3px solid <?= $pc['border'] ?>!important">
+      <div class="card-body py-3">
+        <div class="d-flex align-items-start justify-content-between gap-2 mb-1">
+          <h6 class="fw-semibold mb-0" style="font-size:.9rem"><?= e($n['title']) ?></h6>
+          <div class="d-flex gap-2 flex-shrink-0 align-items-center">
+            <?php if ($pri !== 'normal'): ?>
+            <span class="badge bg-<?= $pc['badge'] ?> bg-opacity-75" style="font-size:.65rem"><?= ucfirst($pri) ?></span>
+            <?php endif; ?>
             <?php if (!empty($n['class_name'])): ?>
-            <span class="badge bg-success bg-opacity-25 text-success" style="font-size:.7rem">
+            <span class="badge bg-success bg-opacity-25 text-success" style="font-size:.65rem">
               <i class="fas fa-chalkboard me-1"></i><?= e($n['class_name']) ?>
             </span>
             <?php endif; ?>
-            <span class="badge bg-secondary bg-opacity-25 text-secondary" style="font-size:.7rem">
-              <i class="fas <?= $aIcon ?> me-1"></i><?= ucfirst($aud) ?>
-            </span>
-            <span class="text-muted" style="font-size:.72rem;white-space:nowrap"><?= date('d M Y', strtotime($n['created_at'])) ?></span>
+            <span class="text-muted" style="font-size:.7rem;white-space:nowrap"><?= date('d M Y', strtotime($n['created_at'])) ?></span>
           </div>
         </div>
-        <p class="text-muted mb-0" style="font-size:.88rem;line-height:1.6"><?= nl2br(e($n['content'] ?? '')) ?></p>
+        <p class="text-muted mb-0" style="font-size:.855rem;line-height:1.6"><?= nl2br(e($n['content'] ?? '')) ?></p>
       </div>
     </div>
   </div>

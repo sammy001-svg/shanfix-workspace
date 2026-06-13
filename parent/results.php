@@ -6,7 +6,7 @@ require_once __DIR__ . '/../includes/header-parent.php';
 $exams = [];
 try {
     $s = $pdo->prepare(
-        "SELECT DISTINCT e.id, e.name, e.start_date, e.end_date, e.status
+        "SELECT DISTINCT e.id, e.name, e.term, e.academic_year, e.start_date, e.end_date, e.status
          FROM sch_exams e
          JOIN sch_results r ON r.exam_id = e.id
          WHERE r.student_id=? AND r.org_id=?
@@ -45,15 +45,44 @@ if ($selectedExamId) {
     } catch (Throwable $e) {}
 }
 
-$overallPct   = $maxMarks > 0 ? round($totalMarks / $maxMarks * 100, 1) : 0;
-$gradeColors  = ['A'=>'#1A8A4E','B'=>'#3498db','C'=>'#f39c12','D'=>'#e67e22','E'=>'#e74c3c','F'=>'#c0392b'];
-$gradeLabels  = ['A'=>'Excellent','B'=>'Very Good','C'=>'Good','D'=>'Satisfactory','E'=>'Poor','F'=>'Fail'];
+$overallPct = $maxMarks > 0 ? round($totalMarks / $maxMarks * 100, 1) : 0;
+
+// ── Class position ───────────────────────────────────────────────
+$classPosition = null; $classTotal = 0;
+if ($selectedExamId && !empty($activeStudent['class_id'])) {
+    try {
+        $s = $pdo->prepare(
+            "SELECT student_id, SUM(marks) AS total
+             FROM sch_results
+             WHERE exam_id=? AND class_id=? AND org_id=?
+             GROUP BY student_id ORDER BY total DESC"
+        );
+        $s->execute([$selectedExamId, $activeStudent['class_id'], $parOrgId]);
+        $rankings = $s->fetchAll();
+        $classTotal = count($rankings);
+        foreach ($rankings as $i => $r) {
+            if ($r['student_id'] == $parActive) { $classPosition = $i + 1; break; }
+        }
+    } catch (Throwable $e) {}
+}
+
+$gradeColors = ['A'=>'#1A8A4E','B'=>'#3498db','C'=>'#f39c12','D'=>'#e67e22','E'=>'#e74c3c','F'=>'#c0392b'];
+$gradeLabels = ['A'=>'Excellent','B'=>'Very Good','C'=>'Good','D'=>'Satisfactory','E'=>'Poor','F'=>'Fail'];
+
+$overallGrade = $overallPct >= 80 ? 'A' : ($overallPct >= 70 ? 'B' : ($overallPct >= 60 ? 'C' : ($overallPct >= 50 ? 'D' : ($overallPct >= 40 ? 'E' : 'F'))));
+$overallColor = $gradeColors[$overallGrade] ?? '#6c757d';
+
+function ordinalSuffix(int $n): string {
+    $s = ['th','st','nd','rd'];
+    $v = $n % 100;
+    return $n . (isset($s[$v-10]) || isset($s[$v-11]) ? 'th' : ($s[$v%10] ?? 'th'));
+}
 ?>
 
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
   <h5 class="fw-bold mb-0"><i class="fas fa-graduation-cap me-2" style="color:var(--par-green)"></i>Exam Results</h5>
   <?php if ($selectedExamId && $parActive): ?>
-  <a href="<?= APP_URL ?>/modules/school/report-card-pdf.php?student_id=<?= $parActive ?>&exam_id=<?= $selectedExamId ?>&token=<?= md5($parActive . $selectedExamId . $parOrgId) ?>"
+  <a href="<?= APP_URL ?>/modules/school/report-card-pdf.php?student_id=<?= $parActive ?>&exam_id=<?= $selectedExamId ?>"
      class="btn btn-sm btn-outline-success" target="_blank">
     <i class="fas fa-print me-1"></i>Print Report Card
   </a>
@@ -65,7 +94,7 @@ $gradeLabels  = ['A'=>'Excellent','B'=>'Very Good','C'=>'Good','D'=>'Satisfactor
   <div class="card-body text-muted">
     <i class="fas fa-graduation-cap fa-3x mb-3 d-block opacity-25"></i>
     <h6>No results available yet</h6>
-    <p class="small">Results will appear here once your child's exams have been graded by their teachers.</p>
+    <p class="small">Results will appear here once your child's exams have been graded.</p>
   </div>
 </div>
 <?php else: ?>
@@ -74,13 +103,15 @@ $gradeLabels  = ['A'=>'Excellent','B'=>'Very Good','C'=>'Good','D'=>'Satisfactor
 <div class="card border-0 shadow-sm mb-4">
   <div class="card-body py-3">
     <div class="d-flex align-items-center gap-3 flex-wrap">
-      <label class="fw-semibold small mb-0">Select Exam:</label>
+      <label class="fw-semibold small mb-0 flex-shrink-0">Select Exam:</label>
       <div class="d-flex flex-wrap gap-2">
         <?php foreach ($exams as $ex): ?>
         <a href="?exam=<?= $ex['id'] ?>"
            class="btn btn-sm <?= (int)$ex['id'] === $selectedExamId ? 'btn-success' : 'btn-outline-secondary' ?>">
           <?= e($ex['name']) ?>
-          <span class="ms-1" style="font-size:.7rem"><?= date('Y', strtotime($ex['end_date'])) ?></span>
+          <?php if (!empty($ex['end_date'])): ?>
+          <span class="ms-1 opacity-75" style="font-size:.68rem"><?= date('Y', strtotime($ex['end_date'])) ?></span>
+          <?php endif; ?>
         </a>
         <?php endforeach; ?>
       </div>
@@ -90,32 +121,72 @@ $gradeLabels  = ['A'=>'Excellent','B'=>'Very Good','C'=>'Good','D'=>'Satisfactor
 
 <?php if ($selectedExam && !empty($results)): ?>
 
-<!-- Summary bar -->
+<!-- Summary cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="par-stat-card text-center">
+      <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-2"
+           style="width:44px;height:44px;background:<?= $overallColor ?>18">
+        <i class="fas fa-percent" style="color:<?= $overallColor ?>"></i>
+      </div>
+      <div class="fs-3 fw-bold" style="color:<?= $overallColor ?>"><?= $overallPct ?>%</div>
+      <div class="text-muted small">Overall Score</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="par-stat-card text-center">
+      <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-2"
+           style="width:44px;height:44px;background:<?= $overallColor ?>18">
+        <span class="fw-bold" style="color:<?= $overallColor ?>;font-size:1.1rem"><?= $overallGrade ?></span>
+      </div>
+      <div class="fs-3 fw-bold" style="color:<?= $overallColor ?>"><?= $gradeLabels[$overallGrade] ?? '' ?></div>
+      <div class="text-muted small">Overall Grade</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="par-stat-card text-center">
+      <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-2"
+           style="width:44px;height:44px;background:#e8f4fd">
+        <i class="fas fa-book-open" style="color:#3498db"></i>
+      </div>
+      <div class="fs-3 fw-bold text-primary"><?= count($results) ?></div>
+      <div class="text-muted small">Subjects</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="par-stat-card text-center">
+      <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-2"
+           style="width:44px;height:44px;background:#fef5e7">
+        <i class="fas fa-trophy" style="color:#f39c12"></i>
+      </div>
+      <div class="fs-3 fw-bold text-warning">
+        <?= $classPosition ? ordinalSuffix($classPosition) : '&mdash;' ?>
+      </div>
+      <div class="text-muted small">Class Position<?= $classTotal ? " of $classTotal" : '' ?></div>
+    </div>
+  </div>
+</div>
+
+<!-- Exam info banner -->
 <div class="card border-0 shadow-sm mb-4" style="border-left:4px solid var(--par-green)!important">
-  <div class="card-body">
-    <div class="row g-3 align-items-center">
-      <div class="col-md-6">
-        <div class="fw-700 text-navy"><?= e($selectedExam['name']) ?></div>
+  <div class="card-body py-3">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div>
+        <div class="fw-bold" style="color:var(--par-navy)"><?= e($selectedExam['name']) ?></div>
         <div class="text-muted small">
-          <?= date('d M', strtotime($selectedExam['start_date'])) ?> –
+          <?php if (!empty($selectedExam['term'])): ?><?= e($selectedExam['term']) ?> &nbsp;&middot;&nbsp;<?php endif; ?>
+          <?php if (!empty($selectedExam['start_date'])): ?>
+          <?= date('d M', strtotime($selectedExam['start_date'])) ?> &ndash;
           <?= date('d M Y', strtotime($selectedExam['end_date'])) ?>
+          <?php endif; ?>
+          <?php if (!empty($selectedExam['academic_year'])): ?>
+          &nbsp;&middot;&nbsp; <?= e($selectedExam['academic_year']) ?>
+          <?php endif; ?>
         </div>
       </div>
-      <div class="col-md-6">
-        <div class="d-flex align-items-center justify-content-md-end gap-4">
-          <div class="text-center">
-            <div class="fw-700 fs-4" style="color:var(--par-green)"><?= $overallPct ?>%</div>
-            <div class="text-muted small">Overall</div>
-          </div>
-          <div class="text-center">
-            <div class="fw-700 fs-4"><?= $totalMarks ?>/<?= $maxMarks ?></div>
-            <div class="text-muted small">Total Marks</div>
-          </div>
-          <div class="text-center">
-            <div class="fw-700 fs-4"><?= count($results) ?></div>
-            <div class="text-muted small">Subjects</div>
-          </div>
-        </div>
+      <div class="text-end">
+        <div class="fw-bold"><?= $totalMarks ?> / <?= $maxMarks ?> marks</div>
+        <div class="text-muted small"><?= $overallPct ?>% overall</div>
       </div>
     </div>
   </div>
@@ -123,16 +194,19 @@ $gradeLabels  = ['A'=>'Excellent','B'=>'Very Good','C'=>'Good','D'=>'Satisfactor
 
 <!-- Results table -->
 <div class="card border-0 shadow-sm">
+  <div class="card-header">
+    <h6 class="mb-0 fw-bold"><i class="fas fa-table me-2" style="color:var(--par-green)"></i>Subject Breakdown</h6>
+  </div>
   <div class="card-body p-0">
     <div class="table-responsive">
-      <table class="table mb-0">
+      <table class="table mb-0 align-middle">
         <thead class="table-light">
           <tr>
             <th>Subject</th>
             <th class="text-center">Marks</th>
-            <th class="text-center">%</th>
+            <th class="text-center" style="min-width:100px">Performance</th>
             <th class="text-center">Grade</th>
-            <th class="d-none d-md-table-cell">Teacher Comment</th>
+            <th class="d-none d-lg-table-cell">Teacher Comment</th>
           </tr>
         </thead>
         <tbody>
@@ -145,29 +219,41 @@ $gradeLabels  = ['A'=>'Excellent','B'=>'Very Good','C'=>'Good','D'=>'Satisfactor
           <tr>
             <td>
               <div class="fw-semibold small"><?= e($r['subject_name']) ?></div>
-              <?php if (!empty($r['subject_code'])): ?><div class="text-muted" style="font-size:.7rem"><?= e($r['subject_code']) ?></div><?php endif; ?>
+              <?php if (!empty($r['subject_code'])): ?>
+              <div class="text-muted" style="font-size:.68rem"><?= e($r['subject_code']) ?></div>
+              <?php endif; ?>
             </td>
-            <td class="text-center fw-semibold"><?= $r['marks'] ?><span class="text-muted">/<?= $r['max_marks'] ?></span></td>
+            <td class="text-center fw-semibold"><?= $r['marks'] ?><span class="text-muted fw-normal">/<?= $r['max_marks'] ?></span></td>
             <td class="text-center">
-              <div class="progress" style="height:6px;min-width:60px">
+              <div class="progress mb-1" style="height:5px">
                 <div class="progress-bar" style="width:<?= $pct ?>%;background:<?= $gc ?>"></div>
               </div>
-              <div class="small mt-1"><?= $pct ?>%</div>
+              <div class="small fw-semibold" style="color:<?= $gc ?>"><?= $pct ?>%</div>
             </td>
             <td class="text-center">
               <span class="badge" style="background:<?= $gc ?>;font-size:.75rem"><?= e($r['grade']) ?></span>
               <?php if ($gl): ?><div class="text-muted" style="font-size:.65rem"><?= $gl ?></div><?php endif; ?>
             </td>
-            <td class="small text-muted d-none d-md-table-cell"><?= e($r['teacher_comment'] ?? '—') ?></td>
+            <td class="small text-muted d-none d-lg-table-cell">
+              <?= e($r['teacher_comment'] ?? $r['remarks'] ?? '&mdash;') ?>
+            </td>
           </tr>
           <?php endforeach; ?>
         </tbody>
         <tfoot class="table-light">
           <tr>
-            <td class="fw-700">Total</td>
-            <td class="text-center fw-700"><?= $totalMarks ?>/<?= $maxMarks ?></td>
-            <td class="text-center fw-700"><?= $overallPct ?>%</td>
-            <td colspan="2"></td>
+            <td class="fw-bold">Total</td>
+            <td class="text-center fw-bold"><?= $totalMarks ?>/<?= $maxMarks ?></td>
+            <td class="text-center fw-bold" style="color:<?= $overallColor ?>"><?= $overallPct ?>%</td>
+            <td class="text-center">
+              <span class="badge" style="background:<?= $overallColor ?>;font-size:.75rem"><?= $overallGrade ?></span>
+            </td>
+            <td class="d-none d-lg-table-cell small text-muted">
+              <?php if ($classPosition): ?>
+              <i class="fas fa-trophy text-warning me-1"></i>
+              Position <?= $classPosition ?> of <?= $classTotal ?> in class
+              <?php endif; ?>
+            </td>
           </tr>
         </tfoot>
       </table>
@@ -176,7 +262,9 @@ $gradeLabels  = ['A'=>'Excellent','B'=>'Very Good','C'=>'Good','D'=>'Satisfactor
 </div>
 
 <?php elseif ($selectedExam): ?>
-<div class="alert alert-info">No results recorded for this exam yet.</div>
+<div class="alert alert-info border-0">
+  <i class="fas fa-info-circle me-2"></i>No results recorded for this exam yet.
+</div>
 <?php endif; ?>
 <?php endif; ?>
 

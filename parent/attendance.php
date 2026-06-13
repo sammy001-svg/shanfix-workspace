@@ -30,7 +30,7 @@ $records = [];
 try {
     $s = $pdo->prepare(
         "SELECT date, status, remarks FROM sch_attendance
-         WHERE student_id=? AND org_id=? AND date BETWEEN ? AND ?
+         WHERE student_id=? AND org_id=? AND att_date BETWEEN ? AND ?
          ORDER BY date DESC"
     );
     $s->execute([$parActive, $parOrgId, $dateFrom, $dateTo]);
@@ -142,7 +142,7 @@ $statusColors = [
     <div class="table-responsive">
       <table class="table mb-0">
         <thead class="table-light">
-          <tr><th>Date</th><th>Day</th><th class="text-center">Status</th><th>Remarks</th></tr>
+          <tr><th>Date</th><th>Day</th><th class="text-center">Status</th><th class="d-none d-md-table-cell">Remarks</th></tr>
         </thead>
         <tbody>
           <?php foreach ($records as $r):
@@ -150,14 +150,14 @@ $statusColors = [
             $sc  = $statusColors[$st] ?? $statusColors['absent'];
           ?>
           <tr>
-            <td class="fw-semibold small"><?= date('d M Y', strtotime($r['date'])) ?></td>
-            <td class="small text-muted"><?= date('l', strtotime($r['date'])) ?></td>
+            <td class="fw-semibold small"><?= date('d M Y', strtotime($r['att_date'])) ?></td>
+            <td class="small text-muted"><?= date('l', strtotime($r['att_date'])) ?></td>
             <td class="text-center">
               <span class="badge" style="background:<?= $sc['bg'] ?>;color:<?= $sc['txt'] ?>;font-size:.75rem">
                 <?= $sc['label'] ?>
               </span>
             </td>
-            <td class="small text-muted"><?= e($r['remarks'] ?? '—') ?></td>
+            <td class="small text-muted d-none d-md-table-cell"><?= e($r['remarks'] ?? '—') ?></td>
           </tr>
           <?php endforeach; ?>
         </tbody>

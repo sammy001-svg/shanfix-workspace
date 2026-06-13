@@ -24,7 +24,7 @@ try {
            COUNT(*) AS total,
            SUM(CASE WHEN status='present' THEN 1 ELSE 0 END) AS present
          FROM sch_attendance
-         WHERE student_id=? AND org_id=? AND date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
+         WHERE student_id=? AND org_id=? AND att_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
     );
     $s->execute([$parActive, $parOrgId]);
     $attRow = $s->fetch();
