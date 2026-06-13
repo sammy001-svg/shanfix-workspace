@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * OrbitDesk — Standalone Pricing Page
  * Pulls live plans and modules from the database.
@@ -90,18 +90,12 @@ $compareFeatures = [
 
 $planCount = count($plans);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="<?= htmlspecialchars($appName, ENT_QUOTES) ?> pricing — transparent, modular plans built for African businesses. Start free for 14 days.">
-  <title>Pricing — <?= htmlspecialchars($appName, ENT_QUOTES) ?></title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<?php
+$pageTitle = 'Pricing — ' . APP_NAME;
+$metaDesc  = APP_NAME . ' pricing — transparent, modular plans built for African businesses. Start free for 14 days.';
+$activeNav = 'pricing';
+ob_start();
+?>
   <style>
     /* ── Variables ─────────────────────────────────────────── */
     :root {
@@ -364,30 +358,10 @@ $planCount = count($plans);
       .plan-card.popular { margin-top: .5rem; }
       .compare-table thead th, .compare-table tbody td { padding: .7rem .9rem; }
     }
-  </style>
-</head>
-<body>
-
-<!-- ══════════════════════════════════════════════════════════
-     NAVBAR
-════════════════════════════════════════════════════════════ -->
-<nav class="site-nav" id="siteNav">
-  <div class="container d-flex align-items-center justify-content-between">
-    <a href="<?= htmlspecialchars($appUrl ?: '/', ENT_QUOTES) ?>" class="nav-brand">Orbit<span>Desk</span></a>
-    <ul class="nav-links d-none d-lg-flex">
-      <li><a href="<?= htmlspecialchars($appUrl . '/index.php', ENT_QUOTES) ?>">Home</a></li>
-      <li><a href="<?= htmlspecialchars($appUrl . '/index.php#features', ENT_QUOTES) ?>">Features</a></li>
-      <li><a href="pricing.php" class="active">Pricing</a></li>
-      <li><a href="contact.php">Contact</a></li>
-    </ul>
-    <div class="d-flex gap-2">
-      <a href="<?= htmlspecialchars($appUrl . '/index.php', ENT_QUOTES) ?>" class="btn btn-nav btn-nav-outline d-none d-sm-inline-flex">Login</a>
-      <a href="<?= htmlspecialchars($appUrl . '/auth/register.php', ENT_QUOTES) ?>" class="btn btn-nav btn-nav-solid">
-        <i class="fas fa-rocket me-1" style="font-size:.8rem"></i>Start Free Trial
-      </a>
-    </div>
-  </div>
-</nav>
+<?php
+$extraHeadHtml = ob_get_clean();
+require_once __DIR__ . '/includes/header-public.php';
+?>
 
 <!-- ══════════════════════════════════════════════════════════
      HERO
@@ -798,81 +772,14 @@ $planCount = count($plans);
 <!-- ══════════════════════════════════════════════════════════
      FOOTER
 ════════════════════════════════════════════════════════════ -->
-<footer class="site-footer">
-  <div class="container">
-    <div class="row g-4">
-      <div class="col-md-4">
-        <div class="footer-brand">Orbit<span>Desk</span></div>
-        <p style="font-size:.8rem;color:#4a6080;max-width:260px;margin-top:.5rem">
-          <?= htmlspecialchars($appTagline, ENT_QUOTES) ?>
-        </p>
-        <div class="mt-3 d-flex gap-2">
-          <?php foreach ([['fab fa-facebook-f','#1877f2'],['fab fa-twitter','#1da1f2'],['fab fa-linkedin-in','#0a66c2'],['fab fa-whatsapp','#25d366']] as [$icon,$c]): ?>
-          <a href="#" style="width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;color:#90a4c0;font-size:.8rem;transition:.15s" onmouseover="this.style.background='<?= $c ?>'" onmouseout="this.style.background='rgba(255,255,255,.07)'">
-            <i class="<?= $icon ?>"></i>
-          </a>
-          <?php endforeach; ?>
-        </div>
-      </div>
-      <div class="col-md-2 col-6">
-        <div class="footer-col-title">Platform</div>
-        <ul class="footer-links">
-          <li><a href="<?= htmlspecialchars($appUrl . '/index.php#features', ENT_QUOTES) ?>">Features</a></li>
-          <li><a href="pricing.php" style="color:#90caf9">Pricing</a></li>
-          <li><a href="#">Modules</a></li>
-          <li><a href="#">Integrations</a></li>
-          <li><a href="#">API Docs</a></li>
-        </ul>
-      </div>
-      <div class="col-md-2 col-6">
-        <div class="footer-col-title">Company</div>
-        <ul class="footer-links">
-          <li><a href="#">About Us</a></li>
-          <li><a href="#">Blog</a></li>
-          <li><a href="#">Careers</a></li>
-          <li><a href="contact.php">Contact</a></li>
-        </ul>
-      </div>
-      <div class="col-md-2 col-6">
-        <div class="footer-col-title">Support</div>
-        <ul class="footer-links">
-          <li><a href="#">Help Centre</a></li>
-          <li><a href="#">Documentation</a></li>
-          <li><a href="#">System Status</a></li>
-          <li><a href="track.php">Parcel Tracking</a></li>
-          <li><a href="mall-tenant-portal.php">Tenant Portal</a></li>
-        </ul>
-      </div>
-      <div class="col-md-2 col-6">
-        <div class="footer-col-title">Legal</div>
-        <ul class="footer-links">
-          <li><a href="#">Privacy Policy</a></li>
-          <li><a href="#">Terms of Service</a></li>
-          <li><a href="#">Cookie Policy</a></li>
-          <li><a href="#">Data Processing</a></li>
-        </ul>
-      </div>
-    </div>
-    <hr class="footer-divider">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-      <div class="footer-copy">&copy; <?= date('Y') ?> <?= htmlspecialchars($appName, ENT_QUOTES) ?>. All rights reserved.</div>
-      <div class="footer-copy"><i class="fas fa-map-marker-alt me-1"></i>Nairobi, Kenya &nbsp;·&nbsp; <i class="fas fa-envelope me-1"></i><?= htmlspecialchars($siteEmail, ENT_QUOTES) ?></div>
-    </div>
-  </div>
-</footer>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<?php
+ob_start();
+?>
 <script>
-// ── State ────────────────────────────────────────────────────────────────────
-let _cycle    = 'monthly';   // 'monthly' | 'annual'
-let _currency = 'USD';       // 'USD' | 'KES'
+let _cycle    = 'monthly';
+let _currency = 'USD';
 
-// ── Navbar shadow ─────────────────────────────────────────────────────────────
-window.addEventListener('scroll', () => {
-  document.getElementById('siteNav').classList.toggle('scrolled', window.scrollY > 10);
-}, { passive: true });
-
-// ── Currency selector ─────────────────────────────────────────────────────────
 function setCurrency(cur) {
   _currency = cur;
   document.getElementById('btnUSD').classList.toggle('active', cur === 'USD');
@@ -882,7 +789,6 @@ function setCurrency(cur) {
   refreshPrices();
 }
 
-// ── Billing cycle toggle ──────────────────────────────────────────────────────
 document.getElementById('billingToggle').addEventListener('change', function () {
   _cycle = this.checked ? 'annual' : 'monthly';
   const isAnn = _cycle === 'annual';
@@ -892,57 +798,41 @@ document.getElementById('billingToggle').addEventListener('change', function () 
   refreshPrices();
 });
 
-// ── Update plan card prices ───────────────────────────────────────────────────
 function refreshPrices() {
   const isAnn = _cycle === 'annual';
   const isKES = _currency === 'KES';
   const sym   = isKES ? 'KES ' : '$';
 
-  // Plan cards
   document.querySelectorAll('.plan-price-val').forEach(el => {
-    const raw = isKES
-      ? (isAnn ? el.dataset.kesAnnMo : el.dataset.kesMo)
-      : (isAnn ? el.dataset.usdAnnMo : el.dataset.usdMo);
+    const raw = isKES ? (isAnn ? el.dataset.kesAnnMo : el.dataset.kesMo)
+                      : (isAnn ? el.dataset.usdAnnMo : el.dataset.usdMo);
     if (raw !== undefined) el.textContent = raw;
   });
-
   document.querySelectorAll('.plan-cur').forEach(el => {
-    el.textContent = isKES ? 'KES ' : '$';
-    el.style.fontSize = isKES ? '.7rem' : '';
+    el.textContent = isKES ? 'KES ' : '$';
+    el.style.fontSize  = isKES ? '.7rem' : '';
     el.style.marginTop = isKES ? '.8rem' : '';
   });
-
-  // Billing notes
   document.querySelectorAll('.plan-billed').forEach(el => {
-    const annTot = isKES ? el.dataset.kesAnnTotal : el.dataset.usdAnnTotal;
+    const annTot  = isKES ? el.dataset.kesAnnTotal : el.dataset.usdAnnTotal;
     const savePct = el.dataset.savePct || 20;
-    if (isAnn && annTot) {
-      el.innerHTML = `Billed <strong>${sym}${annTot}</strong> / year &nbsp;
-        <span class="savings">Save ${savePct}%</span>`;
-    } else {
-      el.innerHTML = 'Billed monthly &mdash; upgrade anytime';
-    }
+    el.innerHTML = (isAnn && annTot)
+      ? `Billed <strong>${sym}${annTot}</strong> / year &nbsp;<span class="savings">Save ${savePct}%</span>`
+      : 'Billed monthly &mdash; upgrade anytime';
   });
-
-  // Module cards
   document.querySelectorAll('.mod-price-display').forEach(el => {
-    const raw = isKES
-      ? (isAnn ? el.dataset.kesAnnMo : el.dataset.kesMo)
-      : (isAnn ? el.dataset.usdAnnMo : el.dataset.usdMo);
+    const raw = isKES ? (isAnn ? el.dataset.kesAnnMo : el.dataset.kesMo)
+                      : (isAnn ? el.dataset.usdAnnMo : el.dataset.usdMo);
     if (raw) el.innerHTML = `<strong>${raw}</strong>/mo`;
   });
-
-  // Update save badge
   const firstCard = document.querySelector('.plan-price-val');
   if (firstCard) {
-    const closest = firstCard.closest('.plan-card');
-    const billed  = closest?.querySelector('.plan-billed');
-    const pct     = billed?.dataset.savePct || 20;
+    const billed = firstCard.closest('.plan-card')?.querySelector('.plan-billed');
+    const pct    = billed?.dataset.savePct || 20;
     document.getElementById('saveBadge').textContent = `Save ${pct}%`;
   }
 }
 
-// ── Module category filter ────────────────────────────────────────────────────
 function filterMods(cat, btn) {
   document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -951,8 +841,9 @@ function filterMods(cat, btn) {
   });
 }
 
-// Initial price render
 refreshPrices();
 </script>
-</body>
-</html>
+<?php
+$extraBodyJs = ob_get_clean();
+require_once __DIR__ . '/includes/footer-public.php';
+?>

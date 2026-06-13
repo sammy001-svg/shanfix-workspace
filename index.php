@@ -74,44 +74,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['contact_submit'])) {
     $contactSent = true;
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <?php
-$_ogTitle = APP_NAME . ' — ' . $appTagline;
-$_ogDesc  = 'The all-in-one business management platform for African businesses. Manage accounting, CRM, HRM, POS, hotel, school, SACCO, health clinic and 20+ modules in one place. M-Pesa integrated.';
-$_ogImg   = APP_URL . '/assets/images/og-banner-1200.png';
-$_ogUrl   = APP_URL . '/';
+// ── Shared public header setup ─────────────────────────────────────────────
+$pageTitle    = APP_NAME . ' — ' . $appTagline;
+$metaDesc     = 'The all-in-one business management platform for African businesses. Manage accounting, CRM, HRM, POS, hotel, school, SACCO, health clinic and 20+ modules in one place. M-Pesa integrated.';
+$canonicalUrl = APP_URL . '/';
+$ogImage      = APP_URL . '/assets/images/og-banner-1200.png';
+$activeNav    = 'home';
+$bodyClass    = 'landing-body';
+$_ogTitle     = $pageTitle; // used by JSON-LD below
+$_ogDesc      = $metaDesc;  // used by JSON-LD below
+ob_start();   // capture page-specific <head> extras for shared header
 ?>
-<title><?= e($_ogTitle) ?></title>
-<meta name="description"       content="<?= e($_ogDesc) ?>">
-<meta name="keywords"          content="business management software Kenya, ERP Kenya, accounting software, CRM Kenya, school management, SACCO software, hotel management, M-Pesa integration, OrbitDesk">
-<meta name="author"            content="<?= APP_NAME ?>">
-<link rel="canonical"          href="<?= e($_ogUrl) ?>">
-<!-- Open Graph (Facebook, WhatsApp, LinkedIn) -->
-<meta property="og:type"        content="website">
-<meta property="og:site_name"   content="<?= e(APP_NAME) ?>">
-<meta property="og:title"       content="<?= e($_ogTitle) ?>">
-<meta property="og:description" content="<?= e($_ogDesc) ?>">
-<meta property="og:image"       content="<?= e($_ogImg) ?>">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height"content="630">
-<meta property="og:image:alt"   content="<?= e(APP_NAME) ?> — Business Management Platform">
-<meta property="og:url"         content="<?= e($_ogUrl) ?>">
-<meta property="og:locale"      content="en_KE">
-<!-- Twitter Card -->
-<meta name="twitter:card"       content="summary_large_image">
-<meta name="twitter:title"      content="<?= e($_ogTitle) ?>">
-<meta name="twitter:description"content="<?= e($_ogDesc) ?>">
-<meta name="twitter:image"      content="<?= e($_ogImg) ?>">
-<meta name="twitter:image:alt"  content="<?= e(APP_NAME) ?> preview">
-<link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/assets/images/favicon.svg">
-<!-- PWA & Sitemap discovery -->
-<link rel="manifest" href="<?= APP_URL ?>/manifest.php">
+<meta name="keywords" content="business management software Kenya, ERP Kenya, accounting software, CRM Kenya, school management, SACCO software, hotel management, M-Pesa integration, OrbitDesk">
 <link rel="sitemap" type="application/xml" title="Sitemap" href="<?= APP_URL ?>/sitemap.xml">
-<meta name="theme-color" content="#1A8A4E">
+<meta property="og:image:width"  content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt"    content="<?= e(APP_NAME) ?> — Business Management Platform">
+<meta property="og:locale"       content="en_KE">
+<meta name="twitter:image:alt"   content="<?= e(APP_NAME) ?> preview">
 
 <!-- ═══════════════════════════════════════════════════════
      JSON-LD STRUCTURED DATA (Schema.org)
@@ -266,9 +247,6 @@ echo '<script type="application/ld+json">' . json_encode($_jsonLd, JSON_UNESCAPE
 // Clean up vars
 unset($_planOffers, $_modItems, $_faqs, $_jsonLd, $_ogTitle, $_ogDesc, $_ogImg, $_ogUrl);
 ?>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link href="<?= APP_URL ?>/assets/css/style.css" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════════════════
@@ -865,55 +843,10 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
 .od-mobile-menu .mob-divider { border-color: rgba(255,255,255,.1); margin: .5rem 0; }
 
 </style>
-</head>
-<body class="landing-body">
-
-<!-- Scroll progress -->
-<div id="scroll-progress"></div>
-
-<!-- ══════════════════════════════════════════════════════════
-     NAVBAR
-══════════════════════════════════════════════════════════ -->
-<nav class="od-nav" id="odNav">
-  <div class="container">
-    <div class="d-flex align-items-center justify-content-between">
-      <!-- Logo -->
-      <a href="#hero" class="nav-logo">
-        <div class="logo-mark">OD</div>
-        <div class="logo-name">Orbit<span>Desk</span></div>
-      </a>
-      <!-- Desktop links -->
-      <div class="od-nav-links d-none d-lg-flex">
-        <a href="#features">Features</a>
-        <a href="#modules">Modules</a>
-        <a href="#how">How it Works</a>
-        <a href="pricing.php">Pricing</a>
-        <a href="contact.php">Contact</a>
-      </div>
-      <!-- CTAs -->
-      <div class="d-flex align-items-center gap-2">
-        <a href="<?= APP_URL ?>/auth/login.php" class="nav-cta-login d-none d-sm-inline">Login</a>
-        <a href="<?= APP_URL ?>/auth/register.php" class="nav-cta-start">Get Started <i class="fas fa-arrow-right ms-1" style="font-size:.75rem"></i></a>
-        <button class="d-lg-none btn-icon text-white ms-1" style="background:none;border:none;font-size:1.1rem;cursor:pointer" data-bs-toggle="collapse" data-bs-target="#mobileNav">
-          <i class="fas fa-bars"></i>
-        </button>
-      </div>
-    </div>
-    <!-- Mobile nav -->
-    <div class="collapse" id="mobileNav">
-      <div class="od-mobile-menu">
-        <a href="#features"><i class="fas fa-bolt me-2"></i>Features</a>
-        <a href="#modules"><i class="fas fa-th me-2"></i>Modules</a>
-        <a href="#how"><i class="fas fa-route me-2"></i>How it Works</a>
-        <a href="pricing.php"><i class="fas fa-tags me-2"></i>Pricing</a>
-        <a href="contact.php"><i class="fas fa-envelope me-2"></i>Contact</a>
-        <hr class="mob-divider">
-        <a href="<?= APP_URL ?>/auth/login.php"><i class="fas fa-sign-in-alt me-2"></i>Login</a>
-        <a href="<?= APP_URL ?>/auth/register.php" style="background:var(--od-green);color:white;text-align:center;font-weight:700">Start Free Trial</a>
-      </div>
-    </div>
-  </div>
-</nav>
+<?php
+$extraHeadHtml = ob_get_clean();
+require_once __DIR__ . '/includes/header-public.php';
+?>
 
 <!-- ══════════════════════════════════════════════════════════
      HERO
@@ -1616,86 +1549,12 @@ body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #ff
 </div>
 <!-- ══ /Module Detail Modal ══════════════════════════════════════ -->
 
-<footer class="od-footer">
-  <div class="container" style="padding-top:4rem;padding-bottom:2rem">
-    <div class="row g-4 mb-5">
-      <!-- Brand col -->
-      <div class="col-lg-4">
-        <div class="d-flex align-items-center gap-2 mb-3">
-          <div style="width:38px;height:38px;background:linear-gradient(135deg,#1A8A4E,#22c27a);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:900;color:white;font-size:.85rem">OD</div>
-          <div class="foot-logo-name">Orbit<span>Desk</span></div>
-        </div>
-        <p class="foot-desc"><?= htmlspecialchars($appTagline, ENT_QUOTES) ?>. Built for African businesses, trusted across Kenya and East Africa.</p>
-        <div class="social-links">
-          <a href="#" class="soc-btn"><i class="fab fa-facebook-f"></i></a>
-          <a href="#" class="soc-btn"><i class="fab fa-twitter"></i></a>
-          <a href="#" class="soc-btn"><i class="fab fa-linkedin-in"></i></a>
-          <a href="#" class="soc-btn"><i class="fab fa-whatsapp"></i></a>
-          <a href="#" class="soc-btn"><i class="fab fa-youtube"></i></a>
-        </div>
-      </div>
-      <!-- Modules 1 -->
-      <div class="col-6 col-lg-2">
-        <h6>Modules</h6>
-        <?php foreach(array_slice($modules,0,8) as $m): ?>
-        <a href="<?=APP_URL?>/auth/register.php" class="foot-link"><?=e($m['name'])?></a>
-        <?php endforeach; ?>
-      </div>
-      <!-- Modules 2 -->
-      <div class="col-6 col-lg-2">
-        <h6>More Modules</h6>
-        <?php foreach(array_slice($modules,8) as $m): ?>
-        <a href="<?=APP_URL?>/auth/register.php" class="foot-link"><?=e($m['name'])?></a>
-        <?php endforeach; ?>
-      </div>
-      <!-- Company -->
-      <div class="col-6 col-lg-2">
-        <h6>Company</h6>
-        <a href="#about"   class="foot-link">About Us</a>
-        <a href="#"        class="foot-link">Careers</a>
-        <a href="#"        class="foot-link">Blog</a>
-        <a href="#contact" class="foot-link">Contact</a>
-        <a href="#"        class="foot-link">Partners</a>
-      </div>
-      <!-- Legal -->
-      <div class="col-6 col-lg-2">
-        <h6>Legal</h6>
-        <a href="#" class="foot-link">Privacy Policy</a>
-        <a href="#" class="foot-link">Terms of Service</a>
-        <a href="#" class="foot-link">Cookie Policy</a>
-        <a href="#" class="foot-link">Security</a>
-        <a href="#" class="foot-link">Compliance</a>
-      </div>
-    </div>
-    <div class="foot-bottom d-flex flex-wrap align-items-center justify-content-between gap-3">
-      <p>&copy; <?=APP_YEAR?> <?=APP_NAME?>. All rights reserved. Made with <i class="fas fa-heart" style="color:#ef4444;font-size:.75rem"></i> in Kenya.</p>
-      <div class="foot-badges">
-        <span class="foot-badge"><i class="fas fa-shield-halved"></i> SSL Secured</span>
-        <span class="foot-badge"><i class="fas fa-lock"></i> Data Encrypted</span>
-        <span class="foot-badge"><i class="fas fa-server"></i> 99.9% Uptime</span>
-      </div>
-    </div>
-  </div>
-</footer>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<?php
+ob_start();
+?>
 <script src="<?= APP_URL ?>/assets/js/app.js"></script>
 <script>
-// ── Scroll progress bar ─────────────────────────────────────
-const progressBar = document.getElementById('scroll-progress');
-window.addEventListener('scroll', () => {
-  const s = document.documentElement;
-  const pct = (s.scrollTop / (s.scrollHeight - s.clientHeight)) * 100;
-  progressBar.style.width = pct + '%';
-}, { passive: true });
-
-// ── Sticky navbar ─────────────────────────────────────────────
-const nav = document.getElementById('odNav');
-window.addEventListener('scroll', () => {
-  nav.classList.toggle('scrolled', window.scrollY > 30);
-}, { passive: true });
-
-// ── Scroll-reveal (Intersection Observer) ────────────────────
+// ── Scroll-reveal ─────────────────────────────────────────────
 const observer = new IntersectionObserver((entries) => {
   entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
 }, { threshold: .12, rootMargin: '0px 0px -40px 0px' });
@@ -1721,15 +1580,12 @@ function animateCounter(el) {
 }
 const counterObserver = new IntersectionObserver((entries) => {
   entries.forEach(e => {
-    if (e.isIntersecting) {
-      animateCounter(e.target);
-      counterObserver.unobserve(e.target);
-    }
+    if (e.isIntersecting) { animateCounter(e.target); counterObserver.unobserve(e.target); }
   });
 }, { threshold: .5 });
 document.querySelectorAll('[data-counter]').forEach(el => counterObserver.observe(el));
 
-// ── Pricing: billing cycle + currency toggle ──────────────────
+// ── Pricing toggle ─────────────────────────────────────────────
 const USD_RATE = <?= (float)$usdRate ?>;
 let activeCur  = localStorage.getItem('landingCurrency') || 'USD';
 
@@ -1737,52 +1593,32 @@ function updatePricing() {
   const annual   = document.getElementById('billingToggle').checked;
   const isUSD    = (activeCur === 'USD');
   const curSym   = isUSD ? '$' : 'KES ';
-  const subtitle = isUSD
+  document.getElementById('pricingSubtitle').textContent = isUSD
     ? 'All prices in USD. Start free, scale as you grow. No hidden fees.'
     : 'All prices in KES. Start free, scale as you grow. No hidden fees.';
-
-  document.getElementById('pricingSubtitle').textContent = subtitle;
-
-  // Billing cycle labels
   document.getElementById('lblMonthly').className = annual ? '' : 'active';
   document.getElementById('lblAnnual').className  = annual ? 'active' : '';
-
-  // Currency pill buttons
   document.getElementById('btnUSD').classList.toggle('active', isUSD);
   document.getElementById('btnKES').classList.toggle('active', !isUSD);
   document.getElementById('btnUSD').setAttribute('aria-pressed', isUSD);
   document.getElementById('btnKES').setAttribute('aria-pressed', !isUSD);
-
-  // Update currency symbol on each card
-  document.querySelectorAll('.plan-cur').forEach(function(el) {
-    el.textContent = curSym;
-  });
-
-  // Update each plan card's price and note
+  document.querySelectorAll('.plan-cur').forEach(function(el) { el.textContent = curSym; });
   document.querySelectorAll('.plan-price-val').forEach(function(el) {
-    var val = annual
-      ? (isUSD ? el.dataset.usdAnnMo : el.dataset.kesAnnMo)
-      : (isUSD ? el.dataset.usdMo    : el.dataset.kesMo);
+    var val = annual ? (isUSD ? el.dataset.usdAnnMo : el.dataset.kesAnnMo)
+                     : (isUSD ? el.dataset.usdMo    : el.dataset.kesMo);
     el.textContent = val || '0';
   });
-
   document.querySelectorAll('.plan-note').forEach(function(el) {
-    var annTot  = isUSD ? el.dataset.usdAnnTotal : el.dataset.kesAnnTotal;
-    var save    = el.dataset.savePct;
-    var curFull = isUSD ? 'USD' : 'KES';
+    var annTot = isUSD ? el.dataset.usdAnnTotal : el.dataset.kesAnnTotal;
+    var save   = el.dataset.savePct;
+    var cur    = isUSD ? 'USD' : 'KES';
     el.textContent = annual
-      ? 'Billed annually — ' + curFull + ' ' + annTot + '/yr' + (save > 0 ? ' · Save ' + save + '%' : '')
+      ? 'Billed annually — ' + cur + ' ' + annTot + '/yr' + (save > 0 ? ' · Save ' + save + '%' : '')
       : 'No long-term commitment';
   });
-
-  // ── Module tiles: update price pills ──────────────────────────
   document.querySelectorAll('.mod-price-pill').forEach(function(el) {
-    el.textContent = isUSD
-      ? 'From $ '   + el.dataset.usd + '/mo'
-      : 'From KES ' + el.dataset.kes + '/mo';
+    el.textContent = isUSD ? 'From $ ' + el.dataset.usd + '/mo' : 'From KES ' + el.dataset.kes + '/mo';
   });
-
-  // Keep both currency toggles in sync (modules section + plans section)
   var modUSD = document.getElementById('modBtnUSD');
   var modKES = document.getElementById('modBtnKES');
   if (modUSD && modKES) {
@@ -1792,53 +1628,30 @@ function updatePricing() {
     modKES.style.cssText = (!isUSD ? activeStyle : inactiveStyle) + ';border:none;padding:.28rem .9rem;font-size:.78rem;font-weight:700;cursor:pointer;transition:all .18s';
   }
 }
-
-function setCurrency(cur) {
-  activeCur = cur;
-  localStorage.setItem('landingCurrency', cur);
-  updatePricing();
-}
-
-// Wire billing toggle
+function setCurrency(cur) { activeCur = cur; localStorage.setItem('landingCurrency', cur); updatePricing(); }
 document.getElementById('billingToggle').addEventListener('change', updatePricing);
-
-// Apply saved/default preference on page load
 updatePricing();
 
 // ── Module detail modal ────────────────────────────────────────
 const MOD_INFO = <?= json_encode($moduleMap, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
-
 function openModuleModal(slug) {
   const m = MOD_INFO[slug];
   if (!m) return;
-
-  // Header colour (gradient from the module's brand colour)
-  document.getElementById('mmHeader').style.background =
-    `linear-gradient(135deg, ${m.color}f0 0%, ${m.color}b0 100%)`;
-
+  document.getElementById('mmHeader').style.background = `linear-gradient(135deg, ${m.color}f0 0%, ${m.color}b0 100%)`;
   document.getElementById('mmIcon').className = m.icon;
   document.getElementById('mmCat').textContent  = m.category;
   document.getElementById('mmName').textContent = m.name;
   document.getElementById('mmDesc').textContent = m.desc;
-  // Show primary price in active currency, secondary below
-  var isUSD    = (activeCur === 'USD');
-  var primary  = isUSD
-    ? '$ '   + Number(m.price_usd).toFixed(2)    + '/mo'
-    : 'KES ' + Number(m.price).toLocaleString('en-KE') + '/mo';
-  var secondary = isUSD
-    ? '≈ KES ' + Number(m.price).toLocaleString('en-KE') + '/mo'
-    : '≈ $ '  + Number(m.price_usd).toFixed(2) + '/mo';
-  var annLine = (m.price_ann > 0)
-    ? (isUSD
-        ? ' · $ ' + Number(m.price_ann_usd).toFixed(2) + '/yr (≈ KES ' + Number(m.price_ann).toLocaleString('en-KE') + ')'
-        : ' · KES ' + Number(m.price_ann).toLocaleString('en-KE') + '/yr (≈ $ ' + Number(m.price_ann_usd).toFixed(2) + ')')
-    : '';
+  var isUSD = (activeCur === 'USD');
+  var primary   = isUSD ? '$ ' + Number(m.price_usd).toFixed(2) + '/mo' : 'KES ' + Number(m.price).toLocaleString('en-KE') + '/mo';
+  var secondary = isUSD ? '≈ KES ' + Number(m.price).toLocaleString('en-KE') + '/mo' : '≈ $ ' + Number(m.price_usd).toFixed(2) + '/mo';
+  var annLine   = (m.price_ann > 0) ? (isUSD
+    ? ' · $ ' + Number(m.price_ann_usd).toFixed(2) + '/yr (≈ KES ' + Number(m.price_ann).toLocaleString('en-KE') + ')'
+    : ' · KES ' + Number(m.price_ann).toLocaleString('en-KE') + '/yr (≈ $ ' + Number(m.price_ann_usd).toFixed(2) + ')') : '';
   document.getElementById('mmPrice').innerHTML =
     '<span class="fw-bold">' + primary + '</span>' +
     '<span class="text-muted small ms-2">' + secondary + '</span>' +
     (annLine ? '<div class="text-muted small mt-1" style="font-size:.75rem">' + annLine + '</div>' : '');
-
-  // Feature list — 2-column grid
   document.getElementById('mmFeatures').innerHTML = (m.features || []).map(f => `
     <div class="col-sm-6">
       <div class="d-flex align-items-start gap-2 px-2 py-2 rounded-2" style="background:#f0fdf4">
@@ -1846,21 +1659,22 @@ function openModuleModal(slug) {
         <span style="font-size:.8rem;color:#1e293b;line-height:1.45">${f}</span>
       </div>
     </div>`).join('');
-
   bootstrap.Modal.getOrCreateInstance(document.getElementById('modDetailModal')).show();
 }
 
-// ── Active nav link on scroll ──────────────────────────────────
+// ── Active nav section highlight ───────────────────────────────
 const sections = document.querySelectorAll('section[id]');
 const navLinks = document.querySelectorAll('.od-nav-links a');
 window.addEventListener('scroll', () => {
   let current = '';
   sections.forEach(s => { if (window.scrollY >= s.offsetTop - 100) current = s.id; });
   navLinks.forEach(a => {
-    a.style.color = a.getAttribute('href') === '#' + current ? 'white' : '';
+    a.style.color      = a.getAttribute('href') === '#' + current ? 'white' : '';
     a.style.background = a.getAttribute('href') === '#' + current ? 'rgba(255,255,255,.1)' : '';
   });
 }, { passive: true });
 </script>
-</body>
-</html>
+<?php
+$extraBodyJs = ob_get_clean();
+require_once __DIR__ . '/includes/footer-public.php';
+?>

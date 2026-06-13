@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * OrbitDesk — Public Contact Page
  * Standalone, no authentication required.
@@ -125,19 +125,12 @@ $subjects = [
     'Other'                      => 'Other',
 ];
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Contact <?= htmlspecialchars($appName, ENT_QUOTES) ?> — reach our team for sales, support, demo requests or partnership enquiries.">
-  <title>Contact Us — <?= htmlspecialchars($appName, ENT_QUOTES) ?></title>
-  <meta name="theme-color" content="#1A8A4E">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<?php
+$pageTitle = 'Contact Us — ' . APP_NAME;
+$metaDesc  = 'Contact ' . APP_NAME . ' — reach our team for sales, support, demo requests or partnership enquiries.';
+$activeNav = 'contact';
+ob_start();
+?>
   <style>
     /* ── Variables ───────────────────────────────────────────── */
     :root {
@@ -399,29 +392,10 @@ $subjects = [
       .contact-hero { padding: 3.5rem 0 3rem; }
       .form-card { padding: 1.4rem; }
     }
-  </style>
-</head>
-<body>
-
-<!-- ── Sticky Navbar ──────────────────────────────────────────────────────── -->
-<nav class="site-nav" id="siteNav">
-  <div class="container d-flex align-items-center justify-content-between">
-    <a href="<?= htmlspecialchars($appUrl ?: '/', ENT_QUOTES) ?>" class="nav-brand">
-      Orbit<span>Desk</span>
-    </a>
-    <ul class="nav-links d-none d-lg-flex">
-      <li><a href="<?= htmlspecialchars($appUrl ?: '/', ENT_QUOTES) ?>">Home</a></li>
-      <li><a href="pricing.php">Pricing</a></li>
-      <li><a href="contact.php" class="active">Contact</a></li>
-    </ul>
-    <div class="d-flex align-items-center gap-2">
-      <a href="<?= htmlspecialchars($appUrl . '/auth/register.php', ENT_QUOTES) ?>" class="btn-nav btn-nav-outline d-none d-md-inline-flex">Free Trial</a>
-      <a href="<?= htmlspecialchars($appUrl . '/index.php', ENT_QUOTES) ?>" class="btn-nav btn-nav-solid">
-        <i class="fas fa-sign-in-alt me-1"></i>Login
-      </a>
-    </div>
-  </div>
-</nav>
+<?php
+$extraHeadHtml = ob_get_clean();
+require_once __DIR__ . '/includes/header-public.php';
+?>
 
 <!-- ── Hero ──────────────────────────────────────────────────────────────── -->
 <section class="contact-hero">
@@ -695,77 +669,11 @@ $subjects = [
 </section>
 
 <!-- ── Footer ─────────────────────────────────────────────────────────────── -->
-<footer class="site-footer">
-  <div class="container">
-    <div class="row g-4">
-      <div class="col-md-4">
-        <div class="footer-brand">Orbit<span>Desk</span></div>
-        <div class="footer-tagline"><?= htmlspecialchars($appTagline, ENT_QUOTES) ?></div>
-        <p style="font-size:.8rem;color:#607d9f;max-width:260px;line-height:1.6">
-          Helping businesses across East Africa manage operations smarter — from one unified platform.
-        </p>
-        <div class="social-links mt-3">
-          <a href="#" class="social-link" style="background:rgba(255,255,255,.08)" title="Facebook"><i class="fab fa-facebook-f" style="font-size:.78rem"></i></a>
-          <a href="#" class="social-link" style="background:rgba(255,255,255,.08)" title="Twitter"><i class="fab fa-twitter" style="font-size:.78rem"></i></a>
-          <a href="#" class="social-link" style="background:rgba(255,255,255,.08)" title="LinkedIn"><i class="fab fa-linkedin-in" style="font-size:.78rem"></i></a>
-          <a href="#" class="social-link" style="background:rgba(255,255,255,.08)" title="WhatsApp"><i class="fab fa-whatsapp" style="font-size:.78rem"></i></a>
-        </div>
-      </div>
-      <div class="col-6 col-md-2">
-        <div class="footer-heading">Platform</div>
-        <ul class="footer-links">
-          <li><a href="<?= htmlspecialchars($appUrl ?: '/', ENT_QUOTES) ?>">Home</a></li>
-          <li><a href="pricing.php">Pricing</a></li>
-          <li><a href="<?= htmlspecialchars($appUrl . '/auth/register.php', ENT_QUOTES) ?>">Free Trial</a></li>
-          <li><a href="#">Modules</a></li>
-          <li><a href="#">API Docs</a></li>
-        </ul>
-      </div>
-      <div class="col-6 col-md-2">
-        <div class="footer-heading">Company</div>
-        <ul class="footer-links">
-          <li><a href="#">About Us</a></li>
-          <li><a href="#">Blog</a></li>
-          <li><a href="#">Careers</a></li>
-          <li><a href="#">Partners</a></li>
-          <li><a href="contact.php">Contact</a></li>
-        </ul>
-      </div>
-      <div class="col-6 col-md-2">
-        <div class="footer-heading">Support</div>
-        <ul class="footer-links">
-          <li><a href="#">Help Centre</a></li>
-          <li><a href="#">Documentation</a></li>
-          <li><a href="#">System Status</a></li>
-          <li><a href="<?= htmlspecialchars($appUrl . '/track.php', ENT_QUOTES) ?>">Parcel Tracking</a></li>
-          <li><a href="<?= htmlspecialchars($appUrl . '/mall-tenant-portal.php', ENT_QUOTES) ?>">Tenant Portal</a></li>
-        </ul>
-      </div>
-      <div class="col-6 col-md-2">
-        <div class="footer-heading">Legal</div>
-        <ul class="footer-links">
-          <li><a href="#">Privacy Policy</a></li>
-          <li><a href="#">Terms of Service</a></li>
-          <li><a href="#">Cookie Policy</a></li>
-          <li><a href="#">Data Processing</a></li>
-        </ul>
-      </div>
-    </div>
-    <hr class="footer-divider">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-      <div class="footer-copy">&copy; <?= date('Y') ?> <?= htmlspecialchars($appName, ENT_QUOTES) ?>. All rights reserved.</div>
-      <div class="footer-copy">Built for African businesses &mdash; Nairobi, Kenya</div>
-    </div>
-  </div>
-</footer>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<?php
+ob_start();
+?>
 <script>
-// Sticky nav shadow
-window.addEventListener('scroll', () => {
-  document.getElementById('siteNav').classList.toggle('scrolled', window.scrollY > 10);
-}, { passive: true });
-
 // Character counter
 const msgEl     = document.getElementById('f_message');
 const counterEl = document.getElementById('charCounter');
@@ -812,5 +720,7 @@ if (form) {
   });
 }
 </script>
-</body>
-</html>
+<?php
+$extraBodyJs = ob_get_clean();
+require_once __DIR__ . '/includes/footer-public.php';
+?>
