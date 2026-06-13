@@ -147,107 +147,25 @@ try{$s=$pdo->prepare("SELECT cs.*,sub.name AS subject_name,cl.name AS class_name
   <div class=”col-lg-5”>
     <div class=”card”>
       <div class=”card-header d-flex align-items-center justify-content-between”>
-        <h6 class=”mb-0”><i class=”fas fa-layer-group me-2” style=”color:<?=$moduleColor?>”></i>Class Assignments <span class=”badge bg-secondary ms-1”><?=count($assignments)?></span></h6>
-        <button type=”button” class=”btn btn-sm text-white” style=”background:<?=$moduleColor?>” data-bs-toggle=”modal” data-bs-target=”#assignModal”>
+        <h6 class=”mb-0”>
+          <i class=”fas fa-layer-group me-2” style=”color:<?=$moduleColor?>”></i>
+          Class Assignments
+          <span class=”badge bg-secondary ms-1”><?=count($assignments)?></span>
+        </h6>
+        <button type=”button” class=”btn btn-sm text-white” style=”background:<?=$moduleColor?>” id=”btnShowAssign”>
           <i class=”fas fa-plus me-1”></i>Assign Subject
         </button>
       </div>
 
-      <?php
-        // Build class filter list from assignments
-        $assignClasses = [];
-        foreach ($assignments as $a) {
-          $assignClasses[$a['class_id']] = $a['class_name'];
-        }
-        asort($assignClasses);
-        $filterClass = $_GET['filter_class'] ?? '';
-      ?>
-
-      <?php if (!empty($assignClasses)): ?>
-      <div class=”card-body border-bottom py-2 px-3”>
-        <div class=”d-flex flex-wrap gap-1 align-items-center”>
-          <span class=”small text-muted me-1”>Filter:</span>
-          <a href=”subjects.php<?=http_build_query(array_merge($_GET,['filter_class'=>'']))?'?'.http_build_query(array_merge($_GET,['filter_class'=>''])):''?>”
-             class=”badge <?=$filterClass===''?'text-white':'bg-light text-dark border'?> text-decoration-none”
-             style=”<?=$filterClass===''?'background:'.$moduleColor:'background:#f8f9fa'?>”>All</a>
-          <?php foreach($assignClasses as $cid => $cname): ?>
-          <a href=”?<?=http_build_query(array_merge($_GET,['filter_class'=>$cid]))?>”
-             class=”badge <?=(int)$filterClass===$cid?'text-white':'bg-light text-dark border'?> text-decoration-none”
-             style=”<?=(int)$filterClass===$cid?'background:'.$moduleColor:'background:#f8f9fa'?>”>
-            <?=e($cname)?>
-          </a>
-          <?php endforeach; ?>
-        </div>
-      </div>
-      <?php endif; ?>
-
-      <div class=”card-body p-0” style=”max-height:420px;overflow-y:auto”>
-        <table class=”table table-hover align-middle mb-0 small”>
-          <thead class=”table-light sticky-top”>
-            <tr>
-              <th class=”ps-3”>Subject</th>
-              <th>Class</th>
-              <th>Teacher</th>
-              <th class=”text-center”>Hrs</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-          <?php
-            $filtered = $filterClass
-              ? array_filter($assignments, fn($a) => (int)$a['class_id'] === (int)$filterClass)
-              : $assignments;
-          ?>
-          <?php if(empty($filtered)): ?>
-          <tr><td colspan=”5” class=”text-center text-muted py-4”>
-            <i class=”fas fa-layer-group fa-2x d-block mb-2 opacity-25”></i>
-            <?= $filterClass ? 'No subjects assigned to this class.' : 'No assignments yet. Click <strong>Assign Subject</strong> to get started.' ?>
-          </td></tr>
-          <?php else: foreach($filtered as $a): ?>
-          <tr>
-            <td class=”ps-3”>
-              <div class=”fw-semibold”><?=e($a['subject_name'])?></div>
-            </td>
-            <td><span class=”badge bg-light text-dark border”><?=e($a['class_name'])?></span></td>
-            <td class=”text-muted”>
-              <?= $a['first_name'] ? e($a['first_name'].' '.$a['last_name']) : '<span class=”text-muted fst-italic”>Unassigned</span>' ?>
-            </td>
-            <td class=”text-center”><span class=”badge bg-primary bg-opacity-10 text-primary”><?=$a['periods_week']?>pw</span></td>
-            <td class=”text-end pe-2”>
-              <form method=”POST” class=”d-inline”>
-                <?=csrfField()?>
-                <input type=”hidden” name=”action” value=”unassign”>
-                <input type=”hidden” name=”id” value=”<?=$a['id']?>”>
-                <button type=”submit” class=”btn btn-xs btn-outline-danger btn-confirm” data-msg=”Remove <?=e($a['subject_name'])?> from <?=e($a['class_name'])?>?” title=”Remove”>
-                  <i class=”fas fa-times”></i>
-                </button>
-              </form>
-            </td>
-          </tr>
-          <?php endforeach; endif; ?>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Assign Subject Modal -->
-<div class=”modal fade” id=”assignModal” tabindex=”-1”>
-  <div class=”modal-dialog modal-dialog-centered”>
-    <div class=”modal-content”>
-      <div class=”modal-header text-white” style=”background:<?=$moduleColor?>”>
-        <h5 class=”modal-title”><i class=”fas fa-layer-group me-2”></i>Assign Subject to Class</h5>
-        <button type=”button” class=”btn-close btn-close-white” data-bs-dismiss=”modal”></button>
-      </div>
-      <form method=”POST”>
-        <?=csrfField()?>
-        <input type=”hidden” name=”action” value=”assign”>
-        <div class=”modal-body”>
-          <div class=”row g-3”>
+      <!-- Inline assignment form — hidden by default, toggled via JS -->
+      <div id=”assignFormPanel” style=”display:none;border-bottom:1px solid #dee2e6;background:#f8fff9;”>
+        <form method=”POST” class=”p-3”>
+          <?=csrfField()?>
+          <input type=”hidden” name=”action” value=”assign”>
+          <div class=”row g-2 mb-2”>
             <div class=”col-12”>
-              <label class=”form-label fw-semibold”>Class <span class=”text-danger”>*</span></label>
-              <select name=”class_id” class=”form-select” required>
+              <label class=”form-label small fw-semibold mb-1”>Class <span class=”text-danger”>*</span></label>
+              <select name=”class_id” class=”form-select form-select-sm” required>
                 <option value=””>Select a class…</option>
                 <?php foreach($classes as $c): ?>
                 <option value=”<?=$c['id']?>”><?=e($c['name'])?></option>
@@ -255,36 +173,79 @@ try{$s=$pdo->prepare("SELECT cs.*,sub.name AS subject_name,cl.name AS class_name
               </select>
             </div>
             <div class=”col-12”>
-              <label class=”form-label fw-semibold”>Subject <span class=”text-danger”>*</span></label>
-              <select name=”subject_id” class=”form-select” required>
+              <label class=”form-label small fw-semibold mb-1”>Subject <span class=”text-danger”>*</span></label>
+              <select name=”subject_id” class=”form-select form-select-sm” required>
                 <option value=””>Select a subject…</option>
                 <?php foreach($subjects as $s): if($s['status']==='active'): ?>
                 <option value=”<?=$s['id']?>”><?=e($s['name'])?><?=$s['code']?' ('.$s['code'].')':''?></option>
                 <?php endif; endforeach; ?>
               </select>
             </div>
-            <div class=”col-md-8”>
-              <label class=”form-label fw-semibold”>Assigned Teacher</label>
-              <select name=”staff_id” class=”form-select”>
+            <div class=”col-8”>
+              <label class=”form-label small fw-semibold mb-1”>Teacher</label>
+              <select name=”staff_id” class=”form-select form-select-sm”>
                 <option value=””>No teacher assigned</option>
                 <?php foreach($staff as $st): ?>
                 <option value=”<?=$st['id']?>”><?=e($st['name'])?></option>
                 <?php endforeach; ?>
               </select>
             </div>
-            <div class=”col-md-4”>
-              <label class=”form-label fw-semibold”>Periods / Week</label>
-              <input type=”number” name=”periods_week” class=”form-control” min=”1” max=”30” value=”4”>
+            <div class=”col-4”>
+              <label class=”form-label small fw-semibold mb-1”>Periods/wk</label>
+              <input type=”number” name=”periods_week” class=”form-control form-control-sm” min=”1” max=”30” value=”4”>
             </div>
           </div>
+          <div class=”d-flex gap-2”>
+            <button type=”submit” class=”btn btn-sm text-white” style=”background:<?=$moduleColor?>”>
+              <i class=”fas fa-check me-1”></i>Save Assignment
+            </button>
+            <button type=”button” class=”btn btn-sm btn-outline-secondary” id=”btnCancelAssign”>Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Assignments table -->
+      <div class=”card-body p-0” style=”max-height:400px;overflow-y:auto”>
+        <?php if(empty($assignments)): ?>
+        <div class=”text-center text-muted py-5”>
+          <i class=”fas fa-layer-group fa-2x d-block mb-2 opacity-25”></i>
+          <p class=”mb-0 small”>No subjects assigned yet.<br>Click <strong>Assign Subject</strong> above to start.</p>
         </div>
-        <div class=”modal-footer”>
-          <button type=”button” class=”btn btn-secondary” data-bs-dismiss=”modal”>Cancel</button>
-          <button type=”submit” class=”btn text-white” style=”background:<?=$moduleColor?>”>
-            <i class=”fas fa-layer-group me-1”></i>Save Assignment
-          </button>
-        </div>
-      </form>
+        <?php else: ?>
+        <table class=”table table-hover align-middle mb-0 small”>
+          <thead class=”table-light”>
+            <tr>
+              <th class=”ps-3”>Subject</th>
+              <th>Class</th>
+              <th>Teacher</th>
+              <th class=”text-center”>pw</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+          <?php foreach($assignments as $a): ?>
+          <tr>
+            <td class=”ps-3 fw-semibold”><?=e($a['subject_name'])?></td>
+            <td><span class=”badge bg-light text-dark border”><?=e($a['class_name'])?></span></td>
+            <td class=”text-muted small”><?=$a['first_name']?e($a['first_name'].' '.$a['last_name']):'<em>—</em>'?></td>
+            <td class=”text-center text-muted”><?=$a['periods_week']?></td>
+            <td class=”text-end pe-2”>
+              <form method=”POST” class=”d-inline”>
+                <?=csrfField()?>
+                <input type=”hidden” name=”action” value=”unassign”>
+                <input type=”hidden” name=”id” value=”<?=$a['id']?>”>
+                <button type=”submit” class=”btn btn-xs btn-outline-danger btn-confirm”
+                  data-msg=”Remove <?=e($a['subject_name'])?> from <?=e($a['class_name'])?>?” title=”Remove”>
+                  <i class=”fas fa-times”></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+        <?php endif; ?>
+      </div>
     </div>
   </div>
 </div>
@@ -322,6 +283,16 @@ document.querySelectorAll('.btn-edit').forEach(btn=>{btn.addEventListener('click
   new bootstrap.Modal(document.getElementById('subModal')).show();
 });});
 document.querySelectorAll('.btn-confirm').forEach(btn=>{btn.addEventListener('click',function(e){if(!confirm(this.dataset.msg||'Are you sure?'))e.preventDefault();});});
+const assignPanel=document.getElementById('assignFormPanel');
+document.getElementById('btnShowAssign').addEventListener('click',function(){
+  assignPanel.style.display='block';
+  this.style.display='none';
+  assignPanel.querySelector('select').focus();
+});
+document.getElementById('btnCancelAssign').addEventListener('click',function(){
+  assignPanel.style.display='none';
+  document.getElementById('btnShowAssign').style.display='';
+});
 </script>
 JS;
 require_once __DIR__.'/../../includes/footer.php';?>
