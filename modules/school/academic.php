@@ -8,6 +8,41 @@ require_once __DIR__ . '/_nav.php';
 $user  = currentUser();
 $orgId = (int)$user['org_id'];
 
+// Auto-create academic tables if migration hasn't been run yet
+$pdo->exec("CREATE TABLE IF NOT EXISTS sch_academic_years (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    org_id     INT NOT NULL,
+    name       VARCHAR(100) NOT NULL,
+    start_date DATE NULL,
+    end_date   DATE NULL,
+    is_current TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+$pdo->exec("CREATE TABLE IF NOT EXISTS sch_terms (
+    id               INT AUTO_INCREMENT PRIMARY KEY,
+    org_id           INT NOT NULL,
+    academic_year_id INT NULL,
+    name             VARCHAR(100) NOT NULL,
+    term_type        VARCHAR(20) NOT NULL DEFAULT 'term',
+    start_date       DATE NULL,
+    end_date         DATE NULL,
+    is_current       TINYINT(1) NOT NULL DEFAULT 0,
+    status           VARCHAR(20) NOT NULL DEFAULT 'upcoming',
+    notes            TEXT NULL,
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+// Ensure columns added by migration exist
+foreach ([
+    "ALTER TABLE sch_terms ADD COLUMN IF NOT EXISTS academic_year_id INT NULL DEFAULT NULL",
+    "ALTER TABLE sch_terms ADD COLUMN IF NOT EXISTS term_type VARCHAR(20) NOT NULL DEFAULT 'term'",
+    "ALTER TABLE sch_terms ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'upcoming'",
+    "ALTER TABLE sch_terms ADD COLUMN IF NOT EXISTS notes TEXT NULL",
+] as $sql) {
+    try { $pdo->exec($sql); } catch (Throwable $ignored) {}
+}
+
 // ── POST Handlers ─────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();denyIfReadOnly($moduleSlug);
@@ -32,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } catch (Throwable $e) {
             error_log('[school/academic save_year] ' . $e->getMessage());
-            setFlash('danger', 'Could not save academic year. Please run database/school_module_migration.sql and try again.');
+            setFlash('danger', 'Could not save academic year: ' . htmlspecialchars($e->getMessage()));
         }
         redirect('academic.php');
     }
@@ -60,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } catch (Throwable $e) {
             error_log('[school/academic save_term] ' . $e->getMessage());
-            setFlash('danger', 'Could not save term. Please run database/school_module_migration.sql and try again.');
+            setFlash('danger', 'Could not save term: ' . htmlspecialchars($e->getMessage()));
         }
         redirect('academic.php');
     }
