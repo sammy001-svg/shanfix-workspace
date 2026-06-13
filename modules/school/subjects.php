@@ -145,75 +145,70 @@ try{$s=$pdo->prepare("SELECT cs.*,sub.name AS subject_name,cl.name AS class_name
     </div>
   </div>
   <div class=”col-lg-5”>
-    <div class=”card”>
-      <div class=”card-header d-flex align-items-center justify-content-between”>
-        <h6 class=”mb-0”>
-          <i class=”fas fa-layer-group me-2” style=”color:<?=$moduleColor?>”></i>
-          Class Assignments
-          <span class=”badge bg-secondary ms-1”><?=count($assignments)?></span>
-        </h6>
-        <button type=”button” class=”btn btn-sm text-white” style=”background:<?=$moduleColor?>” id=”btnShowAssign”>
-          <i class=”fas fa-plus me-1”></i>Assign Subject
-        </button>
-      </div>
 
-      <!-- Inline assignment form — hidden by default, toggled via JS -->
-      <div id=”assignFormPanel” style=”display:none;border-bottom:1px solid #dee2e6;background:#f8fff9;”>
-        <form method=”POST” class=”p-3”>
+    <!-- New Assignment Form Card -->
+    <div class=”card mb-3”>
+      <div class=”card-header” style=”background:<?=$moduleColor?>;color:#fff;”>
+        <h6 class=”mb-0”><i class=”fas fa-link me-2”></i>New Class Assignment</h6>
+      </div>
+      <div class=”card-body”>
+        <form method=”POST”>
           <?=csrfField()?>
-          <input type=”hidden” name=”action” value=”assign”>
-          <div class=”row g-2 mb-2”>
-            <div class=”col-12”>
-              <label class=”form-label small fw-semibold mb-1”>Class <span class=”text-danger”>*</span></label>
-              <select name=”class_id” class=”form-select form-select-sm” required>
-                <option value=””>Select a class…</option>
-                <?php foreach($classes as $c): ?>
-                <option value=”<?=$c['id']?>”><?=e($c['name'])?></option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-            <div class=”col-12”>
-              <label class=”form-label small fw-semibold mb-1”>Subject <span class=”text-danger”>*</span></label>
-              <select name=”subject_id” class=”form-select form-select-sm” required>
-                <option value=””>Select a subject…</option>
-                <?php foreach($subjects as $s): if($s['status']==='active'): ?>
-                <option value=”<?=$s['id']?>”><?=e($s['name'])?><?=$s['code']?' ('.$s['code'].')':''?></option>
-                <?php endif; endforeach; ?>
-              </select>
-            </div>
+          <div class=”mb-3”>
+            <label class=”form-label fw-semibold”>Class <span class=”text-danger”>*</span></label>
+            <select name=”class_id” class=”form-select” required>
+              <option value=””>Select class…</option>
+              <?php foreach($classes as $c): ?>
+              <option value=”<?=$c['id']?>”><?=e($c['name'])?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class=”mb-3”>
+            <label class=”form-label fw-semibold”>Subject <span class=”text-danger”>*</span></label>
+            <select name=”subject_id” class=”form-select” required>
+              <option value=””>Select subject…</option>
+              <?php foreach($subjects as $s): if($s['status']==='active'): ?>
+              <option value=”<?=$s['id']?>”><?=e($s['name'])?><?=$s['code']?' — '.$s['code']:''?></option>
+              <?php endif; endforeach; ?>
+            </select>
+          </div>
+          <div class=”row g-2 mb-3”>
             <div class=”col-8”>
-              <label class=”form-label small fw-semibold mb-1”>Teacher</label>
-              <select name=”staff_id” class=”form-select form-select-sm”>
-                <option value=””>No teacher assigned</option>
+              <label class=”form-label fw-semibold”>Teacher</label>
+              <select name=”staff_id” class=”form-select”>
+                <option value=””>None assigned</option>
                 <?php foreach($staff as $st): ?>
                 <option value=”<?=$st['id']?>”><?=e($st['name'])?></option>
                 <?php endforeach; ?>
               </select>
             </div>
             <div class=”col-4”>
-              <label class=”form-label small fw-semibold mb-1”>Periods/wk</label>
-              <input type=”number” name=”periods_week” class=”form-control form-control-sm” min=”1” max=”30” value=”4”>
+              <label class=”form-label fw-semibold”>Periods/wk</label>
+              <input type=”number” name=”periods_week” class=”form-control” min=”1” max=”30” value=”4”>
             </div>
           </div>
-          <div class=”d-flex gap-2”>
-            <button type=”submit” class=”btn btn-sm text-white” style=”background:<?=$moduleColor?>”>
-              <i class=”fas fa-check me-1”></i>Save Assignment
-            </button>
-            <button type=”button” class=”btn btn-sm btn-outline-secondary” id=”btnCancelAssign”>Cancel</button>
-          </div>
+          <button type=”submit” name=”action” value=”assign” class=”btn text-white w-100” style=”background:<?=$moduleColor?>”>
+            <i class=”fas fa-link me-2”></i>Assign to Class
+          </button>
         </form>
       </div>
+    </div>
 
-      <!-- Assignments table -->
-      <div class=”card-body p-0” style=”max-height:400px;overflow-y:auto”>
+    <!-- Assignments List Card -->
+    <div class=”card”>
+      <div class=”card-header d-flex align-items-center justify-content-between”>
+        <h6 class=”mb-0”><i class=”fas fa-layer-group me-2” style=”color:<?=$moduleColor?>”></i>Assignments</h6>
+        <span class=”badge bg-secondary”><?=count($assignments)?></span>
+      </div>
+      <div class=”card-body p-0” style=”max-height:360px;overflow-y:auto”>
         <?php if(empty($assignments)): ?>
-        <div class=”text-center text-muted py-5”>
+        <div class=”text-center text-muted py-4”>
           <i class=”fas fa-layer-group fa-2x d-block mb-2 opacity-25”></i>
-          <p class=”mb-0 small”>No subjects assigned yet.<br>Click <strong>Assign Subject</strong> above to start.</p>
+          <p class=”mb-0 small”>No assignments yet.</p>
         </div>
         <?php else: ?>
         <table class=”table table-hover align-middle mb-0 small”>
-          <thead class=”table-light”>
+          <thead class=”table-light sticky-top”>
             <tr>
               <th class=”ps-3”>Subject</th>
               <th>Class</th>
@@ -227,15 +222,15 @@ try{$s=$pdo->prepare("SELECT cs.*,sub.name AS subject_name,cl.name AS class_name
           <tr>
             <td class=”ps-3 fw-semibold”><?=e($a['subject_name'])?></td>
             <td><span class=”badge bg-light text-dark border”><?=e($a['class_name'])?></span></td>
-            <td class=”text-muted small”><?=$a['first_name']?e($a['first_name'].' '.$a['last_name']):'<em>—</em>'?></td>
-            <td class=”text-center text-muted”><?=$a['periods_week']?></td>
+            <td class=”text-muted”><?=$a['first_name']?e($a['first_name'].' '.$a['last_name']):'—'?></td>
+            <td class=”text-center”><?=$a['periods_week']?></td>
             <td class=”text-end pe-2”>
               <form method=”POST” class=”d-inline”>
                 <?=csrfField()?>
-                <input type=”hidden” name=”action” value=”unassign”>
                 <input type=”hidden” name=”id” value=”<?=$a['id']?>”>
-                <button type=”submit” class=”btn btn-xs btn-outline-danger btn-confirm”
-                  data-msg=”Remove <?=e($a['subject_name'])?> from <?=e($a['class_name'])?>?” title=”Remove”>
+                <button type=”submit” name=”action” value=”unassign”
+                  class=”btn btn-xs btn-outline-danger btn-confirm”
+                  data-msg=”Remove <?=e($a['subject_name'])?> from <?=e($a['class_name'])?>?”>
                   <i class=”fas fa-times”></i>
                 </button>
               </form>
@@ -247,6 +242,7 @@ try{$s=$pdo->prepare("SELECT cs.*,sub.name AS subject_name,cl.name AS class_name
         <?php endif; ?>
       </div>
     </div>
+
   </div>
 </div>
 <!-- Modal -->
@@ -283,16 +279,6 @@ document.querySelectorAll('.btn-edit').forEach(btn=>{btn.addEventListener('click
   new bootstrap.Modal(document.getElementById('subModal')).show();
 });});
 document.querySelectorAll('.btn-confirm').forEach(btn=>{btn.addEventListener('click',function(e){if(!confirm(this.dataset.msg||'Are you sure?'))e.preventDefault();});});
-const assignPanel=document.getElementById('assignFormPanel');
-document.getElementById('btnShowAssign').addEventListener('click',function(){
-  assignPanel.style.display='block';
-  this.style.display='none';
-  assignPanel.querySelector('select').focus();
-});
-document.getElementById('btnCancelAssign').addEventListener('click',function(){
-  assignPanel.style.display='none';
-  document.getElementById('btnShowAssign').style.display='';
-});
 </script>
 JS;
 require_once __DIR__.'/../../includes/footer.php';?>
