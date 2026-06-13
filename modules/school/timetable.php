@@ -9,7 +9,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     if($action==='save'){
         $id=(int)($_POST['id']??0);
         $classId=(int)($_POST['class_id']??0);$subjectId=(int)($_POST['subject_id']??0);
-        $staffId=(int)($_POST['staff_id']??0)||null;$day=(int)($_POST['day_of_week']??1);
+        $staffId=($_POST['staff_id']??0)?(int)$_POST['staff_id']:null;$day=(int)($_POST['day_of_week']??1);
         $period=(int)($_POST['period']??1);$start=sanitize($_POST['start_time']??'');
         $end=sanitize($_POST['end_time']??'');$room=sanitize($_POST['room']??'');
         if(!$classId||!$day||!$start||!$end){setFlash('error','Class, day and times are required.');redirect('timetable.php');}

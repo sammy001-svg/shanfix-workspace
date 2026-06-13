@@ -68,7 +68,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     }
     if($action==='assign'){
         $classId=(int)($_POST['class_id']??0);$subjectId=(int)($_POST['subject_id']??0);
-        $staffId=(int)($_POST['staff_id']??0)||null;$periods=(int)($_POST['periods_week']??1);
+        $staffId=($_POST['staff_id']??0)?(int)$_POST['staff_id']:null;$periods=(int)($_POST['periods_week']??1);
         if($classId&&$subjectId){
             try{$pdo->prepare("INSERT INTO sch_class_subjects (org_id,class_id,subject_id,staff_id,periods_week) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE staff_id=VALUES(staff_id),periods_week=VALUES(periods_week)")->execute([$orgId,$classId,$subjectId,$staffId,$periods]);setFlash('success','Subject assigned to class.');}
             catch(Exception $e){setFlash('danger','Assignment failed. Run database/school_module_migration.sql if this is a new install.');}
