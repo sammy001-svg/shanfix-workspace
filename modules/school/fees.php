@@ -116,6 +116,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         setFlash('success', 'Fee invoice deleted.');
         redirect('fees.php');
     }
+
+    if ($action === 'bulk_invoice') {
+        $classId  = (int)($_POST['class_id'] ?? 0);
+        $feeType  = sanitize($_POST['fee_type'] ?? 'tuition');
+        $termId   = (int)($_POST['term_id'] ?? 0) ?: null;
+        $amount   = (float)($_POST['amount'] ?? 0);
+        $currency = in_array($_POST['currency'] ?? '', ['KES','USD','LRD']) ? $_POST['currency'] : 'KES';
+        $dueDate  = $_POST['due_date'] ?: date('Y-m-d', strtotime('+30 days'));
+        $notes    = sanitize($_POST['notes'] ?? '');
+
+        if (!$classId || $amount < 1) {
+            setFlash('error', 'Select a class and enter a valid amount.');
+            redirect('fees.php');
+        }
+
+        $termName = 'Term 1';
+        if ($termId) {
+            $tStmt = $pdo->prepare("SELECT name FROM sch_terms WHERE id=? AND org_id=?");
+            $tStmt->execute([$termId, $orgId]);
+            if ($tr = $tStmt->fetch()) $termName = $tr['name'];
+        }
+
+        $sStmt = $pdo->prepare("SELECT id FROM sch_students WHERE org_id=? AND class_id=? AND status='active'");
+        $sStmt->execute([$orgId, $classId]);
+        $classStudents = $sStmt->fetchAll();
+
+        $created = 0;
+        foreach ($classStudents as $cs) {
+            $pdo->prepare("INSERT INTO sch_fees
+                (org_id,student_id,fee_type,term_id,term,year,amount,paid,balance,currency,due_date,status,notes)
+                VALUES (?,?,?,?,?,?,?,0.00,?,?,?,'unpaid',?)")
+                ->execute([$orgId,$cs['id'],$feeType,$termId,$termName,(int)date('Y'),$amount,$amount,$currency,$dueDate,$notes]);
+            $created++;
+        }
+        logActivity('create','school',"Bulk fee invoices: $created student(s) — $feeType ($currency $amount)");
+        setFlash('success', "Generated $created fee invoice(s) for the selected class.");
+        redirect('fees.php');
+    }
 }
 
 // ── GET Handlers ──────────────────────────────────────────────────
@@ -157,6 +195,13 @@ try {
     $termsList = $stmt->fetchAll();
 } catch (Exception $e) {}
 
+$classesList = [];
+try {
+    $stmt = $pdo->prepare("SELECT id, name FROM sch_classes WHERE org_id=? ORDER BY name");
+    $stmt->execute([$orgId]);
+    $classesList = $stmt->fetchAll();
+} catch (Exception $e) {}
+
 require_once __DIR__ . '/../../includes/header-module.php';
 ?>
 <?= flashAlert() ?>
@@ -168,6 +213,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
   </div>
   <div class="d-flex gap-2">
     <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#payModal"><i class="fas fa-cash-register me-2"></i>Receive Payment</button>
+    <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#bulkInvoiceModal"><i class="fas fa-layer-group me-2"></i>Bulk Class Invoice</button>
     <button class="btn text-white" style="background:<?= $moduleColor ?>" data-bs-toggle="modal" data-bs-target="#invoiceModal"><i class="fas fa-file-invoice-dollar me-2"></i>Issue Invoice</button>
   </div>
 </div>
@@ -433,6 +479,78 @@ require_once __DIR__ . '/../../includes/header-module.php';
   <div class="modal-footer">
     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
     <button type="submit" class="btn btn-success"><i class="fas fa-check-circle me-1"></i>Record Payment</button>
+  </div>
+  </form>
+</div></div></div>
+
+<!-- Bulk Invoice Modal -->
+<div class="modal fade" id="bulkInvoiceModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+  <form method="POST"><?= csrfField() ?><input type="hidden" name="action" value="bulk_invoice">
+  <div class="modal-header text-white" style="background:#495057">
+    <h5 class="modal-title"><i class="fas fa-layer-group me-2"></i>Bulk Class Invoice Generation</h5>
+    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+  </div>
+  <div class="modal-body">
+    <div class="alert alert-info small py-2"><i class="fas fa-info-circle me-1"></i>This will generate one fee invoice for <strong>every active student</strong> in the selected class.</div>
+    <div class="row g-3">
+      <div class="col-12">
+        <label class="form-label fw-semibold">Class <span class="text-danger">*</span></label>
+        <select name="class_id" class="form-select" required id="bulkClassSelect">
+          <option value="">— select class —</option>
+          <?php foreach ($classesList as $cl): ?>
+          <option value="<?= $cl['id'] ?>"><?= e($cl['name']) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <small class="text-muted" id="bulkStudentCount"></small>
+      </div>
+      <div class="col-6">
+        <label class="form-label fw-semibold">Fee Type <span class="text-danger">*</span></label>
+        <select name="fee_type" class="form-select" required>
+          <option value="tuition">Tuition Fee</option>
+          <option value="hostel">Hostel Fee</option>
+          <option value="transport">Transport Fee</option>
+          <option value="activity">Activity Fee</option>
+          <option value="exam">Exam Fee</option>
+          <option value="library">Library Fee</option>
+          <option value="uniform">Uniform Fee</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="col-6">
+        <label class="form-label fw-semibold">Academic Term <span class="text-danger">*</span></label>
+        <select name="term_id" class="form-select" required>
+          <?php foreach ($termsList as $t): ?>
+          <option value="<?= $t['id'] ?>"><?= e($t['name']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="col-6">
+        <label class="form-label fw-semibold">Currency <span class="text-danger">*</span></label>
+        <select name="currency" class="form-select" required>
+          <option value="KES">KES — Kenya Shillings</option>
+          <option value="USD">USD — US Dollars</option>
+          <option value="LRD">LRD — Liberian Dollars</option>
+        </select>
+      </div>
+      <div class="col-6">
+        <label class="form-label fw-semibold">Amount Per Student <span class="text-danger">*</span></label>
+        <input type="number" name="amount" class="form-control" required min="1" step="0.01" placeholder="0.00">
+      </div>
+      <div class="col-12">
+        <label class="form-label fw-semibold">Due Date <span class="text-danger">*</span></label>
+        <input type="date" name="due_date" class="form-control" required value="<?= date('Y-m-d', strtotime('+30 days')) ?>">
+      </div>
+      <div class="col-12">
+        <label class="form-label fw-semibold">Notes</label>
+        <input type="text" name="notes" class="form-control" placeholder="e.g. Term 1 2026 Tuition">
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+    <button type="submit" class="btn btn-dark" onclick="return confirm('Generate invoices for ALL active students in the selected class?')">
+      <i class="fas fa-layer-group me-1"></i>Generate Bulk Invoices
+    </button>
   </div>
   </form>
 </div></div></div>

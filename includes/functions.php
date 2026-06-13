@@ -1217,8 +1217,37 @@ function getModuleRoleDefinitions(): array {
         ],
         'events' => [
             'admin'        => ['name'=>'Events Manager','desc'=>'Full events access',                            'color'=>'#9b59b6', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
-            'coordinator'  => ['name'=>'Coordinator',   'desc'=>'Event planning and attendee management',        'color'=>'#3498db', 'icon'=>'fa-calendar-check',      'pages'=>['events','attendees','venues','speakers']],
+            'coordinator'  => ['name'=>'Coordinator',   'desc'=>'Event planning and attendee management',        'color'=>'#3498db', 'icon'=>'fa-calendar-check',      'pages'=>['events','attendees','schedule','tasks','budget','vendors','sponsors']],
             'ticketing'    => ['name'=>'Ticketing',     'desc'=>'Ticket sales and check-in',                     'color'=>'#27ae60', 'icon'=>'fa-ticket-alt',          'pages'=>['tickets','attendees']],
+        ],
+        'courier' => [
+            'admin'      => ['name'=>'Operations Manager','desc'=>'Full courier management access',              'color'=>'#1565c0', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'dispatcher' => ['name'=>'Dispatcher',        'desc'=>'Routes, manifests and delivery management',  'color'=>'#3498db', 'icon'=>'fa-route',               'pages'=>['routes','manifest','delivery','couriers','agreements']],
+            'agent'      => ['name'=>'Delivery Agent',    'desc'=>'Own deliveries and tracking — read only',    'color'=>'#27ae60', 'icon'=>'fa-motorcycle',          'pages'=>['tracking','manifest'], 'readonly'=>true],
+            'cashier'    => ['name'=>'Cashier',           'desc'=>'Payments and billing management',             'color'=>'#e67e22', 'icon'=>'fa-cash-register',       'pages'=>['payments','agents','setup']],
+        ],
+        'driving' => [
+            'admin'      => ['name'=>'School Manager',  'desc'=>'Full driving school access',                   'color'=>'#1a237e', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'instructor' => ['name'=>'Instructor',      'desc'=>'Students, lessons, schedule and tests',        'color'=>'#3498db', 'icon'=>'fa-chalkboard-teacher',  'pages'=>['students','lessons','classes','schedule','tests','vehicles']],
+            'finance'    => ['name'=>'Finance Officer', 'desc'=>'Fee payments and financial reports',            'color'=>'#27ae60', 'icon'=>'fa-money-bill-wave',     'pages'=>['payments','reports']],
+            'registrar'  => ['name'=>'Registrar',       'desc'=>'Student enrollment, licenses and certificates','color'=>'#9b59b6', 'icon'=>'fa-user-graduate',       'pages'=>['students','licenses','certificates','instructors']],
+        ],
+        'finance' => [
+            'admin'          => ['name'=>'Finance Manager',   'desc'=>'Full finance management access',         'color'=>'#16a085', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'accountant'     => ['name'=>'Accountant',         'desc'=>'Transactions, journals and reconciliation','color'=>'#27ae60','icon'=>'fa-calculator',         'pages'=>['transactions','journals','reconciliation','accounts','statements']],
+            'budget_officer' => ['name'=>'Budget Officer',    'desc'=>'Budgets, income and expense management',  'color'=>'#3498db', 'icon'=>'fa-chart-pie',          'pages'=>['budgets','income','expenses','categories','reports']],
+            'auditor'        => ['name'=>'Auditor',           'desc'=>'Read-only access to all records',          'color'=>'#95a5a6', 'icon'=>'fa-search',             'pages'=>'*', 'readonly'=>true],
+        ],
+        'meetings' => [
+            'admin'     => ['name'=>'Meetings Admin','desc'=>'Full meetings management access',                  'color'=>'#0B2D4E', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'secretary' => ['name'=>'Secretary',    'desc'=>'Schedule meetings, record minutes and track actions','color'=>'#3498db','icon'=>'fa-clipboard',           'pages'=>['meetings','agenda','minutes','participants','actions','documents','recordings']],
+            'attendee'  => ['name'=>'Attendee',     'desc'=>'View meetings, calendar and shared documents',       'color'=>'#95a5a6','icon'=>'fa-user',                'pages'=>['calendar','documents'], 'readonly'=>true],
+        ],
+        'shopping-mall' => [
+            'admin'           => ['name'=>'Mall Manager',      'desc'=>'Full mall management access',           'color'=>'#1abc9c', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
+            'leasing_officer' => ['name'=>'Leasing Officer',   'desc'=>'Shops, tenants and lease agreements',   'color'=>'#3498db', 'icon'=>'fa-handshake',           'pages'=>['shops','tenants','leases','floors','notices']],
+            'maintenance'     => ['name'=>'Maintenance',       'desc'=>'Maintenance requests and site issues',   'color'=>'#e67e22', 'icon'=>'fa-tools',               'pages'=>['maintenance']],
+            'cashier'         => ['name'=>'Cashier',           'desc'=>'Rent payments, utilities and charges',   'color'=>'#27ae60', 'icon'=>'fa-cash-register',       'pages'=>['payments','utilities','service-charges','reports']],
         ],
     ];
 }

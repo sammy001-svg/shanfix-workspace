@@ -19,8 +19,37 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
                ->execute([$orgId,$studentId,$classId,$attDate,$validStatus,$remark,$user['id']]);
         }
         $pdo->commit();
-        setFlash('success','Attendance saved for '.formatDate($attDate).'.');
-        redirect("attendance.php?class_id=$classId&att_date=$attDate");
+        $absentCount=(int)array_sum(array_map(fn($s)=>$s==='absent'?1:0,$statuses));
+        $smsHint=$absentCount>0?" <a href='attendance.php?class_id=$classId&att_date=$attDate&notify=1&mode=mark' class='alert-link'>Notify $absentCount absent parent(s) via SMS</a>":' ';
+        setFlash('success','Attendance saved for '.formatDate($attDate).'.'.$smsHint);
+        redirect("attendance.php?class_id=$classId&att_date=$attDate&mode=mark");
+    }
+
+    if($action==='sms_absences'){
+        $classId=(int)($_POST['class_id']??0);$attDate=sanitize($_POST['att_date']??'');
+        if(!$classId||!$attDate){setFlash('error','Missing class or date.');redirect('attendance.php');}
+        $sent=0;
+        try{
+            $s=$pdo->prepare("SELECT s.first_name,s.last_name,
+                COALESCE(p.phone,s.emergency_phone) AS parent_phone,
+                COALESCE(p.name,s.emergency_contact,'Parent/Guardian') AS parent_name
+                FROM sch_attendance a
+                JOIN sch_students s ON a.student_id=s.id
+                LEFT JOIN sch_parents p ON p.student_id=s.id AND p.org_id=a.org_id AND p.is_primary=1
+                WHERE a.org_id=? AND a.class_id=? AND a.att_date=? AND a.status='absent'");
+            $s->execute([$orgId,$classId,$attDate]);
+            $absentStudents=$s->fetchAll();
+            $dateFormatted=date('d M Y',strtotime($attDate));
+            foreach($absentStudents as $abs){
+                $phone=trim($abs['parent_phone']??'');
+                if(!$phone)continue;
+                $msg="Dear {$abs['parent_name']}, {$abs['first_name']} {$abs['last_name']} was marked absent on $dateFormatted. Please contact the school if clarification is needed.";
+                notifySms($phone,$msg,$orgId,'attendance_absent');
+                $sent++;
+            }
+        }catch(Exception $e){}
+        setFlash('success',"SMS notifications sent to $sent parent(s) of absent students.");
+        redirect("attendance.php?class_id=$classId&att_date=$attDate&mode=mark");
     }
 }
 require_once __DIR__.'/../../includes/header-module.php';
@@ -119,7 +148,13 @@ $statusColors=['present'=>'success','absent'=>'danger','late'=>'warning','excuse
         <?php endforeach;?>
         </tbody>
       </table>
-      <div class="p-3 border-top"><button type="submit" class="btn text-white" style="background:<?=$moduleColor?>"><i class="fas fa-save me-2"></i>Save Attendance</button></div>
+      <div class="p-3 border-top d-flex align-items-center gap-3">
+        <button type="submit" class="btn text-white" style="background:<?=$moduleColor?>"><i class="fas fa-save me-2"></i>Save Attendance</button>
+        <span class="text-muted small">or</span>
+        <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#smsModal">
+          <i class="fas fa-sms me-1"></i>Notify Absent Parents via SMS
+        </button>
+      </div>
     </form>
     <?php endif;?>
   </div>
@@ -165,6 +200,37 @@ $statusColors=['present'=>'success','absent'=>'danger','late'=>'warning','excuse
   </div>
 </div>
 <?php endif;?>
+
+<!-- SMS Absent Parents Modal -->
+<div class="modal fade" id="smsModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-warning">
+        <h5 class="modal-title text-dark"><i class="fas fa-sms me-2"></i>Notify Absent Parents via SMS</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST">
+        <?= csrfField() ?>
+        <input type="hidden" name="action" value="sms_absences">
+        <input type="hidden" name="class_id" value="<?= $fClass ?>">
+        <input type="hidden" name="att_date" value="<?= e($fDate) ?>">
+        <div class="modal-body">
+          <p class="mb-2">This will send an SMS to the <strong>primary parent/guardian</strong> of every student currently marked <span class="badge bg-danger">absent</span> for <strong><?= formatDate($fDate) ?></strong>.</p>
+          <div class="alert alert-light border small">
+            <i class="fas fa-info-circle me-1 text-primary"></i>
+            SMS is only sent if the parent has a phone number on file and SMS notifications are enabled for your organisation.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-warning">
+            <i class="fas fa-paper-plane me-1"></i>Send SMS Notifications
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <?php $extraJs=<<<JS
 <script>

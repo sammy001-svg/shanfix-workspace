@@ -30,6 +30,7 @@ $moduleNav   = [
 // Acknowledge / resolve / dismiss an alert
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
     require_once __DIR__ . '/../../includes/header-module.php';
+    verifyCsrf();
     $orgId = (int)$user['org_id'];
     $action = $_GET['action'];
     $alertId = (int)($_POST['alert_id'] ?? 0);

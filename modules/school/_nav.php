@@ -26,6 +26,8 @@ $moduleNav = [
     ['url' => 'transport.php',   'icon' => 'fas fa-bus',               'label' => 'Transport'],
     ['url' => 'hostel.php',      'icon' => 'fas fa-bed',               'label' => 'Hostel'],
     ['url' => 'discipline.php',  'icon' => 'fas fa-gavel',             'label' => 'Discipline'],
+    ['url' => 'homework.php',    'icon' => 'fas fa-book-open',         'label' => 'Homework'],
+    ['url' => 'promotion.php',   'icon' => 'fas fa-arrow-up',          'label' => 'Promotion'],
     ['url' => 'id-cards.php',    'icon' => 'fas fa-id-card',           'label' => 'ID Cards'],
     ['url' => 'events.php',      'icon' => 'fas fa-calendar-day',      'label' => 'Events'],
     ['url' => 'notices.php',     'icon' => 'fas fa-bullhorn',          'label' => 'Notices'],
