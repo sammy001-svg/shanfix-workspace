@@ -338,6 +338,27 @@ function showOutstandingBalance() {
     $("#outstandingBalanceNotice").hide();
   }
 }
+
+function sendSaccoStk() {
+  var phone  = document.getElementById("stkPhone").value.trim();
+  var amount = parseFloat(document.getElementById("repayAmount").value) || 0;
+  if (!phone)   { document.getElementById("stkResult").innerHTML = "<span class=\"text-danger\">Enter phone number.</span>"; return; }
+  if (amount < 1) { document.getElementById("stkResult").innerHTML = "<span class=\"text-danger\">Enter repayment amount first.</span>"; return; }
+  document.getElementById("stkResult").innerHTML = "<span class=\"text-muted\"><span class=\"spinner-border spinner-border-sm\"></span> Sending...</span>";
+  var fd = new FormData();
+  fd.append("phone", phone); fd.append("amount", amount); fd.append("invoice_id", "0");
+  fetch("../../api/mpesa-stk.php", {method:"POST", body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.success) {
+        document.getElementById("stkResult").innerHTML = "<span class=\"text-success\"><i class=\"fas fa-check me-1\"></i>" + d.message + "</span>";
+        document.getElementById("repayReference").value = "MPESA-STK-PENDING";
+      } else {
+        document.getElementById("stkResult").innerHTML = "<span class=\"text-danger\">" + (d.message || "Failed.") + "</span>";
+      }
+    })
+    .catch(function(){ document.getElementById("stkResult").innerHTML = "<span class=\"text-danger\">Network error.</span>"; });
+}
 </script>';
 require_once __DIR__ . '/../../includes/footer.php';
 ?>

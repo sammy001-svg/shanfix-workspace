@@ -417,6 +417,17 @@ require_once __DIR__ . '/../../includes/header-module.php';
         <label class="form-label fw-semibold">Receipt Remarks</label>
         <input type="text" name="notes" class="form-control" placeholder="Optional notes…">
       </div>
+      <div class="col-12">
+        <div class="border rounded p-3 bg-light">
+          <div class="fw-semibold small mb-2"><i class="fas fa-mobile-alt text-success me-1"></i>Send M-Pesa STK Push (optional)</div>
+          <div class="input-group input-group-sm">
+            <span class="input-group-text"><i class="fas fa-phone"></i></span>
+            <input type="tel" id="schoolStkPhone" class="form-control" placeholder="Parent/Guardian 07XXXXXXXX" maxlength="15">
+            <button type="button" class="btn btn-success" onclick="sendSchoolStk()"><i class="fas fa-paper-plane me-1"></i>Send Push</button>
+          </div>
+          <div id="schoolStkResult" class="mt-2 small"></div>
+        </div>
+      </div>
     </div>
   </div>
   <div class="modal-footer">
@@ -482,6 +493,28 @@ function handleCurrencyChange() {
       rateHelper.innerHTML = 'Cross-currency conversion. Enter exchange conversion rate.';
     }
   }
+}
+
+function sendSchoolStk() {
+  var phone  = document.getElementById('schoolStkPhone').value.trim();
+  var amount = parseFloat(document.getElementById('payAmt').value) || 0;
+  var result = document.getElementById('schoolStkResult');
+  if (!phone)  { result.innerHTML = '<span class="text-danger">Enter phone number.</span>'; return; }
+  if (amount < 1) { result.innerHTML = '<span class="text-danger">Enter payment amount first.</span>'; return; }
+  result.innerHTML = '<span class="text-muted"><span class="spinner-border spinner-border-sm"></span> Sending STK push...</span>';
+  var fd = new FormData();
+  fd.append('phone', phone); fd.append('amount', amount); fd.append('invoice_id', '0');
+  fetch('../../api/mpesa-stk.php', {method: 'POST', body: fd})
+    .then(r => r.json())
+    .then(d => {
+      if (d.success) {
+        result.innerHTML = '<span class="text-success"><i class="fas fa-check me-1"></i>' + d.message + '</span>';
+        document.getElementById('paymentMethod') && (document.getElementById('paymentMethod').value = 'mpesa');
+      } else {
+        result.innerHTML = '<span class="text-danger">' + (d.message || 'STK push failed.') + '</span>';
+      }
+    })
+    .catch(() => { result.innerHTML = '<span class="text-danger">Network error.</span>'; });
 }
 
 function delInvoice(id) {

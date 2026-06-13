@@ -236,6 +236,17 @@ $methodColors = ['cash'=>'success','mpesa'=>'primary','card'=>'info','bank'=>'se
               <label class="form-label fw-semibold">Notes</label>
               <textarea name="notes" class="form-control" rows="2"></textarea>
             </div>
+            <div class="col-12">
+              <div class="border rounded p-3 bg-light">
+                <div class="fw-semibold small mb-2"><i class="fas fa-mobile-alt text-success me-1"></i>Send M-Pesa STK Push (optional)</div>
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text"><i class="fas fa-phone"></i></span>
+                  <input type="tel" id="salonStkPhone" class="form-control" placeholder="Client 07XXXXXXXX" maxlength="15">
+                  <button type="button" class="btn btn-success" onclick="sendSalonStk()"><i class="fas fa-paper-plane me-1"></i>Send</button>
+                </div>
+                <div id="salonStkResult" class="mt-2 small"></div>
+              </div>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -247,4 +258,30 @@ $methodColors = ['cash'=>'success','mpesa'=>'primary','card'=>'info','bank'=>'se
   </div>
 </div>
 
-<?php require_once __DIR__ . '/../../includes/footer.php'; ?>
+<?php
+$extraJs = <<<'JS'
+<script>
+function sendSalonStk() {
+  var phone  = document.getElementById('salonStkPhone').value.trim();
+  var amount = parseFloat(document.querySelector('#payModal [name="amount"]')?.value) || 0;
+  var result = document.getElementById('salonStkResult');
+  if (!phone)  { result.innerHTML = '<span class="text-danger">Enter client phone number.</span>'; return; }
+  if (amount < 1) { result.innerHTML = '<span class="text-danger">Enter payment amount first.</span>'; return; }
+  result.innerHTML = '<span class="text-muted"><span class="spinner-border spinner-border-sm"></span> Sending...</span>';
+  var fd = new FormData();
+  fd.append('phone', phone); fd.append('amount', amount); fd.append('invoice_id', '0');
+  fetch('../../api/mpesa-stk.php', {method: 'POST', body: fd})
+    .then(r => r.json())
+    .then(d => {
+      if (d.success) {
+        result.innerHTML = '<span class="text-success"><i class="fas fa-check me-1"></i>' + d.message + '</span>';
+        document.querySelector('#payModal [name="method"]').value = 'mpesa';
+      } else {
+        result.innerHTML = '<span class="text-danger">' + (d.message || 'Failed.') + '</span>';
+      }
+    })
+    .catch(() => { result.innerHTML = '<span class="text-danger">Network error.</span>'; });
+}
+</script>
+JS;
+require_once __DIR__ . '/../../includes/footer.php'; ?>
