@@ -358,6 +358,7 @@ ob_start();
       .plan-card.popular { margin-top: .5rem; }
       .compare-table thead th, .compare-table tbody td { padding: .7rem .9rem; }
     }
+  </style>
 <?php
 $extraHeadHtml = ob_get_clean();
 require_once __DIR__ . '/includes/header-public.php';

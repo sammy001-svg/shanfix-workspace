@@ -36,6 +36,7 @@ $moduleNav = [
     ['url' => 'communication.php',    'icon' => 'fas fa-broadcast-tower',     'label' => 'Communicate'],
     ['url' => 'alumni.php',           'icon' => 'fas fa-user-graduate',       'label' => 'Alumni'],
     ['url' => 'fee-statement.php',    'icon' => 'fas fa-file-invoice',        'label' => 'Fee Statements'],
+    ['url' => 'budget.php',           'icon' => 'fas fa-chart-pie',           'label' => 'Budget'],
     ['url' => 'reports.php',          'icon' => 'fas fa-chart-bar',           'label' => 'Reports'],
     ['url' => 'staff.php',            'icon' => 'fas fa-user-tie',            'label' => 'Curriculum'],
 ];

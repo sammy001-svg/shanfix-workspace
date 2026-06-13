@@ -1,27 +1,27 @@
--- ── School Module Migration ──────────────────────────────────────────────────
+-- -- School Module Migration --------------------------------------------------
 -- Compatible with MySQL 5.7+ / MariaDB / cPanel.
 -- HOW TO RUN:
 --   1. Select your database in the phpMyAdmin left sidebar.
 --   2. Open the SQL tab.
 --   3. Copy and paste ONE statement at a time, then click Go.
---   4. If you get "#1060 - Duplicate column name", that column already exists — SKIP IT and continue.
+--   4. If you get "#1060 - Duplicate column name", that column already exists - SKIP IT and continue.
 --   5. Any other error: note it and skip that statement.
--- Do NOT add USE <dbname>; — select your database from the left sidebar first.
--- ─────────────────────────────────────────────────────────────────────────────
+-- Do NOT add USE <dbname>; - select your database from the left sidebar first.
+-- -----------------------------------------------------------------------------
 
 
--- ════════════════════════════════════════════════════════════════
+-- ================================================================
 -- SECTION 1: sch_classes (run each line separately)
--- ════════════════════════════════════════════════════════════════
+-- ================================================================
 ALTER TABLE sch_classes ADD COLUMN level VARCHAR(100) NULL DEFAULT NULL;
 ALTER TABLE sch_classes ADD COLUMN curriculum VARCHAR(50) NOT NULL DEFAULT 'IB';
 ALTER TABLE sch_classes ADD COLUMN room VARCHAR(100) NULL DEFAULT NULL;
 ALTER TABLE sch_classes ADD COLUMN academic_year_id INT NULL DEFAULT NULL;
 
 
--- ════════════════════════════════════════════════════════════════
+-- ================================================================
 -- SECTION 2: sch_academic_years (create if table is missing)
--- ════════════════════════════════════════════════════════════════
+-- ================================================================
 CREATE TABLE IF NOT EXISTS sch_academic_years (
     id         INT AUTO_INCREMENT PRIMARY KEY,
     org_id     INT NOT NULL,
@@ -33,9 +33,9 @@ CREATE TABLE IF NOT EXISTS sch_academic_years (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
--- ════════════════════════════════════════════════════════════════
+-- ================================================================
 -- SECTION 3: sch_terms
--- ════════════════════════════════════════════════════════════════
+-- ================================================================
 CREATE TABLE IF NOT EXISTS sch_terms (
     id               INT AUTO_INCREMENT PRIMARY KEY,
     org_id           INT NOT NULL,
@@ -57,9 +57,9 @@ ALTER TABLE sch_terms ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'upcoming';
 ALTER TABLE sch_terms ADD COLUMN notes TEXT NULL;
 
 
--- ════════════════════════════════════════════════════════════════
+-- ================================================================
 -- SECTION 4: sch_subjects (create if table is missing)
--- ════════════════════════════════════════════════════════════════
+-- ================================================================
 CREATE TABLE IF NOT EXISTS sch_subjects (
     id          INT AUTO_INCREMENT PRIMARY KEY,
     org_id      INT NOT NULL,
@@ -74,9 +74,9 @@ CREATE TABLE IF NOT EXISTS sch_subjects (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
--- ════════════════════════════════════════════════════════════════
+-- ================================================================
 -- SECTION 5: sch_class_subjects (create if table is missing)
--- ════════════════════════════════════════════════════════════════
+-- ================================================================
 CREATE TABLE IF NOT EXISTS sch_class_subjects (
     id           INT AUTO_INCREMENT PRIMARY KEY,
     org_id       INT NOT NULL,
@@ -89,10 +89,10 @@ CREATE TABLE IF NOT EXISTS sch_class_subjects (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
--- ════════════════════════════════════════════════════════════════
--- SECTION 6: sch_students — international & emergency columns
+-- ================================================================
+-- SECTION 6: sch_students - international & emergency columns
 -- (run each line separately; skip any that say Duplicate column)
--- ════════════════════════════════════════════════════════════════
+-- ================================================================
 ALTER TABLE sch_students ADD COLUMN nationality VARCHAR(100) NULL DEFAULT NULL;
 ALTER TABLE sch_students ADD COLUMN passport_no VARCHAR(50) NULL DEFAULT NULL;
 ALTER TABLE sch_students ADD COLUMN visa_expiry DATE NULL DEFAULT NULL;
@@ -107,8 +107,8 @@ ALTER TABLE sch_students ADD COLUMN admitted_on DATE NULL DEFAULT NULL;
 ALTER TABLE sch_students ADD COLUMN photo VARCHAR(255) NULL DEFAULT NULL;
 
 
--- ════════════════════════════════════════════════════════════════
--- SECTION 7: sch_parents — portal PIN columns
--- ════════════════════════════════════════════════════════════════
+-- ================================================================
+-- SECTION 7: sch_parents - portal PIN columns
+-- ================================================================
 ALTER TABLE sch_parents ADD COLUMN parent_pin VARCHAR(255) NULL DEFAULT NULL;
 ALTER TABLE sch_parents ADD COLUMN portal_enabled TINYINT(1) NOT NULL DEFAULT 0;

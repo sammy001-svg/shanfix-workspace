@@ -73,8 +73,9 @@ $parNav = [
     ['url'=>'results.php',    'icon'=>'fas fa-graduation-cap', 'label'=>'Results'],
     ['url'=>'fees.php',       'icon'=>'fas fa-receipt',        'label'=>'Fees'],
     ['url'=>'attendance.php', 'icon'=>'fas fa-clipboard-check','label'=>'Attendance'],
+    ['url'=>'homework.php',   'icon'=>'fas fa-book-open',      'label'=>'Homework'],
     ['url'=>'notices.php',    'icon'=>'fas fa-bullhorn',       'label'=>'Notices'],
-    ['url'=>'timetable.php',  'icon'=>'fas fa-calendar-week',  'label'=>'Exam Timetable'],
+    ['url'=>'timetable.php',  'icon'=>'fas fa-calendar-week',  'label'=>'Timetable'],
 ];
 ?>
 <!DOCTYPE html>

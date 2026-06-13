@@ -117,6 +117,95 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('fees.php');
     }
 
+    if ($action === 'send_reminders') {
+        // Bulk SMS fee reminders to parents of students with outstanding balance
+        $classId  = (int)($_POST['class_id'] ?? 0);
+        $termId   = (int)($_POST['term_id']  ?? 0) ?: null;
+
+        $where  = 'f.org_id=? AND f.balance > 0 AND f.status != \'paid\'';
+        $params = [$orgId];
+        if ($classId) { $where .= ' AND s.class_id=?'; $params[] = $classId; }
+        if ($termId)  { $where .= ' AND f.term_id=?';  $params[] = $termId; }
+
+        try {
+            $s = $pdo->prepare(
+                "SELECT DISTINCT p.phone, p.first_name,
+                        s.first_name AS s_first, s.last_name AS s_last, s.admission_no,
+                        SUM(f.balance) AS total_balance
+                 FROM sch_fees f
+                 JOIN sch_students s  ON f.student_id = s.id
+                 JOIN sch_parents  p  ON p.id = (
+                     SELECT sp.parent_id FROM sch_student_parents sp
+                     WHERE sp.student_id = s.id AND sp.is_primary = 1 LIMIT 1
+                 )
+                 WHERE $where AND p.phone IS NOT NULL AND p.phone != ''
+                 GROUP BY p.id, s.id"
+            );
+            $s->execute($params);
+            $targets = $s->fetchAll();
+        } catch (Throwable $e) {
+            $targets = [];
+        }
+
+        if (empty($targets)) {
+            setFlash('warning', 'No parents with phone numbers found for students with outstanding fees.');
+            redirect('fees.php');
+        }
+
+        // Load M-Pesa / SMS settings
+        $smsApiKey = getSetting('sms_api_key', '');
+        $smsSender = getSetting('sms_sender',  APP_NAME);
+        $sent = 0;
+        $failed = 0;
+
+        foreach ($targets as $t) {
+            $phone   = preg_replace('/\D/', '', $t['phone']);
+            if (str_starts_with($phone, '0'))  $phone = '254' . substr($phone, 1);
+            if (!str_starts_with($phone, '254')) $phone = '254' . $phone;
+            if (strlen($phone) !== 12) { $failed++; continue; }
+
+            $balance  = number_format((float)$t['total_balance'], 2);
+            $stuName  = trim($t['s_first'] . ' ' . $t['s_last']);
+            $message  = "Dear {$t['first_name']}, this is a reminder that {$stuName} (Adm: {$t['admission_no']}) has an outstanding fee balance of KES {$balance}. Please visit the school office to settle the balance. Thank you.";
+
+            // Send via Africa's Talking or generic SMS gateway
+            if ($smsApiKey) {
+                try {
+                    $ch = curl_init('https://api.africastalking.com/version1/messaging');
+                    curl_setopt_array($ch, [
+                        CURLOPT_POST           => true,
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_SSL_VERIFYPEER => false,
+                        CURLOPT_TIMEOUT        => 10,
+                        CURLOPT_HTTPHEADER     => ['apiKey: ' . $smsApiKey, 'Content-Type: application/x-www-form-urlencoded', 'Accept: application/json'],
+                        CURLOPT_POSTFIELDS     => http_build_query(['username' => getSetting('sms_username','sandbox'), 'to' => '+' . $phone, 'message' => $message, 'from' => $smsSender]),
+                    ]);
+                    $res = curl_exec($ch); curl_close($ch);
+                    $data = json_decode($res, true);
+                    $msgStatus = $data['SMSMessageData']['Recipients'][0]['status'] ?? '';
+                    if ($msgStatus === 'Success') { $sent++; } else { $failed++; }
+                } catch (Throwable $ex) { $failed++; }
+            } else {
+                // Log to communications table if no SMS API configured
+                try {
+                    $pdo->prepare(
+                        "INSERT INTO sch_communications
+                         (org_id,title,message,recipients_type,channel,status,total_recipients,sent_count,created_by,sent_at)
+                         VALUES (?,?,?,?,?,?,?,?,?,NOW())"
+                    )->execute([$orgId,'Fee Reminder',$message,'custom','notice','sent',1,1,$user['id']]);
+                    $sent++;
+                } catch (Throwable $ex) { $failed++; }
+            }
+        }
+
+        $msg = "Reminders sent: $sent";
+        if ($failed) $msg .= ", failed: $failed";
+        if (!$smsApiKey) $msg .= ' (SMS API not configured — logged to Communicate instead)';
+        logActivity('create', 'school', "Fee reminders sent: $sent, failed: $failed");
+        setFlash($failed > 0 ? 'warning' : 'success', $msg);
+        redirect('fees.php');
+    }
+
     if ($action === 'bulk_invoice') {
         $classId  = (int)($_POST['class_id'] ?? 0);
         $feeType  = sanitize($_POST['fee_type'] ?? 'tuition');
@@ -214,6 +303,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
   <div class="d-flex gap-2">
     <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#payModal"><i class="fas fa-cash-register me-2"></i>Receive Payment</button>
     <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#bulkInvoiceModal"><i class="fas fa-layer-group me-2"></i>Bulk Class Invoice</button>
+    <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#reminderModal"><i class="fas fa-bell me-2"></i>Send Reminders</button>
     <button class="btn text-white" style="background:<?= $moduleColor ?>" data-bs-toggle="modal" data-bs-target="#invoiceModal"><i class="fas fa-file-invoice-dollar me-2"></i>Issue Invoice</button>
   </div>
 </div>
@@ -554,6 +644,57 @@ require_once __DIR__ . '/../../includes/header-module.php';
   </div>
   </form>
 </div></div></div>
+
+<!-- Fee Reminder Modal -->
+<div class="modal fade" id="reminderModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold"><i class="fas fa-bell me-2 text-warning"></i>Send Fee Reminders</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST">
+        <?= csrfField() ?>
+        <input type="hidden" name="action" value="send_reminders">
+        <div class="modal-body">
+          <p class="text-muted small mb-3">
+            Sends an SMS reminder to parents of all students with an outstanding fee balance.
+            If no SMS API is configured, reminders are logged in the <strong>Communicate</strong> section instead.
+          </p>
+          <div class="mb-3">
+            <label class="form-label form-label-sm fw-semibold">Filter by Class (optional)</label>
+            <select name="class_id" class="form-select form-select-sm">
+              <option value="">All Classes</option>
+              <?php foreach ($classesList as $cl): ?>
+              <option value="<?= $cl['id'] ?>"><?= e($cl['name']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label form-label-sm fw-semibold">Filter by Term (optional)</label>
+            <select name="term_id" class="form-select form-select-sm">
+              <option value="">All Terms</option>
+              <?php foreach ($termsList as $tr): ?>
+              <option value="<?= $tr['id'] ?>"><?= e($tr['name']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="alert alert-info py-2 small">
+            <i class="fas fa-info-circle me-1"></i>
+            Only parents with a valid phone number will receive reminders.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-warning btn-sm"
+                  onclick="return confirm('Send fee reminder SMS to all matching parents with outstanding balances?')">
+            <i class="fas fa-paper-plane me-1"></i>Send Reminders
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <form method="POST" id="delFeeForm" style="display:none">
   <?= csrfField() ?>

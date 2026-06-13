@@ -392,6 +392,7 @@ ob_start();
       .contact-hero { padding: 3.5rem 0 3rem; }
       .form-card { padding: 1.4rem; }
     }
+  </style>
 <?php
 $extraHeadHtml = ob_get_clean();
 require_once __DIR__ . '/includes/header-public.php';

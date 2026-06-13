@@ -38,7 +38,19 @@ try {
     $payments = $s->fetchAll();
 } catch (Throwable $e) {}
 
-$statusColors = ['paid'=>'success','partial'=>'warning','unpaid'=>'danger','overdue'=>'danger'];
+// Check if M-Pesa is configured for this org
+$mpesaEnabled = false;
+try {
+    $mpesaEnabled = (bool) $pdo->query("SELECT COUNT(*) FROM settings WHERE org_id={$parOrgId} AND setting_key='mpesa_shortcode' AND setting_value!='' LIMIT 1")->fetchColumn();
+} catch (Throwable $e) {}
+
+// Parent's phone (pre-fill in payment modal)
+$parentPhone = '';
+try {
+    $s = $pdo->prepare("SELECT phone FROM sch_parents WHERE id=? AND org_id=? LIMIT 1");
+    $s->execute([$parId, $parOrgId]);
+    $parentPhone = $s->fetchColumn() ?: '';
+} catch (Throwable $e) {}
 ?>
 
 <div class="d-flex align-items-center mb-4">
@@ -82,11 +94,15 @@ $statusColors = ['paid'=>'success','partial'=>'warning','unpaid'=>'danger','over
 </div>
 
 <?php if (!empty($invoices) && $totalBalance > 0): ?>
-<div class="alert alert-warning d-flex align-items-start gap-2 mb-4">
-  <i class="fas fa-exclamation-triangle flex-shrink-0 mt-1"></i>
+<div class="alert <?= $mpesaEnabled ? 'alert-info' : 'alert-warning' ?> d-flex align-items-start gap-2 mb-4">
+  <i class="fas fa-<?= $mpesaEnabled ? 'mobile-alt' : 'exclamation-triangle' ?> flex-shrink-0 mt-1"></i>
   <div>
     <strong>Outstanding Balance: <?= formatCurrency($totalBalance) ?></strong>
+    <?php if ($mpesaEnabled): ?>
+    — Pay instantly using M-Pesa by clicking <strong>Pay with M-Pesa</strong> next to any invoice below.
+    <?php else: ?>
     — Please contact the school bursar to make a payment or visit the school office.
+    <?php endif; ?>
   </div>
 </div>
 <?php endif; ?>
@@ -103,7 +119,7 @@ $statusColors = ['paid'=>'success','partial'=>'warning','unpaid'=>'danger','over
     </div>
     <?php else: ?>
     <div class="table-responsive">
-      <table class="table mb-0">
+      <table class="table mb-0 align-middle">
         <thead class="table-light">
           <tr>
             <th>Fee Type</th>
@@ -113,6 +129,7 @@ $statusColors = ['paid'=>'success','partial'=>'warning','unpaid'=>'danger','over
             <th class="text-end">Balance</th>
             <th>Due Date</th>
             <th class="text-center">Status</th>
+            <?php if ($mpesaEnabled): ?><th></th><?php endif; ?>
           </tr>
         </thead>
         <tbody>
@@ -126,9 +143,21 @@ $statusColors = ['paid'=>'success','partial'=>'warning','unpaid'=>'danger','over
               <?= formatCurrency($inv['balance']) ?>
             </td>
             <td class="small"><?= $inv['due_date'] ? date('d M Y', strtotime($inv['due_date'])) : '—' ?></td>
-            <td class="text-center">
-              <?= statusBadge($inv['status']) ?>
+            <td class="text-center"><?= statusBadge($inv['status']) ?></td>
+            <?php if ($mpesaEnabled): ?>
+            <td>
+              <?php if ((float)$inv['balance'] > 0 && $inv['currency'] === 'KES'): ?>
+              <button class="btn btn-sm btn-success py-1 mpesa-btn"
+                      data-fee-id="<?= $inv['id'] ?>"
+                      data-balance="<?= number_format((float)$inv['balance'], 2, '.', '') ?>"
+                      data-desc="<?= e(ucwords(str_replace('_',' ',$inv['fee_type']))) ?>">
+                <i class="fas fa-mobile-alt me-1"></i>Pay
+              </button>
+              <?php elseif ((float)$inv['balance'] > 0): ?>
+              <span class="text-muted small">KES only</span>
+              <?php endif; ?>
             </td>
+            <?php endif; ?>
           </tr>
           <?php endforeach; ?>
         </tbody>
@@ -170,5 +199,130 @@ $statusColors = ['paid'=>'success','partial'=>'warning','unpaid'=>'danger','over
     <?php endif; ?>
   </div>
 </div>
+
+<?php if ($mpesaEnabled): ?>
+<!-- M-Pesa Payment Modal -->
+<div class="modal fade" id="mpesaModal" tabindex="-1" aria-labelledby="mpesaModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <div>
+          <h6 class="modal-title fw-bold mb-0" id="mpesaModalLabel">
+            <i class="fas fa-mobile-alt me-2" style="color:var(--par-green)"></i>Pay with M-Pesa
+          </h6>
+          <p class="text-muted mb-0" style="font-size:.78rem" id="mpesaFeeDesc"></p>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="mpesaForm">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">M-Pesa Phone Number</label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text"><i class="fas fa-phone"></i></span>
+              <input type="tel" class="form-control" id="mpesaPhone"
+                     placeholder="07XXXXXXXX" value="<?= e($parentPhone) ?>" maxlength="13">
+            </div>
+            <div class="form-text">Safaricom number registered for M-Pesa</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Amount (KES)</label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text">KES</span>
+              <input type="number" class="form-control" id="mpesaAmount" min="1" step="1">
+            </div>
+            <div class="form-text" id="mpesaBalanceHint"></div>
+          </div>
+          <div id="mpesaAlert" class="alert d-none py-2 small"></div>
+        </div>
+        <div id="mpesaSuccess" class="d-none text-center py-3">
+          <div class="mb-2" style="font-size:2.5rem">📱</div>
+          <div class="fw-bold text-success mb-1">STK Push Sent!</div>
+          <p class="text-muted small mb-0" id="mpesaSuccessMsg"></p>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0" id="mpesaFooter">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success btn-sm" id="mpesaSubmitBtn">
+          <span id="mpesaBtnSpinner" class="spinner-border spinner-border-sm d-none me-1"></span>
+          <i class="fas fa-paper-plane me-1" id="mpesaBtnIcon"></i>Send M-Pesa Prompt
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const csrfToken = '<?= $_SESSION['csrf_token'] ?? '' ?>';
+let activeFeeId = null;
+
+document.querySelectorAll('.mpesa-btn').forEach(btn => {
+  btn.addEventListener('click', function () {
+    activeFeeId  = this.dataset.feeId;
+    const bal    = parseFloat(this.dataset.balance);
+    const desc   = this.dataset.desc;
+    document.getElementById('mpesaFeeDesc').textContent   = desc;
+    document.getElementById('mpesaAmount').value          = Math.ceil(bal);
+    document.getElementById('mpesaAmount').max            = Math.ceil(bal);
+    document.getElementById('mpesaBalanceHint').textContent = 'Balance: KES ' + bal.toLocaleString('en-KE', {minimumFractionDigits: 2});
+    document.getElementById('mpesaAlert').className = 'alert d-none py-2 small';
+    document.getElementById('mpesaForm').classList.remove('d-none');
+    document.getElementById('mpesaSuccess').classList.add('d-none');
+    document.getElementById('mpesaFooter').classList.remove('d-none');
+    new bootstrap.Modal(document.getElementById('mpesaModal')).show();
+  });
+});
+
+document.getElementById('mpesaSubmitBtn').addEventListener('click', function () {
+  const phone  = document.getElementById('mpesaPhone').value.trim();
+  const amount = parseFloat(document.getElementById('mpesaAmount').value);
+  const alertEl = document.getElementById('mpesaAlert');
+
+  if (!phone || amount < 1) {
+    alertEl.className = 'alert alert-warning py-2 small';
+    alertEl.textContent = 'Please enter a valid phone number and amount.';
+    return;
+  }
+
+  // Disable button + show spinner
+  this.disabled = true;
+  document.getElementById('mpesaBtnSpinner').classList.remove('d-none');
+  document.getElementById('mpesaBtnIcon').classList.add('d-none');
+  alertEl.className = 'alert d-none py-2 small';
+
+  const fd = new FormData();
+  fd.append('fee_id', activeFeeId);
+  fd.append('phone',  phone);
+  fd.append('amount', amount);
+
+  fetch('<?= APP_URL ?>/parent/mpesa-pay.php', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('mpesaBtnSpinner').classList.add('d-none');
+      document.getElementById('mpesaBtnIcon').classList.remove('d-none');
+      this.disabled = false;
+
+      if (data.success) {
+        document.getElementById('mpesaForm').classList.add('d-none');
+        document.getElementById('mpesaFooter').classList.add('d-none');
+        document.getElementById('mpesaSuccess').classList.remove('d-none');
+        document.getElementById('mpesaSuccessMsg').textContent = data.message;
+        // Reload page after 4s to reflect updated balance
+        setTimeout(() => location.reload(), 4000);
+      } else {
+        alertEl.className = 'alert alert-danger py-2 small';
+        alertEl.textContent = data.message || 'Payment failed. Please try again.';
+      }
+    })
+    .catch(() => {
+      document.getElementById('mpesaBtnSpinner').classList.add('d-none');
+      document.getElementById('mpesaBtnIcon').classList.remove('d-none');
+      this.disabled = false;
+      alertEl.className = 'alert alert-danger py-2 small';
+      alertEl.textContent = 'Network error. Please check your connection and try again.';
+    });
+});
+</script>
+<?php endif; ?>
 
 <?php require_once __DIR__ . '/../includes/footer-parent.php'; ?>
