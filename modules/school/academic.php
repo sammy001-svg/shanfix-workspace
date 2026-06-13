@@ -33,8 +33,11 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS sch_terms (
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-// Ensure columns added by migration exist
+// Ensure all expected columns exist (safe to run repeatedly)
 foreach ([
+    "ALTER TABLE sch_academic_years ADD COLUMN IF NOT EXISTS start_date DATE NULL",
+    "ALTER TABLE sch_academic_years ADD COLUMN IF NOT EXISTS end_date DATE NULL",
+    "ALTER TABLE sch_academic_years ADD COLUMN IF NOT EXISTS is_current TINYINT(1) NOT NULL DEFAULT 0",
     "ALTER TABLE sch_terms ADD COLUMN IF NOT EXISTS academic_year_id INT NULL DEFAULT NULL",
     "ALTER TABLE sch_terms ADD COLUMN IF NOT EXISTS term_type VARCHAR(20) NOT NULL DEFAULT 'term'",
     "ALTER TABLE sch_terms ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'upcoming'",
