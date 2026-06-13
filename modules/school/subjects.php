@@ -145,18 +145,50 @@ try{$s=$pdo->prepare("SELECT cs.*,sub.name AS subject_name,cl.name AS class_name
     </div>
   </div>
   <div class="col-lg-5">
-    <div class="card mb-3">
-      <div class="card-header"><h6 class="mb-0"><i class="fas fa-link me-2" style="color:<?=$moduleColor?>"></i>Assign Subject to Class</h6></div>
-      <div class="card-body">
-        <form method="POST">
-          <?=csrfField()?><input type="hidden" name="action" value="assign">
-          <div class=”mb-3”><label class=”form-label fw-semibold”>Class</label><select name=”class_id” class=”form-select” required><option value=””>-- Select class --</option><?php foreach($classes as $c):?><option value=”<?=$c['id']?>”><?=e($c['name'])?></option><?php endforeach;?></select></div>
-          <div class=”mb-3”><label class=”form-label fw-semibold”>Subject</label><select name=”subject_id” class=”form-select” required><option value=””>-- Select subject --</option><?php foreach($subjects as $s):if($s['status']==='active'):?><option value=”<?=$s['id']?>”><?=e($s['name'])?></option><?php endif;endforeach;?></select></div>
-          <div class=”row g-2 mb-3”>
-            <div class=”col-7”><label class=”form-label fw-semibold”>Teacher</label><select name=”staff_id” class=”form-select”><option value=””>-- Unassigned --</option><?php foreach($staff as $st):?><option value=”<?=$st['id']?>”><?=e($st['name'])?></option><?php endforeach;?></select></div>
-            <div class="col-5"><label class="form-label fw-semibold">Periods/Week</label><input type="number" name="periods_week" class="form-control" min="1" max="20" value="4"></div>
+    <div class=”card mb-3”>
+      <div class=”card-header”><h6 class=”mb-0”><i class=”fas fa-link me-2” style=”color:<?=$moduleColor?>”></i>Assign Subject to Class</h6></div>
+      <div class=”card-body”>
+        <form method=”POST”>
+          <?=csrfField()?>
+          <input type=”hidden” name=”action” value=”assign”>
+          <div class=”row g-3”>
+            <div class=”col-12”>
+              <label class=”form-label fw-semibold”>Class <span class=”text-danger”>*</span></label>
+              <select name=”class_id” class=”form-select” required>
+                <option value=””>-- Select class --</option>
+                <?php foreach($classes as $c):?>
+                <option value=”<?=$c['id']?>”><?=e($c['name'])?></option>
+                <?php endforeach;?>
+              </select>
+            </div>
+            <div class=”col-12”>
+              <label class=”form-label fw-semibold”>Subject <span class=”text-danger”>*</span></label>
+              <select name=”subject_id” class=”form-select” required>
+                <option value=””>-- Select subject --</option>
+                <?php foreach($subjects as $s): if($s['status']==='active'):?>
+                <option value=”<?=$s['id']?>”><?=e($s['name'])?></option>
+                <?php endif; endforeach;?>
+              </select>
+            </div>
+            <div class=”col-sm-8”>
+              <label class=”form-label fw-semibold”>Teacher</label>
+              <select name=”staff_id” class=”form-select”>
+                <option value=””>-- Unassigned --</option>
+                <?php foreach($staff as $st):?>
+                <option value=”<?=$st['id']?>”><?=e($st['name'])?></option>
+                <?php endforeach;?>
+              </select>
+            </div>
+            <div class=”col-sm-4”>
+              <label class=”form-label fw-semibold”>Periods/Week</label>
+              <input type=”number” name=”periods_week” class=”form-control” min=”1” max=”20” value=”4”>
+            </div>
+            <div class=”col-12”>
+              <button type=”submit” class=”btn btn-sm text-white w-100” style=”background:<?=$moduleColor?>”>
+                <i class=”fas fa-link me-1”></i>Assign to Class
+              </button>
+            </div>
           </div>
-          <button type="submit" class="btn btn-sm text-white" style="background:<?=$moduleColor?>"><i class="fas fa-link me-1"></i>Assign</button>
         </form>
       </div>
     </div>
