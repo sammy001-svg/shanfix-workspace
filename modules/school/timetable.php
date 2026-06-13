@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once __DIR__ . '/_nav.php';
 
 if($_SERVER['REQUEST_METHOD']==='POST'){
@@ -47,7 +47,7 @@ $className='';foreach($classes as $c){if($c['id']==$fClass)$className=$c['name']
   <form method="GET" class="row g-2 align-items-end">
     <div class="col-sm-4"><label class="form-label small fw-semibold mb-1">Select Class</label>
       <select name="class_id" class="form-select" onchange="this.form.submit()">
-        <option value="">â€” Choose a class â€”</option>
+        <option value="">Choose a class...</option>
         <?php foreach($classes as $c):?><option value="<?=$c['id']?>" <?=$fClass==$c['id']?'selected':''?>><?=e($c['name'])?></option><?php endforeach;?>
       </select>
     </div>
@@ -59,7 +59,7 @@ $className='';foreach($classes as $c){if($c['id']==$fClass)$className=$c['name']
 <div class="text-center py-5 text-muted"><i class="fas fa-calendar-alt fa-3x mb-3 d-block"></i>Select a class above to view its timetable.</div>
 <?php else:?>
 <div class="card"><div class="card-header d-flex align-items-center justify-content-between">
-  <h6 class="mb-0"><i class="fas fa-table me-2" style="color:<?=$moduleColor?>"></i>Weekly Schedule â€” <?=e($className)?></h6>
+  <h6 class="mb-0"><i class="fas fa-table me-2" style="color:<?=$moduleColor?>"></i>Weekly Schedule &mdash; <?=e($className)?></h6>
   <button class="btn btn-sm btn-outline-secondary" onclick="window.print()"><i class="fas fa-print me-1"></i>Print</button>
 </div>
 <div class="card-body p-0"><div class="table-responsive"><table class="table table-bordered mb-0 text-center small">
@@ -74,9 +74,9 @@ $className='';foreach($classes as $c){if($c['id']==$fClass)$className=$c['name']
       $slot=$grid[$d][$p]??null;?>
     <td class="align-middle p-1" style="min-width:120px">
       <?php if($slot):
-        $timeRange=date('H:i',strtotime($slot['start_time'])).'â€“'.date('H:i',strtotime($slot['end_time']));?>
+        $timeRange=date('H:i',strtotime($slot['start_time'])).' - '.date('H:i',strtotime($slot['end_time']));?>
       <div class="p-1 rounded" style="background:<?=$moduleColor?>15;border-left:3px solid <?=$moduleColor?>">
-        <div class="fw-semibold" style="color:<?=$moduleColor?>;font-size:.78rem"><?=e($slot['subject_name']??'â€”')?></div>
+        <div class="fw-semibold" style="color:<?=$moduleColor?>;font-size:.78rem"><?=e($slot['subject_name']??'Free')?></div>
         <div class="text-muted" style="font-size:.7rem"><?=$timeRange?></div>
         <?php if($slot['first_name']):?><div class="text-muted" style="font-size:.7rem"><?=e($slot['first_name'].' '.$slot['last_name'])?></div><?php endif;?>
         <?php if($slot['room']):?><div class="text-muted" style="font-size:.68rem"><i class="fas fa-map-marker-alt me-1"></i><?=e($slot['room'])?></div><?php endif;?>
@@ -92,7 +92,7 @@ $className='';foreach($classes as $c){if($c['id']==$fClass)$className=$c['name']
         </div>
       </div>
       <?php else:?>
-      <span class="text-muted small">â€”</span>
+      <span class="text-muted" style="font-size:1.1rem;line-height:1">&#8212;</span>
       <?php endif;?>
     </td>
     <?php endif;endforeach;?>
@@ -115,9 +115,9 @@ $className='';foreach($classes as $c){if($c['id']==$fClass)$className=$c['name']
       <div class="col-md-6"><label class="form-label fw-semibold">Period #</label><input type="number" name="period" id="slotPeriod" class="form-control" min="1" max="10" value="1"></div>
       <div class="col-md-6"><label class="form-label fw-semibold">Start Time <span class="text-danger">*</span></label><input type="time" name="start_time" id="slotStart" class="form-control" value="08:00"></div>
       <div class="col-md-6"><label class="form-label fw-semibold">End Time <span class="text-danger">*</span></label><input type="time" name="end_time" id="slotEnd" class="form-control" value="09:00"></div>
-      <div class="col-md-8"><label class="form-label fw-semibold">Subject</label><select name="subject_id" id="slotSubject" class="form-select"><option value="">â€” Break / Free â€”</option><?php foreach($subjects as $s):?><option value="<?=$s['id']?>"><?=e($s['name'])?></option><?php endforeach;?></select></div>
+      <div class="col-md-8"><label class="form-label fw-semibold">Subject</label><select name="subject_id" id="slotSubject" class="form-select"><option value="">Break / Free period</option><?php foreach($subjects as $s):?><option value="<?=$s['id']?>"><?=e($s['name'])?></option><?php endforeach;?></select></div>
       <div class="col-md-4"><label class="form-label fw-semibold">Room</label><input type="text" name="room" id="slotRoom" class="form-control" placeholder="e.g. A101"></div>
-      <div class="col-12"><label class="form-label fw-semibold">Teacher</label><select name="staff_id" id="slotStaff" class="form-select"><option value="">â€” Unassigned â€”</option><?php foreach($staff as $st):?><option value="<?=$st['id']?>"><?=e($st['name'])?></option><?php endforeach;?></select></div>
+      <div class="col-12"><label class="form-label fw-semibold">Teacher</label><select name="staff_id" id="slotStaff" class="form-select"><option value="">No teacher assigned</option><?php foreach($staff as $st):?><option value="<?=$st['id']?>"><?=e($st['name'])?></option><?php endforeach;?></select></div>
     </div>
   </div>
   <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn text-white" style="background:<?=$moduleColor?>">Save Slot</button></div>

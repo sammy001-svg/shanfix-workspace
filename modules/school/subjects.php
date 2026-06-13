@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/functions.php';
 if (session_status() === PHP_SESSION_NONE) session_start();
@@ -124,7 +124,7 @@ try{$s=$pdo->prepare("SELECT cs.*,sub.name AS subject_name,cl.name AS class_name
         <tr>
           <td><code><?=e($sub['code']??'&mdash;')?></code></td>
           <td class="fw-semibold"><?=e($sub['name'])?></td>
-          <td class=”small”><?=e($sub['department']??'&mdash;')?></td>
+          <td class="small"><?=e($sub['department']??'&mdash;')?></td>
           <td><?=$sub['pass_mark']?>%</td>
           <td><?=$sub['is_elective']?'<span class="badge bg-info">Elective</span>':'<span class="badge bg-secondary">Core</span>'?></td>
           <td><?=statusBadge($sub['status'])?></td>
@@ -144,94 +144,89 @@ try{$s=$pdo->prepare("SELECT cs.*,sub.name AS subject_name,cl.name AS class_name
       </table></div></div>
     </div>
   </div>
-  <div class=”col-lg-5”>
-
-    <!-- New Assignment Form Card -->
-    <div class=”card mb-3”>
-      <div class=”card-header” style=”background:<?=$moduleColor?>;color:#fff;”>
-        <h6 class=”mb-0”><i class=”fas fa-link me-2”></i>New Class Assignment</h6>
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between" style="background:<?=$moduleColor?>;color:#fff;">
+        <h6 class="mb-0"><i class="fas fa-link me-2"></i>Assign Subject to Class</h6>
+        <span class="badge bg-white text-dark fw-semibold"><?=count($assignments)?> assigned</span>
       </div>
-      <div class=”card-body”>
-        <form method=”POST”>
+
+      <div class="card-body border-bottom">
+        <form method="POST">
           <?=csrfField()?>
-          <div class=”mb-3”>
-            <label class=”form-label fw-semibold”>Class <span class=”text-danger”>*</span></label>
-            <select name=”class_id” class=”form-select” required>
-              <option value=””>Select class…</option>
-              <?php foreach($classes as $c): ?>
-              <option value=”<?=$c['id']?>”><?=e($c['name'])?></option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-          <div class=”mb-3”>
-            <label class=”form-label fw-semibold”>Subject <span class=”text-danger”>*</span></label>
-            <select name=”subject_id” class=”form-select” required>
-              <option value=””>Select subject…</option>
-              <?php foreach($subjects as $s): if($s['status']==='active'): ?>
-              <option value=”<?=$s['id']?>”><?=e($s['name'])?><?=$s['code']?' — '.$s['code']:''?></option>
-              <?php endif; endforeach; ?>
-            </select>
-          </div>
-          <div class=”row g-2 mb-3”>
-            <div class=”col-8”>
-              <label class=”form-label fw-semibold”>Teacher</label>
-              <select name=”staff_id” class=”form-select”>
-                <option value=””>None assigned</option>
-                <?php foreach($staff as $st): ?>
-                <option value=”<?=$st['id']?>”><?=e($st['name'])?></option>
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label fw-semibold">Class <span class="text-danger">*</span></label>
+              <select name="class_id" class="form-select" required>
+                <option value="">Select class...</option>
+                <?php foreach($classes as $c): ?>
+                <option value="<?=$c['id']?>"><?=e($c['name'])?></option>
                 <?php endforeach; ?>
               </select>
             </div>
-            <div class=”col-4”>
-              <label class=”form-label fw-semibold”>Periods/wk</label>
-              <input type=”number” name=”periods_week” class=”form-control” min=”1” max=”30” value=”4”>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Subject <span class="text-danger">*</span></label>
+              <select name="subject_id" class="form-select" required>
+                <option value="">Select subject...</option>
+                <?php foreach($subjects as $s): if($s['status']==='active'): ?>
+                <option value="<?=$s['id']?>"><?=e($s['name'])?><?=$s['code']?' ('.$s['code'].')':''?></option>
+                <?php endif; endforeach; ?>
+              </select>
+            </div>
+            <div class="col-md-7">
+              <label class="form-label fw-semibold">Teacher</label>
+              <select name="staff_id" class="form-select">
+                <option value="">None assigned</option>
+                <?php foreach($staff as $st): ?>
+                <option value="<?=$st['id']?>"><?=e($st['name'])?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label fw-semibold">Periods / Week</label>
+              <input type="number" name="periods_week" class="form-control" min="1" max="30" value="4">
+            </div>
+            <div class="col-12">
+              <button type="submit" name="action" value="assign" class="btn text-white w-100" style="background:<?=$moduleColor?>">
+                <i class="fas fa-check me-2"></i>Save Assignment
+              </button>
             </div>
           </div>
-          <button type=”submit” name=”action” value=”assign” class=”btn text-white w-100” style=”background:<?=$moduleColor?>”>
-            <i class=”fas fa-link me-2”></i>Assign to Class
-          </button>
         </form>
       </div>
-    </div>
 
-    <!-- Assignments List Card -->
-    <div class=”card”>
-      <div class=”card-header d-flex align-items-center justify-content-between”>
-        <h6 class=”mb-0”><i class=”fas fa-layer-group me-2” style=”color:<?=$moduleColor?>”></i>Assignments</h6>
-        <span class=”badge bg-secondary”><?=count($assignments)?></span>
-      </div>
-      <div class=”card-body p-0” style=”max-height:360px;overflow-y:auto”>
+      <div class="card-body p-0" style="max-height:310px;overflow-y:auto">
         <?php if(empty($assignments)): ?>
-        <div class=”text-center text-muted py-4”>
-          <i class=”fas fa-layer-group fa-2x d-block mb-2 opacity-25”></i>
-          <p class=”mb-0 small”>No assignments yet.</p>
+        <div class="text-center text-muted py-4">
+          <i class="fas fa-layer-group fa-2x d-block mb-2 opacity-25"></i>
+          <p class="mb-0 small">No class assignments yet.</p>
         </div>
         <?php else: ?>
-        <table class=”table table-hover align-middle mb-0 small”>
-          <thead class=”table-light sticky-top”>
+        <table class="table table-hover align-middle mb-0 small">
+          <thead class="table-light sticky-top">
             <tr>
-              <th class=”ps-3”>Subject</th>
+              <th class="ps-3">Subject</th>
               <th>Class</th>
               <th>Teacher</th>
-              <th class=”text-center”>pw</th>
+              <th class="text-center">pw</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
           <?php foreach($assignments as $a): ?>
           <tr>
-            <td class=”ps-3 fw-semibold”><?=e($a['subject_name'])?></td>
-            <td><span class=”badge bg-light text-dark border”><?=e($a['class_name'])?></span></td>
-            <td class=”text-muted”><?=$a['first_name']?e($a['first_name'].' '.$a['last_name']):'—'?></td>
-            <td class=”text-center”><?=$a['periods_week']?></td>
-            <td class=”text-end pe-2”>
-              <form method=”POST” class=”d-inline”>
+            <td class="ps-3 fw-semibold"><?=e($a['subject_name'])?></td>
+            <td><span class="badge bg-light text-dark border"><?=e($a['class_name'])?></span></td>
+            <td class="text-muted"><?=$a['first_name']?e($a['first_name'].' '.$a['last_name']):'<em>None</em>'?></td>
+            <td class="text-center text-muted"><?=$a['periods_week']?></td>
+            <td class="pe-2">
+              <form method="POST" class="d-inline">
                 <?=csrfField()?>
-                <input type=”hidden” name=”id” value=”<?=$a['id']?>”>
-                <button type=”submit” name=”action” value=”unassign”
-                  class=”btn btn-xs btn-outline-danger btn-confirm”
-                  data-msg=”Remove <?=e($a['subject_name'])?> from <?=e($a['class_name'])?>?”>
-                  <i class=”fas fa-times”></i>
+                <input type="hidden" name="id" value="<?=$a['id']?>">
+                <button type="submit" name="action" value="unassign"
+                  class="btn btn-xs btn-outline-danger btn-confirm"
+                  data-msg="Remove <?=e($a['subject_name'])?> from <?=e($a['class_name'])?>?">
+                  <i class="fas fa-times"></i>
                 </button>
               </form>
             </td>
@@ -242,7 +237,6 @@ try{$s=$pdo->prepare("SELECT cs.*,sub.name AS subject_name,cl.name AS class_name
         <?php endif; ?>
       </div>
     </div>
-
   </div>
 </div>
 <!-- Modal -->
