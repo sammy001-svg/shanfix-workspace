@@ -24,10 +24,10 @@ $user=currentUser();$orgId=(int)$user['org_id'];
 $fClass=(int)($_GET['class_id']??0);
 $classes=[];try{$s=$pdo->prepare("SELECT id,name FROM sch_classes WHERE org_id=? ORDER BY name");$s->execute([$orgId]);$classes=$s->fetchAll();}catch(Exception $e){}
 $subjects=[];try{$s=$pdo->prepare("SELECT id,name FROM sch_subjects WHERE org_id=? AND status='active' ORDER BY name");$s->execute([$orgId]);$subjects=$s->fetchAll();}catch(Exception $e){}
-$staff=[];try{$s=$pdo->prepare("SELECT id,CONCAT(first_name,' ',last_name) AS name FROM sch_staff WHERE org_id=? ORDER BY first_name");$s->execute([$orgId]);$staff=$s->fetchAll();}catch(Exception $e){}
+$staff=[];try{$s=$pdo->prepare("SELECT id,CONCAT(first_name,' ',last_name) AS name FROM sch_teachers WHERE org_id=? AND status='active' ORDER BY first_name");$s->execute([$orgId]);$staff=$s->fetchAll();}catch(Exception $e){}
 $slots=[];
 if($fClass){
-    try{$s=$pdo->prepare("SELECT t.*,sub.name AS subject_name,st.first_name,st.last_name FROM sch_timetable t LEFT JOIN sch_subjects sub ON t.subject_id=sub.id LEFT JOIN sch_staff st ON t.staff_id=st.id WHERE t.org_id=? AND t.class_id=? ORDER BY t.day_of_week,t.period");$s->execute([$orgId,$fClass]);$slots=$s->fetchAll();}catch(Exception $e){}
+    try{$s=$pdo->prepare("SELECT t.*,sub.name AS subject_name,st.first_name,st.last_name FROM sch_timetable t LEFT JOIN sch_subjects sub ON t.subject_id=sub.id LEFT JOIN sch_teachers st ON t.staff_id=st.id WHERE t.org_id=? AND t.class_id=? ORDER BY t.day_of_week,t.period");$s->execute([$orgId,$fClass]);$slots=$s->fetchAll();}catch(Exception $e){}
 }
 $days=[1=>'Monday',2=>'Tuesday',3=>'Wednesday',4=>'Thursday',5=>'Friday',6=>'Saturday'];
 // Build grid: day => period => slot

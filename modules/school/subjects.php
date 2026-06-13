@@ -90,9 +90,9 @@ if($fStatus){$where.=' AND status=?';$params[]=$fStatus;}
 $subjects=[];try{$s=$pdo->prepare("SELECT * FROM sch_subjects WHERE $where ORDER BY name");$s->execute($params);$subjects=$s->fetchAll();}catch(Exception $e){}
 $depts=[];try{$s=$pdo->prepare("SELECT DISTINCT department FROM sch_subjects WHERE org_id=? AND department IS NOT NULL ORDER BY department");$s->execute([$orgId]);$depts=array_column($s->fetchAll(),'department');}catch(Exception $e){}
 $classes=[];try{$s=$pdo->prepare("SELECT id,name FROM sch_classes WHERE org_id=? ORDER BY name");$s->execute([$orgId]);$classes=$s->fetchAll();}catch(Exception $e){}
-$staff=[];try{$s=$pdo->prepare("SELECT id,CONCAT(first_name,' ',last_name) AS name FROM sch_staff WHERE org_id=? ORDER BY first_name");$s->execute([$orgId]);$staff=$s->fetchAll();}catch(Exception $e){}
+$staff=[];try{$s=$pdo->prepare("SELECT id,CONCAT(first_name,' ',last_name) AS name FROM sch_teachers WHERE org_id=? AND status='active' ORDER BY first_name");$s->execute([$orgId]);$staff=$s->fetchAll();}catch(Exception $e){}
 $assignments=[];
-try{$s=$pdo->prepare("SELECT cs.*,sub.name AS subject_name,cl.name AS class_name,st.first_name,st.last_name FROM sch_class_subjects cs JOIN sch_subjects sub ON cs.subject_id=sub.id JOIN sch_classes cl ON cs.class_id=cl.id LEFT JOIN sch_staff st ON cs.staff_id=st.id WHERE cs.org_id=? ORDER BY cl.name,sub.name");$s->execute([$orgId]);$assignments=$s->fetchAll();}catch(Exception $e){}
+try{$s=$pdo->prepare("SELECT cs.*,sub.name AS subject_name,cl.name AS class_name,st.first_name,st.last_name FROM sch_class_subjects cs JOIN sch_subjects sub ON cs.subject_id=sub.id JOIN sch_classes cl ON cs.class_id=cl.id LEFT JOIN sch_teachers st ON cs.staff_id=st.id WHERE cs.org_id=? ORDER BY cl.name,sub.name");$s->execute([$orgId]);$assignments=$s->fetchAll();}catch(Exception $e){}
 ?>
 <?=flashAlert()?>
 <div class="page-header d-flex align-items-center justify-content-between mb-4">
