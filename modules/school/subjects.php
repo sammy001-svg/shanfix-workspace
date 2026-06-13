@@ -1,10 +1,48 @@
 ﻿<?php
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../includes/functions.php';
+if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/_nav.php';
 
+// Auto-create / patch tables if migration hasn't been run
+$pdo->exec("CREATE TABLE IF NOT EXISTS sch_subjects (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    org_id      INT NOT NULL,
+    code        VARCHAR(20)  NULL,
+    name        VARCHAR(150) NOT NULL,
+    department  VARCHAR(100) NULL,
+    description TEXT         NULL,
+    is_elective TINYINT(1)   NOT NULL DEFAULT 0,
+    pass_mark   DECIMAL(5,2) NOT NULL DEFAULT 50.00,
+    status      VARCHAR(20)  NOT NULL DEFAULT 'active',
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+$pdo->exec("CREATE TABLE IF NOT EXISTS sch_class_subjects (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    org_id       INT NOT NULL,
+    class_id     INT NOT NULL,
+    subject_id   INT NOT NULL,
+    staff_id     INT NULL,
+    periods_week INT NOT NULL DEFAULT 4,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_class_subject (class_id, subject_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+foreach ([
+    "ALTER TABLE sch_subjects ADD COLUMN IF NOT EXISTS code VARCHAR(20) NULL",
+    "ALTER TABLE sch_subjects ADD COLUMN IF NOT EXISTS department VARCHAR(100) NULL",
+    "ALTER TABLE sch_subjects ADD COLUMN IF NOT EXISTS description TEXT NULL",
+    "ALTER TABLE sch_subjects ADD COLUMN IF NOT EXISTS is_elective TINYINT(1) NOT NULL DEFAULT 0",
+    "ALTER TABLE sch_subjects ADD COLUMN IF NOT EXISTS pass_mark DECIMAL(5,2) NOT NULL DEFAULT 50.00",
+    "ALTER TABLE sch_subjects ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active'",
+] as $sql) {
+    try { $pdo->exec($sql); } catch (Throwable $ignored) {}
+}
+
+requireLogin();
+
 if($_SERVER['REQUEST_METHOD']==='POST'){
-    require_once __DIR__.'/../../config/database.php';
-    require_once __DIR__.'/../../includes/functions.php';
-    if(session_status()===PHP_SESSION_NONE)session_start();
     verifyCsrf();denyIfReadOnly($moduleSlug);$user=currentUser();$orgId=(int)$user['org_id'];$action=$_POST['action']??'';
     if($action==='save'){
         $id=(int)($_POST['id']??0);
@@ -18,7 +56,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
             else{$pdo->prepare("INSERT INTO sch_subjects (org_id,code,name,department,description,is_elective,pass_mark,status) VALUES (?,?,?,?,?,?,?,?)")->execute([$orgId,$code,$name,$dept,$desc,$elective,$pass,$status]);setFlash('success','Subject added.');}
         } catch (Throwable $e) {
             error_log('[school/subjects save] ' . $e->getMessage());
-            setFlash('danger','Could not save subject. Please run database/school_module_migration.sql and try again.');
+            setFlash('danger','Could not save subject: ' . htmlspecialchars($e->getMessage()));
         }
         redirect('subjects.php');
     }
