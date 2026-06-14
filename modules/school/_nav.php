@@ -39,4 +39,6 @@ $moduleNav = [
     ['url' => 'budget.php',           'icon' => 'fas fa-chart-pie',           'label' => 'Budget'],
     ['url' => 'reports.php',          'icon' => 'fas fa-chart-bar',           'label' => 'Reports'],
     ['url' => 'staff.php',            'icon' => 'fas fa-user-tie',            'label' => 'Curriculum'],
+    ['url' => 'portals.php',          'icon' => 'fas fa-key',                 'label' => 'Portal Access'],
+    ['url' => 'settings.php',         'icon' => 'fas fa-cog',                 'label' => 'Settings'],
 ];

@@ -1,7 +1,7 @@
 <?php
 /**
  * School Module — Student Report Card (print-friendly HTML)
- * Access via: staff/admin with school module access, OR parent portal session.
+ * Access via: staff/admin with school module access, parent portal session, or student portal session.
  * GET: ?student_id=X&exam_id=Y
  */
 if (session_status() === PHP_SESSION_NONE) session_start();
@@ -12,7 +12,7 @@ $studentId = (int)($_GET['student_id'] ?? 0);
 $examId    = (int)($_GET['exam_id']    ?? 0);
 $orgId     = 0;
 
-// ── Dual auth: staff session OR parent portal session ─────────────
+// ── Triple auth: staff session, parent portal session, or student session ────
 if (!empty($_SESSION['user_id'])) {
     requireModuleAccess('school');
     $staffUser = currentUser();
@@ -23,6 +23,12 @@ if (!empty($_SESSION['user_id'])) {
     if (!in_array($studentId, $parSids, true)) {
         http_response_code(403); exit('Access denied.');
     }
+} elseif (!empty($_SESSION['stu_id'])) {
+    // Students may only view their own report card
+    if ((int)$_SESSION['stu_id'] !== $studentId) {
+        http_response_code(403); exit('Access denied.');
+    }
+    $orgId = (int)$_SESSION['stu_org_id'];
 } else {
     redirect(APP_URL . '/auth/login.php');
 }

@@ -398,7 +398,13 @@ require_once __DIR__ . '/../../includes/header-module.php';
               <tr><td colspan="8" class="text-center text-muted py-5"><i class="fas fa-receipt fa-2x mb-2 d-block opacity-25"></i>No payments recorded yet.</td></tr>
               <?php else: foreach($paymentsList as $p): ?>
               <tr>
-                <td class="fw-bold text-dark"><?=e($p['receipt_no'])?></td>
+                <td class="fw-bold text-dark">
+                  <a href="fee-receipt-pdf.php?payment_id=<?=$p['id']?>" target="_blank"
+                     class="text-decoration-none" title="Print Receipt">
+                    <?=e($p['receipt_no'])?>
+                    <i class="fas fa-print ms-1 text-muted" style="font-size:.7rem"></i>
+                  </a>
+                </td>
                 <td>
                   <div class="fw-semibold text-dark"><?=e($p['first_name'].' '.$p['last_name'])?></div>
                   <small class="text-muted"><?=e($p['admission_no'])?></small>
