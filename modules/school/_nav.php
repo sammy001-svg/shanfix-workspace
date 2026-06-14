@@ -39,9 +39,16 @@ $moduleNav = [
 
     // ── Finance ──────────────────────────────────────────────────
     ['divider' => true, 'label' => 'Finance'],
+    ['url' => 'finance.php',       'icon' => 'fas fa-chart-pie',       'label' => 'Finance Dashboard'],
     ['url' => 'fees.php',          'icon' => 'fas fa-money-bill-wave', 'label' => 'Fees'],
     ['url' => 'fee-statement.php', 'icon' => 'fas fa-file-invoice',    'label' => 'Fee Statements'],
-    ['url' => 'budget.php',        'icon' => 'fas fa-chart-pie',       'label' => 'Budget'],
+    ['url' => 'budget.php',        'icon' => 'fas fa-chart-bar',       'label' => 'Budget'],
+    ['url' => 'expenses.php',      'icon' => 'fas fa-receipt',         'label' => 'Expenses'],
+
+    // ── HR & Payroll ──────────────────────────────────────────────
+    ['divider' => true, 'label' => 'HR & Payroll'],
+    ['url' => 'hr.php',      'icon' => 'fas fa-users-cog',         'label' => 'HR Management'],
+    ['url' => 'payroll.php', 'icon' => 'fas fa-money-check-alt',   'label' => 'Payroll'],
 
     // ── Facilities & Welfare ──────────────────────────────────────
     ['divider' => true, 'label' => 'Facilities'],

@@ -106,8 +106,10 @@ $tchNav = [
     ['url'=>'timetable.php',      'icon'=>'fas fa-calendar-week', 'label'=>'Timetable'],
     ['url'=>'online-classes.php', 'icon'=>'fas fa-video',         'label'=>'Online Classes'],
     ['url'=>'students.php',       'icon'=>'fas fa-users',         'label'=>'My Students'],
-    ['url'=>'notices.php',        'icon'=>'fas fa-bullhorn',      'label'=>'Notices',    'badge'=>$tchNoticeCount ?: null],
-    ['url'=>'profile.php',    'icon'=>'fas fa-user-circle',    'label'=>'My Profile'],
+    ['url'=>'notices.php',  'icon'=>'fas fa-bullhorn',            'label'=>'Notices',  'badge'=>$tchNoticeCount ?: null],
+    ['url'=>'leave.php',    'icon'=>'fas fa-calendar-check',      'label'=>'My Leave'],
+    ['url'=>'payslips.php', 'icon'=>'fas fa-file-invoice-dollar', 'label'=>'My Payslips'],
+    ['url'=>'profile.php',  'icon'=>'fas fa-user-circle',         'label'=>'My Profile'],
 ];
 ?>
 <!DOCTYPE html>
