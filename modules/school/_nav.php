@@ -50,6 +50,11 @@ $moduleNav = [
     ['url' => 'hostel.php',     'icon' => 'fas fa-bed',         'label' => 'Hostel'],
     ['url' => 'discipline.php', 'icon' => 'fas fa-gavel',       'label' => 'Discipline'],
 
+    // ── Online Learning ──────────────────────────────────────────
+    ['divider' => true, 'label' => 'Online Learning'],
+    ['url' => 'online-classes.php', 'icon' => 'fas fa-video',  'label' => 'Online Classes'],
+    ['url' => 'online-exams.php',   'icon' => 'fas fa-laptop', 'label' => 'Online Exams'],
+
     // ── Communication ────────────────────────────────────────────
     ['divider' => true, 'label' => 'Communication'],
     ['url' => 'events.php',        'icon' => 'fas fa-calendar-day',    'label' => 'Events'],

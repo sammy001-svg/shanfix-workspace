@@ -34,14 +34,16 @@ $pageTitle    = $pageTitle ?? 'Student Portal';
 $currentPage  = basename($_SERVER['PHP_SELF']);
 
 $stuNav = [
-    ['url'=>'index.php',      'icon'=>'fas fa-th-large',       'label'=>'Dashboard'],
-    ['url'=>'results.php',    'icon'=>'fas fa-graduation-cap', 'label'=>'My Results'],
-    ['url'=>'fees.php',       'icon'=>'fas fa-receipt',        'label'=>'My Fees'],
-    ['url'=>'attendance.php', 'icon'=>'fas fa-clipboard-check','label'=>'Attendance'],
-    ['url'=>'homework.php',   'icon'=>'fas fa-book-open',      'label'=>'Homework'],
-    ['url'=>'timetable.php',  'icon'=>'fas fa-calendar-week',  'label'=>'Timetable'],
-    ['url'=>'notices.php',    'icon'=>'fas fa-bullhorn',       'label'=>'Notices'],
-    ['url'=>'profile.php',    'icon'=>'fas fa-user-circle',    'label'=>'My Profile'],
+    ['url'=>'index.php',          'icon'=>'fas fa-th-large',       'label'=>'Dashboard'],
+    ['url'=>'results.php',        'icon'=>'fas fa-graduation-cap', 'label'=>'My Results'],
+    ['url'=>'fees.php',           'icon'=>'fas fa-receipt',        'label'=>'My Fees'],
+    ['url'=>'attendance.php',     'icon'=>'fas fa-clipboard-check','label'=>'Attendance'],
+    ['url'=>'homework.php',       'icon'=>'fas fa-book-open',      'label'=>'Homework'],
+    ['url'=>'online-classes.php', 'icon'=>'fas fa-video',          'label'=>'Online Classes'],
+    ['url'=>'online-exams.php',   'icon'=>'fas fa-laptop',         'label'=>'Online Exams'],
+    ['url'=>'timetable.php',      'icon'=>'fas fa-calendar-week',  'label'=>'Timetable'],
+    ['url'=>'notices.php',        'icon'=>'fas fa-bullhorn',       'label'=>'Notices'],
+    ['url'=>'profile.php',        'icon'=>'fas fa-user-circle',    'label'=>'My Profile'],
 ];
 ?>
 <!DOCTYPE html>
