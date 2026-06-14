@@ -478,7 +478,15 @@ $statusColors = ['pending'=>'warning','approved'=>'success','rejected'=>'danger'
               ✗ Reject
             </button>
             <?php else: ?>
-            <span class="text-muted small"><?= $req['approved_at'] ? date('d M Y', strtotime($req['approved_at'])) : '' ?></span>
+            <div class="d-flex align-items-center gap-1 flex-wrap">
+              <span class="text-muted small"><?= $req['approved_at'] ? date('d M Y', strtotime($req['approved_at'])) : '' ?></span>
+              <?php if (in_array($req['status'], ['approved','rejected'])): ?>
+              <a href="leave-letter-pdf.php?id=<?= $req['id'] ?>" target="_blank"
+                 class="btn btn-xs btn-outline-secondary" style="font-size:.7rem;padding:2px 7px" title="Print leave letter">
+                <i class="fas fa-print me-1"></i>Letter
+              </a>
+              <?php endif; ?>
+            </div>
             <?php endif; ?>
           </td>
         </tr>

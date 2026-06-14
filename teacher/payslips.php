@@ -28,125 +28,16 @@ try {
 $monthNames   = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
 $statusColors = ['draft'=>'secondary','approved'=>'success','paid'=>'primary'];
 
-$viewId   = (int)($_GET['view'] ?? 0);
-$viewSlip = null;
-if ($viewId) {
-    foreach ($myPayslips as $ps) {
-        if ((int)$ps['id'] === $viewId) { $viewSlip = $ps; break; }
-    }
-}
-
-function fmtM(float $v, string $c='KES'): string {
-    return $c . ' ' . number_format($v, 2);
-}
+function fmtM(float $v, string $c='KES'): string { return $c.' '.number_format($v,2); }
 ?>
 
-<style>
-@media print {
-  #tchSidebar, #tchTopbar, .no-print { display:none !important; }
-  #tchMain { margin-left:0 !important; }
-  .payslip-print { page-break-inside:avoid; }
-}
-</style>
-
-<div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
-  <?php if ($viewSlip): ?>
-  <a href="payslips.php" class="btn btn-sm btn-outline-secondary no-print">
-    <i class="fas fa-arrow-left me-1"></i>Back
-  </a>
-  <?php endif; ?>
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
   <div>
     <h5 class="fw-bold mb-0"><i class="fas fa-file-invoice-dollar me-2" style="color:var(--tch-green)"></i>My Payslips</h5>
-    <div class="text-muted small">Your salary statements</div>
-  </div>
-  <?php if ($viewSlip): ?>
-  <button class="btn btn-sm btn-outline-secondary no-print ms-auto" onclick="window.print()">
-    <i class="fas fa-print me-1"></i>Print Payslip
-  </button>
-  <?php endif; ?>
-</div>
-
-<?php if ($viewSlip): ?>
-<!-- ── Payslip Detail View ── -->
-<div class="row justify-content-center">
-  <div class="col-md-8 col-lg-7">
-    <div class="card border-0 shadow payslip-print">
-      <div class="card-header text-white py-4 text-center" style="background:var(--tch-green)">
-        <div class="fw-bold fs-5">PAYSLIP</div>
-        <div><?= $monthNames[(int)$viewSlip['period_month']] ?> <?= $viewSlip['period_year'] ?></div>
-      </div>
-      <div class="card-body p-4">
-        <div class="row g-3 mb-4 pb-3 border-bottom" style="font-size:.85rem">
-          <div class="col-sm-6">
-            <table class="table table-sm table-borderless mb-0">
-              <tr><td class="text-muted pe-2" style="width:120px">Name:</td><td class="fw-semibold"><?= e($viewSlip['staff_name']) ?></td></tr>
-              <tr><td class="text-muted pe-2">Employee ID:</td><td><?= e($viewSlip['employee_id'] ?? '—') ?></td></tr>
-              <tr><td class="text-muted pe-2">Grade:</td><td><?= e($viewSlip['grade_name'] ?? '—') ?></td></tr>
-            </table>
-          </div>
-          <div class="col-sm-6 text-sm-end">
-            <div class="text-muted small">Period</div>
-            <div class="fw-bold"><?= $monthNames[(int)$viewSlip['period_month']] ?> <?= $viewSlip['period_year'] ?></div>
-            <span class="badge bg-<?= $statusColors[$viewSlip['status']] ?> mt-1"><?= ucfirst($viewSlip['status']) ?></span>
-          </div>
-        </div>
-
-        <div class="row g-4">
-          <div class="col-sm-6">
-            <div class="fw-bold mb-2 small text-uppercase" style="letter-spacing:.5px">Earnings</div>
-            <table class="table table-sm" style="font-size:.85rem">
-              <tbody>
-                <?php foreach ([
-                  'basic_salary'    => 'Basic Salary',
-                  'house_allowance' => 'House Allowance',
-                  'transport_allow' => 'Transport Allowance',
-                  'medical_allow'   => 'Medical Allowance',
-                  'other_allowances'=> 'Other Allowances',
-                ] as $f => $l): if ((float)$viewSlip[$f] <= 0) continue; ?>
-                <tr><td><?= $l ?></td><td class="text-end"><?= fmtM((float)$viewSlip[$f],$viewSlip['currency']) ?></td></tr>
-                <?php endforeach; ?>
-              </tbody>
-              <tfoot>
-                <tr class="table-success fw-bold">
-                  <td>Gross Salary</td>
-                  <td class="text-end"><?= fmtM((float)$viewSlip['gross_salary'],$viewSlip['currency']) ?></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-          <div class="col-sm-6">
-            <div class="fw-bold mb-2 small text-uppercase" style="letter-spacing:.5px">Deductions</div>
-            <table class="table table-sm" style="font-size:.85rem">
-              <tbody>
-                <?php foreach ([
-                  'paye'            => 'PAYE Tax',
-                  'nhif'            => 'NHIF',
-                  'nssf'            => 'NSSF',
-                  'other_deductions'=> 'Other Deductions',
-                ] as $f => $l): if ((float)$viewSlip[$f] <= 0) continue; ?>
-                <tr><td><?= $l ?></td><td class="text-end text-danger"><?= fmtM((float)$viewSlip[$f],$viewSlip['currency']) ?></td></tr>
-                <?php endforeach; ?>
-              </tbody>
-              <tfoot>
-                <tr class="table-danger fw-bold">
-                  <td>Total Deductions</td>
-                  <td class="text-end"><?= fmtM((float)$viewSlip['total_deductions'],$viewSlip['currency']) ?></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-
-        <div class="alert alert-success d-flex justify-content-between align-items-center mt-2 mb-0 py-3">
-          <span class="fw-bold">NET PAY</span>
-          <span class="fw-bold fs-4"><?= fmtM((float)$viewSlip['net_salary'],$viewSlip['currency']) ?></span>
-        </div>
-      </div>
-    </div>
+    <div class="text-muted small">View and print your salary statements</div>
   </div>
 </div>
 
-<?php else: ?>
 <!-- ── Payslip List ── -->
 <?php if (empty($myPayslips)): ?>
 <div class="card border-0 shadow-sm">
@@ -176,11 +67,12 @@ function fmtM(float $v, string $c='KES'): string {
         </table>
       </div>
       <div class="card-footer bg-transparent border-0 pt-0 pb-3 d-flex gap-2">
-        <a href="?view=<?= $ps['id'] ?>" class="btn btn-sm btn-outline-secondary flex-grow-1">
+        <a href="<?= APP_URL ?>/modules/school/payslip-pdf.php?id=<?= $ps['id'] ?>" target="_blank"
+           class="btn btn-sm btn-outline-secondary flex-grow-1">
           <i class="fas fa-eye me-1"></i>View
         </a>
-        <a href="?view=<?= $ps['id'] ?>" class="btn btn-sm btn-outline-success"
-           onclick="setTimeout(()=>{window.print()},600);return true;">
+        <a href="<?= APP_URL ?>/modules/school/payslip-pdf.php?id=<?= $ps['id'] ?>" target="_blank"
+           class="btn btn-sm btn-outline-success" title="Print">
           <i class="fas fa-print"></i>
         </a>
       </div>
@@ -188,7 +80,6 @@ function fmtM(float $v, string $c='KES'): string {
   </div>
   <?php endforeach; ?>
 </div>
-<?php endif; ?>
 <?php endif; ?>
 
   </div><!-- #tchContent -->

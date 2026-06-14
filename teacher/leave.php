@@ -192,14 +192,20 @@ $statusColors = ['pending'=>'warning','approved'=>'success','rejected'=>'danger'
           <td class="small text-muted" style="max-width:180px">
             <?= $req['admin_notes'] ? e(mb_strimwidth($req['admin_notes'],0,80,'…')) : ($req['reason'] ? e(mb_strimwidth($req['reason'],0,60,'…')) : '—') ?>
           </td>
-          <td>
+          <td class="text-end">
             <?php if ($req['status'] === 'pending'): ?>
-            <form method="POST" onsubmit="return confirm('Cancel this leave request?')">
+            <form method="POST" onsubmit="return confirm('Cancel this leave request?')" class="d-inline">
               <?= csrfField() ?>
               <input type="hidden" name="action" value="cancel_leave">
               <input type="hidden" name="leave_id" value="<?= $req['id'] ?>">
               <button class="btn btn-xs btn-outline-danger" style="font-size:.7rem;padding:2px 8px">Cancel</button>
             </form>
+            <?php elseif (in_array($req['status'], ['approved','rejected'])): ?>
+            <a href="<?= APP_URL ?>/modules/school/leave-letter-pdf.php?id=<?= $req['id'] ?>"
+               target="_blank" class="btn btn-xs btn-outline-secondary" style="font-size:.7rem;padding:2px 8px"
+               title="Print leave letter">
+              <i class="fas fa-print me-1"></i>Letter
+            </a>
             <?php endif; ?>
           </td>
         </tr>

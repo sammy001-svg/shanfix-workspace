@@ -291,6 +291,9 @@ function fmtMoney($v, $cur='KES') { return $cur.' '.number_format((float)$v, 2);
             <a href="?tab=payslips&run=<?= $run['id'] ?>" class="btn btn-sm btn-outline-secondary">
               <i class="fas fa-eye me-1"></i>Payslips
             </a>
+            <a href="payroll-pdf.php?run_id=<?= $run['id'] ?>" target="_blank" class="btn btn-sm btn-outline-success" title="Print Payroll Report">
+              <i class="fas fa-print"></i>
+            </a>
             <?php if ($run['status'] === 'draft'): ?>
             <form method="POST" class="d-inline">
               <?= csrfField() ?>
@@ -518,12 +521,17 @@ function fmtMoney($v, $cur='KES') { return $cur.' '.number_format((float)$v, 2);
           <td class="small"><?= fmtMoney($ps['gross_salary'],$ps['currency']) ?></td>
           <td class="small text-danger"><?= fmtMoney($ps['total_deductions'],$ps['currency']) ?></td>
           <td class="fw-bold text-success"><?= fmtMoney($ps['net_salary'],$ps['currency']) ?></td>
-          <td>
+          <td class="text-end">
             <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
                     data-bs-target="#slipModal"
-                    onclick="showSlip(<?= htmlspecialchars(json_encode($ps), ENT_QUOTES) ?>)">
+                    onclick="showSlip(<?= htmlspecialchars(json_encode($ps), ENT_QUOTES) ?>)"
+                    title="Quick view">
               <i class="fas fa-eye"></i>
             </button>
+            <a href="payslip-pdf.php?id=<?= $ps['id'] ?>" target="_blank"
+               class="btn btn-sm btn-outline-success" title="Print payslip">
+              <i class="fas fa-print"></i>
+            </a>
           </td>
         </tr>
         <?php endforeach; endif; ?>

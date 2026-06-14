@@ -315,6 +315,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
             <td class="text-center">
               <div class="btn-group btn-group-sm">
                 <button class="btn btn-outline-primary" onclick="openEdit(<?= $s['id'] ?>)" title="Edit"><i class="fas fa-edit"></i></button>
+                <a href="admission-letter-pdf.php?student_id=<?= $s['id'] ?>" target="_blank" class="btn btn-outline-success" title="Print Admission Letter"><i class="fas fa-file-alt"></i></a>
                 <button class="btn btn-outline-danger" onclick="delStudent(<?= $s['id'] ?>, '<?= e($s['first_name'] . ' ' . $s['last_name']) ?>')" title="Remove"><i class="fas fa-trash"></i></button>
               </div>
             </td>
