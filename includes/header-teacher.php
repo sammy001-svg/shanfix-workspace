@@ -67,15 +67,46 @@ try {
     $tchNoticeCount = (int)$s->fetchColumn();
 } catch (Throwable $e) {}
 
+// Homework submissions awaiting marking
+$tchHwPending = 0;
+try {
+    $s = $pdo->prepare(
+        "SELECT COUNT(*) FROM sch_homework_submissions sm
+         JOIN sch_homework hw ON hw.id = sm.homework_id
+         WHERE hw.teacher_id=? AND hw.org_id=? AND sm.status='submitted'"
+    );
+    $s->execute([$tchId, $tchOrgId]);
+    $tchHwPending = (int)$s->fetchColumn();
+} catch (Throwable $e) {}
+
+// Online exam attempts with ungraded short-answer questions
+$tchExamPending = 0;
+try {
+    $s = $pdo->prepare(
+        "SELECT COUNT(DISTINCT att.id)
+         FROM sch_online_exam_attempts att
+         JOIN sch_online_exams oe ON oe.id = att.exam_id
+         JOIN sch_online_exam_answers ans ON ans.attempt_id = att.id
+         JOIN sch_online_exam_questions q ON q.id = ans.question_id
+         WHERE oe.teacher_id=? AND oe.org_id=?
+           AND att.status = 'submitted'
+           AND q.question_type = 'short_answer'
+           AND (ans.marks_awarded IS NULL OR ans.marked_at IS NULL)"
+    );
+    $s->execute([$tchId, $tchOrgId]);
+    $tchExamPending = (int)$s->fetchColumn();
+} catch (Throwable $e) {}
+
 $tchNav = [
     ['url'=>'index.php',      'icon'=>'fas fa-th-large',       'label'=>'Dashboard'],
     ['url'=>'attendance.php', 'icon'=>'fas fa-clipboard-check','label'=>'Attendance', 'badge'=>$tchAttNeeded ?: null],
     ['url'=>'results.php',    'icon'=>'fas fa-graduation-cap', 'label'=>'Results'],
-    ['url'=>'homework.php',   'icon'=>'fas fa-book-open',      'label'=>'Homework'],
+    ['url'=>'homework.php',   'icon'=>'fas fa-book-open',      'label'=>'Homework',       'badge'=>$tchHwPending  ?: null],
+    ['url'=>'mark-exam.php',  'icon'=>'fas fa-pen-to-square',  'label'=>'Mark Exams',     'badge'=>$tchExamPending ?: null],
     ['url'=>'timetable.php',      'icon'=>'fas fa-calendar-week', 'label'=>'Timetable'],
     ['url'=>'online-classes.php', 'icon'=>'fas fa-video',         'label'=>'Online Classes'],
     ['url'=>'students.php',       'icon'=>'fas fa-users',         'label'=>'My Students'],
-    ['url'=>'notices.php',        'icon'=>'fas fa-bullhorn',      'label'=>'Notices', 'badge'=>$tchNoticeCount ?: null],
+    ['url'=>'notices.php',        'icon'=>'fas fa-bullhorn',      'label'=>'Notices',    'badge'=>$tchNoticeCount ?: null],
     ['url'=>'profile.php',    'icon'=>'fas fa-user-circle',    'label'=>'My Profile'],
 ];
 ?>
@@ -240,7 +271,7 @@ body { background: #f4f6f9; }
       <span class="small text-muted d-none d-sm-inline">
         <i class="fas fa-calendar-day me-1"></i><?= date('l, d M Y') ?>
       </span>
-      <?php $tchTotalBadge = $tchAttNeeded + $tchNoticeCount; ?>
+      <?php $tchTotalBadge = $tchAttNeeded + $tchNoticeCount + $tchHwPending + $tchExamPending; ?>
       <div class="position-relative">
         <button class="btn btn-sm btn-light border d-flex align-items-center justify-content-center"
                 style="border-radius:50%;width:34px;height:34px;padding:0"
@@ -273,6 +304,32 @@ body { background: #f4f6f9; }
                 <div>
                   <div class="fw-semibold small"><?= $tchNoticeCount ?> new notice<?= $tchNoticeCount!==1?'s':'' ?></div>
                   <div class="text-muted" style="font-size:.7rem">School announcements this week</div>
+                </div>
+              </div>
+            </a>
+          </li>
+          <?php endif; ?>
+          <?php if ($tchHwPending > 0): ?>
+          <li>
+            <a class="dropdown-item py-2" href="<?= APP_URL ?>/teacher/homework.php">
+              <div class="d-flex align-items-center gap-2">
+                <i class="fas fa-book-open text-success" style="width:16px;font-size:.85rem"></i>
+                <div>
+                  <div class="fw-semibold small"><?= $tchHwPending ?> homework submission<?= $tchHwPending!==1?'s':'' ?> to mark</div>
+                  <div class="text-muted" style="font-size:.7rem">Student answers awaiting grades</div>
+                </div>
+              </div>
+            </a>
+          </li>
+          <?php endif; ?>
+          <?php if ($tchExamPending > 0): ?>
+          <li>
+            <a class="dropdown-item py-2" href="<?= APP_URL ?>/teacher/mark-exam.php">
+              <div class="d-flex align-items-center gap-2">
+                <i class="fas fa-pen-to-square text-primary" style="width:16px;font-size:.85rem"></i>
+                <div>
+                  <div class="fw-semibold small"><?= $tchExamPending ?> exam essay<?= $tchExamPending!==1?'s':'' ?> to grade</div>
+                  <div class="text-muted" style="font-size:.7rem">Short-answer responses need marks</div>
                 </div>
               </div>
             </a>
