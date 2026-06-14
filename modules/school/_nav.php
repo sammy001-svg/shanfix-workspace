@@ -63,8 +63,9 @@ $moduleNav = [
 
     // ── Administration ───────────────────────────────────────────
     ['divider' => true, 'label' => 'Administration'],
-    ['url' => 'id-cards.php', 'icon' => 'fas fa-id-card',  'label' => 'ID Cards'],
-    ['url' => 'reports.php',  'icon' => 'fas fa-chart-bar','label' => 'Reports'],
-    ['url' => 'portals.php',  'icon' => 'fas fa-key',       'label' => 'Portal Access'],
-    ['url' => 'settings.php', 'icon' => 'fas fa-cog',       'label' => 'Settings'],
+    ['url' => 'id-cards.php',      'icon' => 'fas fa-id-card',       'label' => 'ID Cards'],
+    ['url' => 'reports.php',       'icon' => 'fas fa-chart-bar',     'label' => 'Reports'],
+    ['url' => 'portals.php',       'icon' => 'fas fa-key',            'label' => 'Portal Access'],
+    ['url' => 'import-export.php', 'icon' => 'fas fa-file-import',   'label' => 'Import / Export'],
+    ['url' => 'settings.php',      'icon' => 'fas fa-cog',            'label' => 'Settings'],
 ];
