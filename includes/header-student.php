@@ -36,6 +36,7 @@ $currentPage  = basename($_SERVER['PHP_SELF']);
 $stuNav = [
     ['url'=>'index.php',      'icon'=>'fas fa-th-large',       'label'=>'Dashboard'],
     ['url'=>'results.php',    'icon'=>'fas fa-graduation-cap', 'label'=>'My Results'],
+    ['url'=>'fees.php',       'icon'=>'fas fa-receipt',        'label'=>'My Fees'],
     ['url'=>'attendance.php', 'icon'=>'fas fa-clipboard-check','label'=>'Attendance'],
     ['url'=>'homework.php',   'icon'=>'fas fa-book-open',      'label'=>'Homework'],
     ['url'=>'timetable.php',  'icon'=>'fas fa-calendar-week',  'label'=>'Timetable'],

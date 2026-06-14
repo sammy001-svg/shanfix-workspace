@@ -76,6 +76,7 @@ $parNav = [
     ['url'=>'homework.php',   'icon'=>'fas fa-book-open',      'label'=>'Homework'],
     ['url'=>'notices.php',    'icon'=>'fas fa-bullhorn',       'label'=>'Notices'],
     ['url'=>'timetable.php',  'icon'=>'fas fa-calendar-week',  'label'=>'Timetable'],
+    ['url'=>'profile.php',    'icon'=>'fas fa-user-circle',    'label'=>'My Profile'],
 ];
 ?>
 <!DOCTYPE html>

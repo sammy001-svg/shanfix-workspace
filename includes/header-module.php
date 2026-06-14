@@ -188,8 +188,10 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
   </div>
   <div class="sidebar-nav">
-    <div class="nav-label">MODULE</div>
     <?php foreach($moduleNav ?? [] as $nav):
+      if (!empty($nav['divider'])): ?>
+    <div class="nav-label"><?= e($nav['label']) ?></div>
+    <?php   continue; endif;
       $_navSlug = pathinfo($nav['url'], PATHINFO_FILENAME);
       if (!canAccessModulePage($moduleSlug ?? '', $_navSlug)) continue;
     ?>

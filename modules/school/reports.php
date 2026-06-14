@@ -1,6 +1,108 @@
 ﻿<?php
 require_once __DIR__ . '/_nav.php';
 
+// ── CSV Export (must run before header-module outputs HTML) ───
+if (!empty($_GET['export'])) {
+    if (session_status() === PHP_SESSION_NONE) session_start();
+    require_once __DIR__ . '/../../config/database.php';
+    require_once __DIR__ . '/../../includes/functions.php';
+    requireModuleAccess($moduleSlug);
+    $user  = currentUser();
+    $orgId = (int)$user['org_id'];
+    $type  = $_GET['export'];
+
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="report_' . preg_replace('/[^a-z0-9_]/', '', $type) . '_' . date('Y-m-d') . '.csv"');
+    $out = fopen('php://output', 'w');
+
+    if ($type === 'attendance') {
+        $attFilter = (int)($_GET['att_class'] ?? 0);
+        $where = 'a.org_id=?'; $params = [$orgId];
+        if ($attFilter) { $where .= ' AND s.class_id=?'; $params[] = $attFilter; }
+        $s = $pdo->prepare(
+            "SELECT s.first_name, s.last_name, s.admission_no, c.name AS class_name,
+                    COUNT(a.id) AS total_days,
+                    SUM(CASE WHEN a.status='present' THEN 1 ELSE 0 END) AS present,
+                    SUM(CASE WHEN a.status='absent'  THEN 1 ELSE 0 END) AS absent,
+                    SUM(CASE WHEN a.status='late'    THEN 1 ELSE 0 END) AS late
+             FROM sch_students s
+             LEFT JOIN sch_attendance a ON a.student_id=s.id AND a.org_id=s.org_id
+             LEFT JOIN sch_classes c ON s.class_id=c.id
+             WHERE $where AND s.status='active'
+             GROUP BY s.id ORDER BY c.name, s.first_name"
+        );
+        $s->execute($params);
+        fputcsv($out, ['Name', 'Adm No', 'Class', 'Days Recorded', 'Present', 'Absent', 'Late', 'Attendance %']);
+        foreach ($s->fetchAll() as $a) {
+            $pct = $a['total_days'] > 0 ? round($a['present'] / $a['total_days'] * 100) . '%' : '';
+            fputcsv($out, [
+                $a['first_name'] . ' ' . $a['last_name'],
+                $a['admission_no'] ?? '',
+                $a['class_name'] ?? '',
+                $a['total_days'], $a['present'], $a['absent'], $a['late'], $pct,
+            ]);
+        }
+    } elseif ($type === 'fees_by_class') {
+        $s = $pdo->prepare(
+            "SELECT c.name AS class_name, COUNT(f.id) AS invoices,
+                    SUM(f.amount) AS invoiced, SUM(f.paid) AS collected, SUM(f.balance) AS outstanding
+             FROM sch_fees f
+             JOIN sch_students s ON f.student_id=s.id
+             LEFT JOIN sch_classes c ON s.class_id=c.id
+             WHERE f.org_id=? GROUP BY s.class_id ORDER BY c.name"
+        );
+        $s->execute([$orgId]);
+        fputcsv($out, ['Class', 'Invoices', 'Invoiced', 'Collected', 'Outstanding', 'Collection Rate %']);
+        foreach ($s->fetchAll() as $fc) {
+            $rate = $fc['invoiced'] > 0 ? round($fc['collected'] / $fc['invoiced'] * 100) : 0;
+            fputcsv($out, [
+                $fc['class_name'] ?? '',
+                $fc['invoices'],
+                number_format((float)$fc['invoiced'], 2),
+                number_format((float)$fc['collected'], 2),
+                number_format((float)$fc['outstanding'], 2),
+                $rate . '%',
+            ]);
+        }
+    } elseif ($type === 'ranking') {
+        $rankExamId = (int)($_GET['rank_exam'] ?? 0);
+        if ($rankExamId) {
+            $examName = $pdo->prepare("SELECT name FROM sch_exams WHERE id=? AND org_id=? LIMIT 1");
+            $examName->execute([$rankExamId, $orgId]);
+            $examLabel = $examName->fetchColumn() ?: '';
+            if ($examLabel) fputcsv($out, ['Exam: ' . $examLabel]);
+
+            $s = $pdo->prepare(
+                "SELECT s.first_name, s.last_name, s.admission_no, c.name AS class_name,
+                        SUM(r.marks) AS total, SUM(r.max_marks) AS max_total,
+                        ROUND(SUM(r.marks)/NULLIF(SUM(r.max_marks),0)*100,1) AS pct,
+                        COUNT(r.id) AS subjects
+                 FROM sch_results r
+                 JOIN sch_students s ON r.student_id=s.id
+                 LEFT JOIN sch_classes c ON s.class_id=c.id
+                 WHERE r.exam_id=? AND r.org_id=?
+                 GROUP BY r.student_id ORDER BY c.name, pct DESC"
+            );
+            $s->execute([$rankExamId, $orgId]);
+            fputcsv($out, ['Rank', 'Name', 'Adm No', 'Class', 'Total Marks', 'Max Marks', '%', 'Subjects']);
+            $rank = 0; $lastClass = null;
+            foreach ($s->fetchAll() as $st) {
+                if ($st['class_name'] !== $lastClass) { $rank = 0; $lastClass = $st['class_name']; }
+                fputcsv($out, [
+                    ++$rank,
+                    $st['first_name'] . ' ' . $st['last_name'],
+                    $st['admission_no'] ?? '',
+                    $st['class_name'] ?? '',
+                    $st['total'], $st['max_total'], $st['pct'] . '%', $st['subjects'],
+                ]);
+            }
+        }
+    }
+
+    fclose($out);
+    exit;
+}
+
 require_once __DIR__ . '/../../includes/header-module.php';
 $user = currentUser();
 $orgId = (int)$user['org_id'];
@@ -266,9 +368,14 @@ try {
 
 <!-- Attendance Summary -->
 <div class="card mb-4 mt-4">
-  <div class="card-header d-flex align-items-center justify-content-between">
+  <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
     <h6 class="mb-0 fw-bold"><i class="fas fa-clipboard-check me-2 text-success"></i>Attendance Summary</h6>
-    <form method="GET" class="d-flex gap-2 align-items-center">
+    <div class="d-flex gap-2 align-items-center">
+      <a href="?<?= http_build_query(array_merge($_GET, ['export'=>'attendance'])) ?>"
+         class="btn btn-sm btn-outline-secondary py-1" title="Download as CSV">
+        <i class="fas fa-download me-1"></i>CSV
+      </a>
+      <form method="GET" class="d-flex gap-2 align-items-center m-0">
       <?php foreach ($_GET as $k=>$v): if ($k !== 'att_class'): ?>
       <input type="hidden" name="<?= e($k) ?>" value="<?= e($v) ?>">
       <?php endif; endforeach; ?>
@@ -279,7 +386,8 @@ try {
         <?php endforeach; ?>
       </select>
     </form>
-  </div>
+    </div><!-- /.d-flex right -->
+  </div><!-- /.card-header -->
   <div class="card-body p-0">
     <div class="table-responsive">
       <table class="table table-sm mb-0">
@@ -315,20 +423,28 @@ try {
 
 <!-- Class Ranking -->
 <div class="card mb-4">
-  <div class="card-header d-flex align-items-center justify-content-between">
+  <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
     <h6 class="mb-0 fw-bold"><i class="fas fa-trophy me-2 text-warning"></i>Class Performance Ranking</h6>
-    <form method="GET" class="d-flex gap-2 align-items-center">
-      <?php foreach ($_GET as $k=>$v): if ($k !== 'rank_exam'): ?>
-      <input type="hidden" name="<?= e($k) ?>" value="<?= e($v) ?>">
-      <?php endif; endforeach; ?>
-      <select name="rank_exam" class="form-select form-select-sm" style="min-width:160px" onchange="this.form.submit()">
-        <option value="">Select Exam</option>
-        <?php foreach ($allExams as $ex): ?>
-        <option value="<?=$ex['id']?>" <?=$rankExamId==$ex['id']?'selected':''?>><?=e($ex['name'])?></option>
-        <?php endforeach; ?>
-      </select>
-    </form>
-  </div>
+    <div class="d-flex gap-2 align-items-center">
+      <?php if ($rankExamId): ?>
+      <a href="?<?= http_build_query(array_merge($_GET, ['export'=>'ranking'])) ?>"
+         class="btn btn-sm btn-outline-secondary py-1" title="Download as CSV">
+        <i class="fas fa-download me-1"></i>CSV
+      </a>
+      <?php endif; ?>
+      <form method="GET" class="d-flex gap-2 align-items-center m-0">
+        <?php foreach ($_GET as $k=>$v): if ($k !== 'rank_exam'): ?>
+        <input type="hidden" name="<?= e($k) ?>" value="<?= e($v) ?>">
+        <?php endif; endforeach; ?>
+        <select name="rank_exam" class="form-select form-select-sm" style="min-width:160px" onchange="this.form.submit()">
+          <option value="">Select Exam</option>
+          <?php foreach ($allExams as $ex): ?>
+          <option value="<?=$ex['id']?>" <?=$rankExamId==$ex['id']?'selected':''?>><?=e($ex['name'])?></option>
+          <?php endforeach; ?>
+        </select>
+      </form>
+    </div><!-- /.d-flex right -->
+  </div><!-- /.card-header -->
   <div class="card-body p-0">
     <?php if (!$rankExamId): ?>
     <div class="text-center text-muted py-4 small"><i class="fas fa-arrow-up d-block mb-1 fa-2x opacity-25"></i>Select an exam to view class rankings.</div>
@@ -366,8 +482,12 @@ try {
 
 <!-- Fee Collection by Class -->
 <div class="card mb-4">
-  <div class="card-header">
+  <div class="card-header d-flex align-items-center justify-content-between">
     <h6 class="mb-0 fw-bold"><i class="fas fa-money-bill-wave me-2 text-success"></i>Fee Collection by Class</h6>
+    <a href="?<?= http_build_query(array_merge($_GET, ['export'=>'fees_by_class'])) ?>"
+       class="btn btn-sm btn-outline-secondary py-1" title="Download as CSV">
+      <i class="fas fa-download me-1"></i>CSV
+    </a>
   </div>
   <div class="card-body p-0">
     <div class="table-responsive">

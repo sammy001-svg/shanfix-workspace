@@ -186,7 +186,15 @@ try {
         <tbody>
           <?php foreach ($payments as $pay): ?>
           <tr>
-            <td class="small fw-semibold"><?= e($pay['receipt_no'] ?? '—') ?></td>
+            <td class="small fw-semibold">
+              <?php if (!empty($pay['receipt_no'])): ?>
+              <a href="<?= APP_URL ?>/modules/school/fee-receipt-pdf.php?payment_id=<?= $pay['id'] ?>"
+                 target="_blank" class="text-decoration-none" title="Print Receipt">
+                <?= e($pay['receipt_no']) ?>
+                <i class="fas fa-print ms-1 text-muted" style="font-size:.7rem"></i>
+              </a>
+              <?php else: ?>—<?php endif; ?>
+            </td>
             <td class="small"><?= e(ucwords(str_replace('_',' ',$pay['fee_type']))) ?></td>
             <td><span class="badge bg-secondary bg-opacity-25 text-dark"><?= e(ucfirst($pay['payment_method'] ?? '')) ?></span></td>
             <td class="text-end fw-semibold text-success small"><?= formatCurrency($pay['amount_paid']) ?></td>
