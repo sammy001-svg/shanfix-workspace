@@ -68,13 +68,37 @@ $orgSlug     = $_SESSION['par_org_slug'] ?? '';
 $pageTitle   = $pageTitle ?? 'Parent Portal';
 $currentPage = basename($_SERVER['PHP_SELF']);
 
+// Notification counts for sidebar badges
+$parFeeAlert = false;
+if ($parActive && $parOrgId) {
+    try {
+        $s = $pdo->prepare(
+            "SELECT COALESCE(SUM(balance),0) FROM sch_fees WHERE student_id=? AND org_id=? AND balance>0"
+        );
+        $s->execute([$parActive, $parOrgId]);
+        $parFeeAlert = (float)$s->fetchColumn() > 0;
+    } catch (Throwable $e) {}
+}
+
+$parNoticeCount = 0;
+try {
+    $s = $pdo->prepare(
+        "SELECT COUNT(*) FROM sch_notices
+         WHERE org_id=? AND audience IN ('all','parents')
+           AND (expiry_date IS NULL OR expiry_date >= CURDATE())
+           AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)"
+    );
+    $s->execute([$parOrgId]);
+    $parNoticeCount = (int)$s->fetchColumn();
+} catch (Throwable $e) {}
+
 $parNav = [
     ['url'=>'index.php',      'icon'=>'fas fa-th-large',       'label'=>'Dashboard'],
     ['url'=>'results.php',    'icon'=>'fas fa-graduation-cap', 'label'=>'Results'],
-    ['url'=>'fees.php',       'icon'=>'fas fa-receipt',        'label'=>'Fees'],
+    ['url'=>'fees.php',       'icon'=>'fas fa-receipt',        'label'=>'Fees',    'badge'=>$parFeeAlert ? '!' : null],
     ['url'=>'attendance.php', 'icon'=>'fas fa-clipboard-check','label'=>'Attendance'],
     ['url'=>'homework.php',   'icon'=>'fas fa-book-open',      'label'=>'Homework'],
-    ['url'=>'notices.php',    'icon'=>'fas fa-bullhorn',       'label'=>'Notices'],
+    ['url'=>'notices.php',    'icon'=>'fas fa-bullhorn',       'label'=>'Notices', 'badge'=>$parNoticeCount ?: null],
     ['url'=>'timetable.php',  'icon'=>'fas fa-calendar-week',  'label'=>'Timetable'],
     ['url'=>'profile.php',    'icon'=>'fas fa-user-circle',    'label'=>'My Profile'],
 ];
@@ -232,7 +256,11 @@ body { background: #f4f6f9; }
   <nav class="mt-1">
     <?php foreach ($parNav as $nav): ?>
     <a href="<?= APP_URL ?>/parent/<?= $nav['url'] ?>" class="nav-link <?= $currentPage === $nav['url'] ? 'active' : '' ?>">
-      <i class="<?= $nav['icon'] ?>"></i><?= $nav['label'] ?>
+      <i class="<?= $nav['icon'] ?>"></i>
+      <span class="flex-grow-1"><?= $nav['label'] ?></span>
+      <?php if (!empty($nav['badge'])): ?>
+      <span class="badge rounded-pill text-white" style="background:#e74c3c;font-size:.58rem;min-width:18px;text-align:center"><?= $nav['badge'] ?></span>
+      <?php endif; ?>
     </a>
     <?php endforeach; ?>
   </nav>
@@ -258,12 +286,55 @@ body { background: #f4f6f9; }
       <span class="small text-muted d-none d-sm-inline">
         <i class="fas fa-calendar-day me-1"></i><?= date('d M Y') ?>
       </span>
+      <?php $parTotalBadge = ($parFeeAlert ? 1 : 0) + $parNoticeCount; ?>
+      <div class="position-relative">
+        <button class="btn btn-sm btn-light border d-flex align-items-center justify-content-center"
+                style="border-radius:50%;width:34px;height:34px;padding:0"
+                data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="fas fa-bell" style="font-size:.85rem;color:#6c757d"></i>
+        </button>
+        <?php if ($parTotalBadge > 0): ?>
+        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+              style="font-size:.58rem"><?= $parTotalBadge ?></span>
+        <?php endif; ?>
+        <ul class="dropdown-menu dropdown-menu-end shadow border-0 py-1" style="min-width:260px">
+          <?php if ($parFeeAlert): ?>
+          <li>
+            <a class="dropdown-item py-2" href="<?= APP_URL ?>/parent/fees.php">
+              <div class="d-flex align-items-center gap-2">
+                <i class="fas fa-receipt text-danger" style="width:16px;font-size:.85rem"></i>
+                <div>
+                  <div class="fw-semibold small">Outstanding fee balance</div>
+                  <div class="text-muted" style="font-size:.7rem">View statement &amp; pay</div>
+                </div>
+              </div>
+            </a>
+          </li>
+          <?php endif; ?>
+          <?php if ($parNoticeCount > 0): ?>
+          <li>
+            <a class="dropdown-item py-2" href="<?= APP_URL ?>/parent/notices.php">
+              <div class="d-flex align-items-center gap-2">
+                <i class="fas fa-bullhorn text-warning" style="width:16px;font-size:.85rem"></i>
+                <div>
+                  <div class="fw-semibold small"><?= $parNoticeCount ?> new notice<?= $parNoticeCount!==1?'s':'' ?></div>
+                  <div class="text-muted" style="font-size:.7rem">School announcements this week</div>
+                </div>
+              </div>
+            </a>
+          </li>
+          <?php endif; ?>
+          <?php if ($parTotalBadge === 0): ?>
+          <li><div class="dropdown-item py-2 text-muted small">No new notifications</div></li>
+          <?php endif; ?>
+        </ul>
+      </div>
       <div class="d-flex align-items-center gap-2">
-        <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-700"
+        <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
              style="width:32px;height:32px;background:var(--par-green);font-size:.75rem">
           <?= strtoupper(substr($parName, 0, 1)) ?>
         </div>
-        <span class="small fw-600 d-none d-sm-inline" style="color:var(--par-navy)"><?= e(explode(' ', $parName)[0]) ?></span>
+        <span class="small fw-semibold d-none d-sm-inline" style="color:var(--par-navy)"><?= e(explode(' ', $parName)[0]) ?></span>
       </div>
     </div>
   </div>

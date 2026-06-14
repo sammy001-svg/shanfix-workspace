@@ -40,12 +40,41 @@ try {
     $teacherRecord = $__t->fetch() ?: [];
 } catch (Throwable $e) {}
 
+// Notification counts for sidebar badges
+$tchAttNeeded = 0;
+try {
+    $s = $pdo->prepare(
+        "SELECT COUNT(DISTINCT t.class_id)
+         FROM sch_timetable t
+         WHERE t.org_id=? AND t.staff_id=? AND t.day_of_week=?
+           AND t.class_id NOT IN (
+             SELECT DISTINCT class_id FROM sch_attendance WHERE org_id=? AND att_date=CURDATE()
+           )"
+    );
+    $s->execute([$tchOrgId, $tchId, (int)date('N'), $tchOrgId]);
+    $tchAttNeeded = (int)$s->fetchColumn();
+} catch (Throwable $e) {}
+
+$tchNoticeCount = 0;
+try {
+    $s = $pdo->prepare(
+        "SELECT COUNT(*) FROM sch_notices
+         WHERE org_id=? AND audience IN ('all','staff','teachers')
+           AND (expiry_date IS NULL OR expiry_date >= CURDATE())
+           AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)"
+    );
+    $s->execute([$tchOrgId]);
+    $tchNoticeCount = (int)$s->fetchColumn();
+} catch (Throwable $e) {}
+
 $tchNav = [
     ['url'=>'index.php',      'icon'=>'fas fa-th-large',       'label'=>'Dashboard'],
-    ['url'=>'attendance.php', 'icon'=>'fas fa-clipboard-check','label'=>'Attendance'],
+    ['url'=>'attendance.php', 'icon'=>'fas fa-clipboard-check','label'=>'Attendance', 'badge'=>$tchAttNeeded ?: null],
     ['url'=>'results.php',    'icon'=>'fas fa-graduation-cap', 'label'=>'Results'],
     ['url'=>'homework.php',   'icon'=>'fas fa-book-open',      'label'=>'Homework'],
+    ['url'=>'timetable.php',  'icon'=>'fas fa-calendar-week',  'label'=>'Timetable'],
     ['url'=>'students.php',   'icon'=>'fas fa-users',          'label'=>'My Students'],
+    ['url'=>'notices.php',    'icon'=>'fas fa-bullhorn',       'label'=>'Notices', 'badge'=>$tchNoticeCount ?: null],
     ['url'=>'profile.php',    'icon'=>'fas fa-user-circle',    'label'=>'My Profile'],
 ];
 ?>
@@ -180,7 +209,11 @@ body { background: #f4f6f9; }
   <nav class="mt-1">
     <?php foreach ($tchNav as $nav): ?>
     <a href="<?= APP_URL ?>/teacher/<?= $nav['url'] ?>" class="nav-link <?= $currentPage === $nav['url'] ? 'active' : '' ?>">
-      <i class="<?= $nav['icon'] ?>"></i><?= $nav['label'] ?>
+      <i class="<?= $nav['icon'] ?>"></i>
+      <span class="flex-grow-1"><?= $nav['label'] ?></span>
+      <?php if (!empty($nav['badge'])): ?>
+      <span class="badge rounded-pill text-white" style="background:#e74c3c;font-size:.58rem;min-width:18px;text-align:center"><?= (int)$nav['badge'] ?></span>
+      <?php endif; ?>
     </a>
     <?php endforeach; ?>
   </nav>
@@ -206,6 +239,49 @@ body { background: #f4f6f9; }
       <span class="small text-muted d-none d-sm-inline">
         <i class="fas fa-calendar-day me-1"></i><?= date('l, d M Y') ?>
       </span>
+      <?php $tchTotalBadge = $tchAttNeeded + $tchNoticeCount; ?>
+      <div class="position-relative">
+        <button class="btn btn-sm btn-light border d-flex align-items-center justify-content-center"
+                style="border-radius:50%;width:34px;height:34px;padding:0"
+                data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="fas fa-bell" style="font-size:.85rem;color:#6c757d"></i>
+        </button>
+        <?php if ($tchTotalBadge > 0): ?>
+        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+              style="font-size:.58rem"><?= $tchTotalBadge ?></span>
+        <?php endif; ?>
+        <ul class="dropdown-menu dropdown-menu-end shadow border-0 py-1" style="min-width:260px">
+          <?php if ($tchAttNeeded > 0): ?>
+          <li>
+            <a class="dropdown-item py-2" href="<?= APP_URL ?>/teacher/attendance.php">
+              <div class="d-flex align-items-center gap-2">
+                <i class="fas fa-clipboard-check text-danger" style="width:16px;font-size:.85rem"></i>
+                <div>
+                  <div class="fw-semibold small"><?= $tchAttNeeded ?> class<?= $tchAttNeeded!==1?'es':'' ?> need attendance</div>
+                  <div class="text-muted" style="font-size:.7rem">Mark today's register</div>
+                </div>
+              </div>
+            </a>
+          </li>
+          <?php endif; ?>
+          <?php if ($tchNoticeCount > 0): ?>
+          <li>
+            <a class="dropdown-item py-2" href="<?= APP_URL ?>/teacher/notices.php">
+              <div class="d-flex align-items-center gap-2">
+                <i class="fas fa-bullhorn text-warning" style="width:16px;font-size:.85rem"></i>
+                <div>
+                  <div class="fw-semibold small"><?= $tchNoticeCount ?> new notice<?= $tchNoticeCount!==1?'s':'' ?></div>
+                  <div class="text-muted" style="font-size:.7rem">School announcements this week</div>
+                </div>
+              </div>
+            </a>
+          </li>
+          <?php endif; ?>
+          <?php if ($tchTotalBadge === 0): ?>
+          <li><div class="dropdown-item py-2 text-muted small">No new notifications</div></li>
+          <?php endif; ?>
+        </ul>
+      </div>
       <div class="d-flex align-items-center gap-2">
         <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
              style="width:32px;height:32px;background:var(--tch-green);font-size:.75rem">
