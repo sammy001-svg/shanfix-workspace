@@ -22,7 +22,17 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         } else {
             $pdo->prepare("INSERT INTO sch_parents (org_id,first_name,last_name,relationship,phone,email,national_id,occupation,address,status) VALUES (?,?,?,?,?,?,?,?,?,?)")
                ->execute([$orgId,$fn,$ln,$rel,$phone,$email,$nid,$occ,$addr,$status]);
-            setFlash('success','Parent added.');
+            $newParentId = (int)$pdo->lastInsertId();
+            // Link to a student immediately if one was selected in the form
+            $linkSid   = (int)($_POST['student_id'] ?? 0);
+            $isPrimary = (int)($_POST['is_primary']  ?? 0);
+            if ($linkSid && $newParentId) {
+                try {
+                    $pdo->prepare("INSERT INTO sch_student_parents (student_id,parent_id,is_primary) VALUES (?,?,?) ON DUPLICATE KEY UPDATE is_primary=VALUES(is_primary)")
+                        ->execute([$linkSid, $newParentId, $isPrimary]);
+                } catch (Throwable $e) {}
+            }
+            setFlash('success', $linkSid ? 'Parent added and linked to student.' : 'Parent added.');
         }
         redirect('parents.php');
     }
@@ -112,6 +122,14 @@ if($viewId){
     }
 }
 $relColors=['father'=>'primary','mother'=>'danger','guardian'=>'success','other'=>'secondary'];
+
+// Students list for the Add Parent modal link selector
+$allStudentsForModal = [];
+try {
+    $s = $pdo->prepare("SELECT id, CONCAT(first_name,' ',last_name) AS name, admission_no FROM sch_students WHERE org_id=? AND status='active' ORDER BY first_name");
+    $s->execute([$orgId]);
+    $allStudentsForModal = $s->fetchAll();
+} catch (Throwable $e) {}
 ?>
 <?=flashAlert()?>
 <div class="page-header d-flex align-items-center justify-content-between mb-4">
@@ -316,6 +334,28 @@ $relColors=['father'=>'primary','mother'=>'danger','guardian'=>'success','other'
       <div class="col-md-6"><label class="form-label fw-semibold">National ID</label><input type="text" name="national_id" id="parentNid" class="form-control"></div>
       <div class="col-md-6"><label class="form-label fw-semibold">Occupation</label><input type="text" name="occupation" id="parentOcc" class="form-control"></div>
       <div class="col-12"><label class="form-label fw-semibold">Address</label><textarea name="address" id="parentAddr" class="form-control" rows="2"></textarea></div>
+      <!-- Student link — shown only when adding a new parent -->
+      <div id="studentLinkRow" class="col-12">
+        <hr class="my-1">
+        <div class="row g-3">
+          <div class="col-md-8">
+            <label class="form-label fw-semibold">Link to Student <span class="text-muted fw-normal small">(optional)</span></label>
+            <select name="student_id" id="parentStudentLink" class="form-select">
+              <option value="">-- No student link --</option>
+              <?php foreach($allStudentsForModal as $st): ?>
+              <option value="<?=$st['id']?>"><?=e($st['name'])?> &nbsp;(<?=e($st['admission_no']??'')?>)</option>
+              <?php endforeach; ?>
+            </select>
+            <div class="form-text">Select a student to link this parent to immediately after saving.</div>
+          </div>
+          <div class="col-md-4 d-flex align-items-center pt-4">
+            <div class="form-check">
+              <input type="checkbox" name="is_primary" value="1" class="form-check-input" id="parentIsPrimary">
+              <label class="form-check-label small fw-semibold" for="parentIsPrimary">Primary guardian</label>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn text-white" style="background:<?=$moduleColor?>">Save</button></div>
@@ -371,6 +411,19 @@ $relColors=['father'=>'primary','mother'=>'danger','guardian'=>'success','other'
 
 <?php ob_start();?>
 <script>
+function resetParentModal(){
+  document.getElementById('parentModalTitle').textContent='Add Parent/Guardian';
+  document.getElementById('parentId').value='0';
+  ['parentFn','parentLn','parentPhone','parentEmail','parentNid','parentOcc','parentAddr'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('parentRel').value='guardian';
+  document.getElementById('parentStatus').value='active';
+  document.getElementById('parentStudentLink').value='';
+  document.getElementById('parentIsPrimary').checked=false;
+  document.getElementById('studentLinkRow').style.display='';
+}
+document.getElementById('parentModal').addEventListener('show.bs.modal',function(e){
+  if(!e.relatedTarget||!e.relatedTarget.classList.contains('btn-edit')) resetParentModal();
+});
 document.querySelectorAll('.btn-edit').forEach(btn=>{btn.addEventListener('click',function(){
   document.getElementById('parentModalTitle').textContent='Edit Parent/Guardian';
   document.getElementById('parentId').value=this.dataset.id;
@@ -383,6 +436,8 @@ document.querySelectorAll('.btn-edit').forEach(btn=>{btn.addEventListener('click
   document.getElementById('parentOcc').value=this.dataset.occ||'';
   document.getElementById('parentAddr').value=this.dataset.addr||'';
   document.getElementById('parentStatus').value=this.dataset.status||'active';
+  // Hide student link — linking is done from the parent detail view
+  document.getElementById('studentLinkRow').style.display='none';
   new bootstrap.Modal(document.getElementById('parentModal')).show();
 });});
 document.querySelectorAll('.btn-confirm').forEach(btn=>{btn.addEventListener('click',function(e){if(!confirm(this.dataset.msg||'Are you sure?'))e.preventDefault();});});

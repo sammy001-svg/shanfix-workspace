@@ -26,7 +26,6 @@ $moduleNav = [
     ['url' => 'classes.php',          'icon' => 'fas fa-chalkboard',         'label' => 'Classes'],
     ['url' => 'subjects.php',         'icon' => 'fas fa-book',               'label' => 'Subjects'],
     ['url' => 'grades.php',           'icon' => 'fas fa-star',               'label' => 'Grading'],
-    ['url' => 'subject-teachers.php', 'icon' => 'fas fa-user-edit',          'label' => 'Assignments'],
     ['url' => 'timetable.php',        'icon' => 'fas fa-clock',              'label' => 'Timetable'],
     ['url' => 'staff.php',            'icon' => 'fas fa-book-open',          'label' => 'Curriculum'],
 

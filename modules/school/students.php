@@ -73,6 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         medical_conditions=?, learning_support=?, emergency_contact=?, emergency_phone=? {$photoSet}
                         WHERE id=? AND org_id=?";
                 $pdo->prepare($sql)->execute($params);
+                $studentId = $id;
                 setFlash('success', 'Student details updated successfully.');
             } else {
                 $sql = "INSERT INTO sch_students (
@@ -87,8 +88,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $nationality, $passportNo, $visaExpiry, $curriculum, $motherTongue, $prevSchool,
                     $medNotes, $learningSupport, $emergName, $emergPhone, $photoPath
                 ]);
+                $studentId = (int)$pdo->lastInsertId();
                 setFlash('success', "Student '$firstName $lastName' enrolled successfully.");
             }
+
+            // ── Auto-sync parent info → sch_parents + sch_student_parents ──
+            if ($parentName && $studentId) {
+                $nameParts = explode(' ', trim($parentName), 2);
+                $parFn = trim($nameParts[0]);
+                $parLn = trim($nameParts[1] ?? '');
+
+                // Try to find an existing parent by phone or email
+                $existingParId = null;
+                if ($parentPhone || $parentEmail) {
+                    $matchConds = []; $matchParams = [$orgId];
+                    if ($parentPhone) { $matchConds[] = 'phone=?';  $matchParams[] = $parentPhone; }
+                    if ($parentEmail) { $matchConds[] = 'email=?';  $matchParams[] = $parentEmail; }
+                    $ep = $pdo->prepare("SELECT id FROM sch_parents WHERE org_id=? AND (" . implode(' OR ', $matchConds) . ") LIMIT 1");
+                    $ep->execute($matchParams);
+                    $existingParId = $ep->fetchColumn() ?: null;
+                }
+                // Fallback: match by full name within the same org
+                if (!$existingParId && $parFn && $parLn) {
+                    $np = $pdo->prepare("SELECT id FROM sch_parents WHERE org_id=? AND first_name=? AND last_name=? LIMIT 1");
+                    $np->execute([$orgId, $parFn, $parLn]);
+                    $existingParId = $np->fetchColumn() ?: null;
+                }
+
+                if ($existingParId) {
+                    // Keep name in sync; preserve other fields the parent module may have filled in
+                    $pdo->prepare("UPDATE sch_parents SET first_name=?, last_name=? WHERE id=? AND org_id=?")
+                        ->execute([$parFn, $parLn, $existingParId, $orgId]);
+                } else {
+                    $pdo->prepare("INSERT INTO sch_parents (org_id,first_name,last_name,relationship,phone,email,status) VALUES (?,?,?,'guardian',?,?,'active')")
+                        ->execute([$orgId, $parFn, $parLn, $parentPhone ?: null, $parentEmail ?: null]);
+                    $existingParId = (int)$pdo->lastInsertId();
+                }
+
+                // Link student ↔ parent (upsert; mark as primary guardian)
+                $pdo->prepare("INSERT INTO sch_student_parents (student_id,parent_id,is_primary) VALUES (?,?,1) ON DUPLICATE KEY UPDATE is_primary=1")
+                    ->execute([$studentId, $existingParId]);
+            }
+
             logActivity($id > 0 ? 'update' : 'create', 'school', "Student: $firstName $lastName (Adm: $admNo)");
         } catch (Throwable $e) {
             error_log('[school/students save] ' . $e->getMessage());
