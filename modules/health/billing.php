@@ -435,7 +435,8 @@ require_once __DIR__ . '/../../includes/header-module.php';
                   <?php if ($balance > 0 && !in_array($b['status'], ['paid','cancelled'])): ?>
                   <button class="btn btn-outline-success btn-sm" onclick="openMpesaPay(<?= $b['id'] ?>,<?= round($balance,2) ?>,'<?= e($b['patient_name']) ?>')" title="Pay via M-Pesa"><i class="fab fa-cc-mastercard"></i> M-Pesa</button>
                   <?php endif; ?>
-                  <button class="btn btn-outline-secondary btn-sm" onclick="printBill(<?= $b['id'] ?>)" title="Print"><i class="fas fa-print"></i></button>
+                  <button class="btn btn-outline-secondary btn-sm" onclick="printBill(<?= $b['id'] ?>)" title="Quick Print"><i class="fas fa-print"></i></button>
+                  <a href="<?= APP_URL ?>/modules/health/invoice-pdf.php?id=<?= $b['id'] ?>" target="_blank" class="btn btn-outline-danger btn-sm" title="Invoice PDF"><i class="fas fa-file-invoice"></i></a>
                 </div>
               </td>
             </tr>

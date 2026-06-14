@@ -88,6 +88,70 @@ try {
   </div>
 </div>
 
+<!-- Portal Links -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-lg-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body d-flex align-items-center gap-3 py-3">
+        <div style="width:42px;height:42px;border-radius:10px;background:#e8f0f8;display:flex;align-items:center;justify-content:center;color:#1a4e7c;font-size:1.1rem;flex-shrink:0">
+          <i class="fas fa-user-md"></i>
+        </div>
+        <div>
+          <div class="fw-bold small">Doctor Portal</div>
+          <a href="<?= APP_URL ?>/doctor/login.php?org=<?= e($_SESSION['org_slug'] ?? '') ?>" target="_blank" class="text-muted small text-decoration-none">
+            Access doctor portal <i class="fas fa-external-link-alt ms-1" style="font-size:.65rem"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body d-flex align-items-center gap-3 py-3">
+        <div style="width:42px;height:42px;border-radius:10px;background:#fde8e8;display:flex;align-items:center;justify-content:center;color:#e74c3c;font-size:1.1rem;flex-shrink:0">
+          <i class="fas fa-procedures"></i>
+        </div>
+        <div>
+          <div class="fw-bold small">Patient Portal</div>
+          <a href="<?= APP_URL ?>/patient/index.php" target="_blank" class="text-muted small text-decoration-none">
+            View patient portal <i class="fas fa-external-link-alt ms-1" style="font-size:.65rem"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body d-flex align-items-center gap-3 py-3">
+        <div style="width:42px;height:42px;border-radius:10px;background:#e8f8f0;display:flex;align-items:center;justify-content:center;color:#1a8a4e;font-size:1.1rem;flex-shrink:0">
+          <i class="fas fa-file-invoice"></i>
+        </div>
+        <div>
+          <div class="fw-bold small">Print Documents</div>
+          <a href="prescription.php" class="text-muted small text-decoration-none">
+            Prescriptions &amp; certificates
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body d-flex align-items-center gap-3 py-3">
+        <div style="width:42px;height:42px;border-radius:10px;background:#fff3cd;display:flex;align-items:center;justify-content:center;color:#856404;font-size:1.1rem;flex-shrink:0">
+          <i class="fas fa-chart-bar"></i>
+        </div>
+        <div>
+          <div class="fw-bold small">Analytics</div>
+          <a href="analytics.php" class="text-muted small text-decoration-none">
+            Health reports &amp; insights
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="card">
   <div class="card-header d-flex align-items-center justify-content-between">
     <h6 class="mb-0 text-dark fw-bold"><i class="fas fa-calendar-check me-2" style="color:<?= $moduleColor ?>"></i>Today's Scheduled Consultations — <?= date('d M Y') ?></h6>

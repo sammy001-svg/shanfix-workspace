@@ -397,6 +397,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
                   <button class="btn btn-outline-primary btn-sm" onclick="openTransfer(<?= $a['id'] ?>, <?= $a['ward_id'] ?: 0 ?>, <?= $a['bed_id'] ?: 0 ?>)" title="Transfer"><i class="fas fa-exchange-alt"></i></button>
                   <button class="btn btn-outline-warning btn-sm" onclick="openNotesModal(<?= $a['id'] ?>, '<?= htmlspecialchars(addslashes($a['diagnosis'])) ?>', '<?= htmlspecialchars(addslashes($a['reason'])) ?>')" title="Update Notes"><i class="fas fa-notes-medical"></i></button>
                   <button class="btn btn-outline-success btn-sm" onclick="openDischarge(<?= $a['id'] ?>, '<?= htmlspecialchars(addslashes($a['admission_no'])) ?>')" title="Discharge"><i class="fas fa-sign-out-alt"></i></button>
+                  <a href="<?= APP_URL ?>/modules/health/discharge-summary-pdf.php?id=<?= $a['id'] ?>" target="_blank" class="btn btn-outline-secondary btn-sm" title="Discharge Summary PDF"><i class="fas fa-file-alt"></i></a>
                 </div>
               </td>
             </tr>

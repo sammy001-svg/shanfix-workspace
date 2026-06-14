@@ -235,12 +235,10 @@ $dispensedCnt = count(array_filter($prescriptions, fn($r) => $r['status'] === 'd
                 <button class="btn btn-xs btn-success" title="Mark dispensed"><i class="fas fa-check"></i></button>
               </form>
               <?php endif; ?>
-              <form method="POST" class="d-inline">
-                <?= csrfField() ?>
-                <input type="hidden" name="action" value="export_pdf">
-                <input type="hidden" name="prescription_id" value="<?= $rx['id'] ?>">
-                <button class="btn btn-xs btn-outline-primary" title="Print PDF"><i class="fas fa-print"></i></button>
-              </form>
+              <a href="<?= APP_URL ?>/modules/health/prescription-pdf.php?id=<?= $rx['id'] ?>" target="_blank"
+                 class="btn btn-xs btn-outline-danger" title="Professional Print">
+                <i class="fas fa-file-prescription"></i>
+              </a>
             </td>
           </tr>
           <?php endforeach; endif; ?>

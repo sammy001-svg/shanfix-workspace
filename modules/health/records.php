@@ -220,7 +220,7 @@ try {
             </td>
             <td class="text-center">
               <div class="btn-group btn-group-sm">
-                <button class="btn btn-outline-secondary" onclick="printPrescription(<?= $r['id'] ?>)" title="Print Prescription Slip"><i class="fas fa-print"></i></button>
+                <a href="<?= APP_URL ?>/modules/health/medical-certificate-pdf.php?patient_id=<?= $r['patient_id'] ?>" target="_blank" class="btn btn-outline-danger" title="Medical Certificate"><i class="fas fa-file-medical"></i></a>
                 <button class="btn btn-outline-primary" onclick="openEdit(<?= $r['id'] ?>)" title="Edit Details"><i class="fas fa-edit"></i></button>
                 <button class="btn btn-outline-danger" onclick="delRecord(<?= $r['id'] ?>)" title="Remove Entry"><i class="fas fa-trash"></i></button>
               </div>

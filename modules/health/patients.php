@@ -410,6 +410,8 @@ try {
             <td class="text-center">
               <div class="btn-group btn-group-sm">
                 <button class="btn btn-outline-primary" onclick="openEdit(<?= $p['id'] ?>)" title="Edit"><i class="fas fa-edit"></i></button>
+                <a href="<?= APP_URL ?>/modules/health/invoice-pdf.php?patient_id=<?= $p['id'] ?>" target="_blank" class="btn btn-outline-danger" title="Invoice PDF"><i class="fas fa-file-invoice"></i></a>
+                <a href="<?= APP_URL ?>/modules/health/medical-certificate-pdf.php?patient_id=<?= $p['id'] ?>" target="_blank" class="btn btn-outline-info" title="Medical Certificate"><i class="fas fa-file-medical"></i></a>
                 <?php if ($p['user_id']): ?>
                 <button class="btn btn-outline-warning" onclick="resetPatientPwd(<?= $p['id'] ?>,'<?= e($p['first_name'].' '.$p['last_name']) ?>')" title="Reset Portal Password"><i class="fas fa-key"></i></button>
                 <?php endif; ?>

@@ -48,7 +48,7 @@ $statusColors = ['draft'=>'secondary','sent'=>'info','partial'=>'warning','paid'
     <div class="table-responsive">
       <table class="table table-hover mb-0">
         <thead class="table-light">
-          <tr><th>Bill No</th><th>Date</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th></tr>
+          <tr><th>Bill No</th><th>Date</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th><th></th></tr>
         </thead>
         <tbody>
           <?php foreach ($bills as $b):
@@ -62,6 +62,12 @@ $statusColors = ['draft'=>'secondary','sent'=>'info','partial'=>'warning','paid'
             <td class="text-success"><?= formatCurrency($b['paid_amount']) ?></td>
             <td class="<?= $balance > 0 ? 'text-danger fw-bold' : 'text-muted' ?>"><?= formatCurrency($balance) ?></td>
             <td><span class="badge bg-<?= $bg ?>"><?= ucfirst($b['status']) ?></span></td>
+            <td>
+              <a href="<?= APP_URL ?>/modules/health/invoice-pdf.php?id=<?= $b['id'] ?>" target="_blank"
+                 class="btn btn-xs btn-outline-secondary" title="Print Invoice">
+                <i class="fas fa-print me-1"></i>Invoice
+              </a>
+            </td>
           </tr>
           <?php endforeach; ?>
         </tbody>
