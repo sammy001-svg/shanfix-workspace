@@ -387,32 +387,39 @@ $resultsSt->execute($resParams);
 $results = $resultsSt->fetchAll(PDO::FETCH_ASSOC);
 
 // ── Summary stats ─────────────────────────────────────────────────
-$statsSt = $pdo->prepare("
-    SELECT
-        COUNT(*) FILTER (WHERE status='ordered')    AS cnt_ordered,
-        COUNT(*) FILTER (WHERE status='collected')  AS cnt_collected,
-        COUNT(*) FILTER (WHERE status='processing') AS cnt_processing,
-        COUNT(*) FILTER (WHERE status='resulted' AND DATE(resulted_at)=CURDATE()) AS cnt_today,
-        COUNT(*) FILTER (WHERE priority='stat' AND status NOT IN ('resulted','cancelled')) AS cnt_stat
-    FROM health_lab_orders WHERE org_id=?
-");
-// Fallback for MySQL < 8 (no FILTER)
+$stats = ['cnt_ordered'=>0,'cnt_collected'=>0,'cnt_processing'=>0,'cnt_today'=>0,'cnt_stat'=>0];
 try {
+    $statsSt = $pdo->prepare("
+        SELECT
+            SUM(CASE WHEN status='ordered'    THEN 1 ELSE 0 END) AS cnt_ordered,
+            SUM(CASE WHEN status='collected'  THEN 1 ELSE 0 END) AS cnt_collected,
+            SUM(CASE WHEN status='processing' THEN 1 ELSE 0 END) AS cnt_processing,
+            SUM(CASE WHEN status='resulted'   AND DATE(resulted_at)=CURDATE() THEN 1 ELSE 0 END) AS cnt_today,
+            SUM(CASE WHEN priority='stat'     AND status NOT IN ('resulted','cancelled') THEN 1 ELSE 0 END) AS cnt_stat
+        FROM health_lab_orders WHERE org_id=?
+    ");
     $statsSt->execute([$orgId]);
-    $stats = $statsSt->fetch(PDO::FETCH_ASSOC);
-} catch (Exception $e) {
-    $stats = ['cnt_ordered'=>0,'cnt_collected'=>0,'cnt_processing'=>0,'cnt_today'=>0,'cnt_stat'=>0];
+    $row = $statsSt->fetch(PDO::FETCH_ASSOC);
+    if ($row) $stats = array_map('intval', $row);
+} catch (Throwable $e) {
+    // fallback: individual counts
     foreach (['ordered','collected','processing'] as $s) {
-        $sx = $pdo->prepare("SELECT COUNT(*) FROM health_lab_orders WHERE org_id=? AND status=?");
-        $sx->execute([$orgId, $s]);
-        $stats["cnt_{$s}"] = (int)$sx->fetchColumn();
+        try {
+            $sx = $pdo->prepare("SELECT COUNT(*) FROM health_lab_orders WHERE org_id=? AND status=?");
+            $sx->execute([$orgId, $s]);
+            $stats["cnt_{$s}"] = (int)$sx->fetchColumn();
+        } catch (Throwable $e2) {}
     }
-    $sx = $pdo->prepare("SELECT COUNT(*) FROM health_lab_orders WHERE org_id=? AND status='resulted' AND DATE(resulted_at)=CURDATE()");
-    $sx->execute([$orgId]);
-    $stats['cnt_today'] = (int)$sx->fetchColumn();
-    $sx = $pdo->prepare("SELECT COUNT(*) FROM health_lab_orders WHERE org_id=? AND priority='stat' AND status NOT IN ('resulted','cancelled')");
-    $sx->execute([$orgId]);
-    $stats['cnt_stat'] = (int)$sx->fetchColumn();
+    try {
+        $sx = $pdo->prepare("SELECT COUNT(*) FROM health_lab_orders WHERE org_id=? AND status='resulted' AND DATE(resulted_at)=CURDATE()");
+        $sx->execute([$orgId]);
+        $stats['cnt_today'] = (int)$sx->fetchColumn();
+    } catch (Throwable $e2) {}
+    try {
+        $sx = $pdo->prepare("SELECT COUNT(*) FROM health_lab_orders WHERE org_id=? AND priority='stat' AND status NOT IN ('resulted','cancelled')");
+        $sx->execute([$orgId]);
+        $stats['cnt_stat'] = (int)$sx->fetchColumn();
+    } catch (Throwable $e2) {}
 }
 
 require_once __DIR__ . '/../../includes/header-module.php';
