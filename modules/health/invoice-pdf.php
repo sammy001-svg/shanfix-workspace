@@ -22,6 +22,15 @@ $bill = null; $items = [];
 try {
     $orgId = $isAdmin ? (int)currentUser()['org_id'] : (int)$_SESSION['org_id'];
 
+    // Load health currency for this org
+    try {
+        $__cs = $pdo->prepare("SELECT setting_value FROM health_settings WHERE org_id=? AND setting_key='h_currency_symbol' LIMIT 1");
+        $__cs->execute([$orgId]);
+        $GLOBALS['hCurrencySymbol'] = $__cs->fetchColumn() ?: (defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'KES');
+    } catch (Throwable $__e) {
+        $GLOBALS['hCurrencySymbol'] = defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'KES';
+    }
+
     $s = $pdo->prepare("
         SELECT b.*, CONCAT(p.first_name,' ',p.last_name) AS patient_name, p.patient_no,
                p.phone AS patient_phone, p.email AS patient_email,
@@ -184,8 +193,8 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:10pt;color:#1a1a2e;backgr
         <td><?= $i+1 ?></td>
         <td><?= e($it['description'] ?? $it['service_name'] ?? '—') ?></td>
         <td><?= e($it['quantity'] ?? 1) ?></td>
-        <td><?= formatCurrency($it['unit_price'] ?? $it['amount'] ?? 0) ?></td>
-        <td><?= formatCurrency(($it['unit_price'] ?? $it['amount'] ?? 0) * ($it['quantity'] ?? 1)) ?></td>
+        <td><?= hMoney($it['unit_price'] ?? $it['amount'] ?? 0) ?></td>
+        <td><?= hMoney(($it['unit_price'] ?? $it['amount'] ?? 0) * ($it['quantity'] ?? 1)) ?></td>
       </tr>
       <?php endforeach; ?>
       <?php endif; ?>
@@ -196,14 +205,14 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:10pt;color:#1a1a2e;backgr
   <div class="totals-box">
     <div class="totals-inner">
       <table>
-        <tr><td class="text-muted">Subtotal</td><td><?= formatCurrency($bill['total_amount']) ?></td></tr>
+        <tr><td class="text-muted">Subtotal</td><td><?= hMoney($bill['total_amount']) ?></td></tr>
         <?php if ((float)($bill['discount_amount'] ?? 0) > 0): ?>
-        <tr><td class="text-muted">Discount</td><td style="color:#dc3545">- <?= formatCurrency($bill['discount_amount']) ?></td></tr>
+        <tr><td class="text-muted">Discount</td><td style="color:#dc3545">- <?= hMoney($bill['discount_amount']) ?></td></tr>
         <?php endif; ?>
-        <tr><td class="text-muted">Paid</td><td style="color:#198754"><?= formatCurrency($bill['paid_amount']) ?></td></tr>
+        <tr><td class="text-muted">Paid</td><td style="color:#198754"><?= hMoney($bill['paid_amount']) ?></td></tr>
         <tr class="net-row">
           <td>Balance Due</td>
-          <td><?= formatCurrency(max(0, $balance)) ?></td>
+          <td><?= hMoney(max(0, $balance)) ?></td>
         </tr>
       </table>
     </div>

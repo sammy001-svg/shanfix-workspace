@@ -287,6 +287,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('settings.php?tab=domain');
     }
 
+    // ── 6. Currency ───────────────────────────────────────────────
+    if ($action === 'save_currency') {
+        $code   = strtoupper(preg_replace('/[^A-Z]/', '', $_POST['currency_code'] ?? ''));
+        $symbol = trim($_POST['currency_symbol'] ?? '');
+        $name   = sanitize($_POST['currency_name'] ?? '');
+        if (!$code || !$symbol) { setFlash('error', 'Currency code and symbol are required.'); redirect('settings.php?tab=currency'); }
+        hSet($pdo, $orgId, 'h_currency_code',   $code);
+        hSet($pdo, $orgId, 'h_currency_symbol',  $symbol);
+        hSet($pdo, $orgId, 'h_currency_name',    $name);
+        setFlash('success', "Currency updated to {$symbol} ({$code}).");
+        redirect('settings.php?tab=currency');
+    }
+
     if ($action === 'save_notifications') {
         $keys = [
             'notif_appt_reminder_sms', 'notif_appt_reminder_email',
@@ -356,6 +369,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
     'consult_types' => ['fas fa-stethoscope',       'Consultation Types'],
     'hours'         => ['fas fa-clock',             'Working Hours'],
     'notifications' => ['fas fa-bell',              'Notifications'],
+    'currency'      => ['fas fa-coins',             'Currency'],
     'portals'       => ['fas fa-external-link-alt', 'Portals & Links'],
     'domain'        => ['fas fa-globe',             'Custom Domain'],
   ];
@@ -640,7 +654,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
           <tr>
             <td class="fw-semibold"><?= e($ct['name']) ?></td>
             <td class="small"><?= $ct['duration_minutes'] ?> min</td>
-            <td class="fw-semibold"><?= formatCurrency($ct['fee']) ?></td>
+            <td class="fw-semibold"><?= hMoney((float)$ct['fee']) ?></td>
             <td class="small text-muted"><?= e(mb_substr($ct['description'] ?? '', 0, 60)) ?: '—' ?></td>
             <td>
               <span class="badge <?= $ct['is_active'] ? 'bg-success' : 'bg-secondary' ?>">
@@ -930,7 +944,166 @@ require_once __DIR__ . '/../../includes/header-module.php';
 </form>
 
 <!-- ════════════════════════════════════════════════════
-     TAB 6: Portals & Links
+     TAB 6: Currency
+     ════════════════════════════════════════════════════ -->
+<?php elseif ($activeTab === 'currency'):
+  $hCurrCode   = hGet($notifSettings, 'h_currency_code',   'KES');
+  $hCurrSymbol = hGet($notifSettings, 'h_currency_symbol', 'KSh');
+  $hCurrName   = hGet($notifSettings, 'h_currency_name',   'Kenyan Shilling');
+
+  $currencyList = [
+    ['KES','KSh','Kenyan Shilling'],
+    ['UGX','USh','Ugandan Shilling'],
+    ['TZS','TSh','Tanzanian Shilling'],
+    ['RWF','RF', 'Rwandan Franc'],
+    ['ETB','Br', 'Ethiopian Birr'],
+    ['NGN','₦',  'Nigerian Naira'],
+    ['GHS','₵',  'Ghanaian Cedi'],
+    ['ZAR','R',  'South African Rand'],
+    ['ZMW','K',  'Zambian Kwacha'],
+    ['MWK','MK', 'Malawian Kwacha'],
+    ['BWP','P',  'Botswana Pula'],
+    ['EGP','E£', 'Egyptian Pound'],
+    ['MAD','MAD','Moroccan Dirham'],
+    ['XOF','CFA','West African CFA Franc'],
+    ['USD','$',  'US Dollar'],
+    ['EUR','€',  'Euro'],
+    ['GBP','£',  'British Pound'],
+    ['INR','₹',  'Indian Rupee'],
+    ['AED','AED','UAE Dirham'],
+    ['SAR','SAR','Saudi Riyal'],
+    ['CNY','¥',  'Chinese Yuan'],
+    ['JPY','¥',  'Japanese Yen'],
+    ['CAD','CA$','Canadian Dollar'],
+    ['AUD','A$', 'Australian Dollar'],
+  ];
+?>
+<div class="row g-4">
+  <div class="col-lg-7">
+    <form method="POST">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="save_currency">
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 py-3 px-4">
+          <h6 class="fw-bold mb-0"><i class="fas fa-coins me-2 text-danger"></i>Health Module Currency</h6>
+          <div class="text-muted small">Set the currency used across billing, lab prices, pharmacy, and all financial displays in this health system</div>
+        </div>
+        <div class="card-body">
+
+          <!-- Quick-select grid -->
+          <div class="mb-4">
+            <label class="form-label fw-semibold small">Select Currency</label>
+            <div class="row g-2" id="currencyGrid">
+              <?php foreach ($currencyList as [$code, $sym, $name]): ?>
+              <div class="col-6 col-md-4 col-lg-3">
+                <label class="currency-card d-flex align-items-center gap-2 p-2 border rounded cursor-pointer
+                       <?= $hCurrCode === $code ? 'border-danger bg-danger bg-opacity-10' : 'border-light' ?>"
+                       style="cursor:pointer;transition:all .15s"
+                       onclick="selectCurrency('<?= $code ?>','<?= addslashes($sym) ?>','<?= addslashes($name) ?>')">
+                  <input type="radio" name="_curr_pick" value="<?= $code ?>"
+                         class="d-none" <?= $hCurrCode === $code ? 'checked' : '' ?>>
+                  <div class="currency-symbol fw-bold text-danger" style="width:28px;text-align:center;font-size:1rem"><?= htmlspecialchars($sym) ?></div>
+                  <div>
+                    <div class="small fw-semibold lh-1"><?= $code ?></div>
+                    <div style="font-size:.68rem;color:#888"><?= $name ?></div>
+                  </div>
+                </label>
+              </div>
+              <?php endforeach; ?>
+            </div>
+          </div>
+
+          <hr class="my-3">
+
+          <!-- Manual / custom entry -->
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label class="form-label fw-semibold small">Currency Code <span class="text-danger">*</span></label>
+              <input type="text" name="currency_code" id="currCode" class="form-control form-control-sm text-uppercase"
+                     value="<?= e($hCurrCode) ?>" maxlength="5" required placeholder="KES"
+                     oninput="this.value=this.value.toUpperCase()">
+              <div class="form-text">ISO 4217 (e.g. KES, USD, EUR)</div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold small">Symbol <span class="text-danger">*</span></label>
+              <input type="text" name="currency_symbol" id="currSymbol" class="form-control form-control-sm"
+                     value="<?= e($hCurrSymbol) ?>" maxlength="6" required placeholder="KSh">
+              <div class="form-text">Displayed before amounts</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small">Currency Name</label>
+              <input type="text" name="currency_name" id="currName" class="form-control form-control-sm"
+                     value="<?= e($hCurrName) ?>" maxlength="60" placeholder="Kenyan Shilling">
+            </div>
+          </div>
+
+          <!-- Live preview -->
+          <div class="mt-4 p-3 bg-light rounded d-flex align-items-center gap-3 flex-wrap">
+            <div class="text-muted small fw-semibold">Preview:</div>
+            <div class="d-flex gap-3 flex-wrap">
+              <div class="text-center">
+                <div class="small text-muted">Amount</div>
+                <div class="fw-bold fs-5 text-danger" id="currPreview"><?= e($hCurrSymbol) ?> 1,250.00</div>
+              </div>
+              <div class="text-center">
+                <div class="small text-muted">Bill Total</div>
+                <div class="fw-bold fs-5 text-success" id="currPreview2"><?= e($hCurrSymbol) ?> 45,000.00</div>
+              </div>
+              <div class="text-center">
+                <div class="small text-muted">Lab Test</div>
+                <div class="fw-bold fs-5" id="currPreview3"><?= e($hCurrSymbol) ?> 500.00</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <div class="card-footer bg-white border-0 px-4 pb-4">
+          <button type="submit" class="btn btn-danger px-4"><i class="fas fa-save me-1"></i>Save Currency</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 py-3 px-4">
+        <h6 class="fw-bold mb-0"><i class="fas fa-info-circle me-2 text-danger"></i>Where This Applies</h6>
+      </div>
+      <div class="card-body p-0">
+        <?php
+        $currencyScope = [
+          ['fas fa-file-invoice-dollar','Billing & Invoices','All patient bills, receipts and invoice PDFs'],
+          ['fas fa-flask',              'Laboratory',        'Lab test prices and order summaries'],
+          ['fas fa-pills',              'Pharmacy',          'Medication pricing and dispensing records'],
+          ['fas fa-stethoscope',        'Consultation Fees', 'Consultation type fee listings'],
+          ['fas fa-tachometer-alt',     'Dashboard',         'Revenue KPIs and outstanding balance totals'],
+          ['fas fa-chart-bar',          'Reports',           'Financial and revenue reports'],
+        ];
+        foreach ($currencyScope as [$icon, $title, $desc]):
+        ?>
+        <div class="d-flex align-items-start gap-3 px-4 py-3 border-bottom border-light">
+          <i class="<?= $icon ?> text-danger mt-1" style="width:16px"></i>
+          <div>
+            <div class="small fw-semibold"><?= $title ?></div>
+            <div class="text-muted" style="font-size:.78rem"><?= $desc ?></div>
+          </div>
+          <i class="fas fa-check-circle text-success ms-auto mt-1"></i>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <div class="card-footer bg-white border-0 px-4 pb-3">
+        <div class="alert alert-info py-2 mb-0" style="font-size:.8rem">
+          <i class="fas fa-lightbulb me-1"></i>
+          <strong>Note:</strong> Changing the currency updates the display symbol only. It does not convert existing monetary values stored in the database.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════
+     TAB 7: Portals & Links
      ════════════════════════════════════════════════════ -->
 <?php elseif ($activeTab === 'portals'): ?>
 
@@ -1356,6 +1529,33 @@ function updatePreview() {
   if (document.getElementById('previewLogo'))    { document.getElementById('previewLogo').textContent = title.charAt(0).toUpperCase(); }
   if (document.getElementById('accentHex'))      document.getElementById('accentHex').textContent = accent;
 }
+
+// ── Currency selector ───────────────────────────────────────────
+function selectCurrency(code, symbol, name) {
+    document.getElementById('currCode').value   = code;
+    document.getElementById('currSymbol').value = symbol;
+    document.getElementById('currName').value   = name;
+    updateCurrencyPreview(symbol);
+    document.querySelectorAll('.currency-card').forEach(el => {
+        const isSelected = el.querySelector('input').value === code;
+        el.classList.toggle('border-danger', isSelected);
+        el.classList.toggle('bg-danger',     isSelected);
+        el.classList.toggle('bg-opacity-10', isSelected);
+        el.classList.toggle('border-light',  !isSelected);
+    });
+}
+function updateCurrencyPreview(sym) {
+    sym = sym || document.getElementById('currSymbol')?.value || 'KES';
+    ['currPreview','currPreview2','currPreview3'].forEach((id, i) => {
+        const amounts = ['1,250.00','45,000.00','500.00'];
+        const el = document.getElementById(id);
+        if (el) el.textContent = sym + ' ' + amounts[i];
+    });
+}
+document.addEventListener('DOMContentLoaded', function () {
+    const symInput = document.getElementById('currSymbol');
+    if (symInput) symInput.addEventListener('input', () => updateCurrencyPreview(symInput.value));
+});
 
 // ── Copy URL ────────────────────────────────────────────────────
 function copyUrl(url) {

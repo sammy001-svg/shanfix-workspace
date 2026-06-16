@@ -17,6 +17,19 @@ if (!empty($_SESSION['health_portal_mode']) && ($moduleSlug ?? '') === 'health')
 sendSecurityHeaders();
 requireModuleAccess($moduleSlug ?? '');
 $user    = currentUser();
+
+// ── Health module: load org currency so hMoney() works on all pages ──
+if (($moduleSlug ?? '') === 'health') {
+    try {
+        $__hcs = $pdo->prepare("SELECT setting_value FROM health_settings WHERE org_id=? AND setting_key='h_currency_symbol' LIMIT 1");
+        $__hcs->execute([(int)$user['org_id']]);
+        $GLOBALS['hCurrencySymbol'] = $__hcs->fetchColumn() ?: (defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'KES');
+    } catch (Throwable $__e) {
+        $GLOBALS['hCurrencySymbol'] = defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'KES';
+    }
+    unset($__hcs, $__e);
+}
+
 // Staff see only their granted modules; admins/super_admin see all
 $modules = ($user['role'] === 'staff')
     ? getUserAccessibleModules((int)$user['id'], (int)$user['org_id'])

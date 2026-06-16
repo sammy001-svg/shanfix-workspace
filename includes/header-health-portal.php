@@ -21,6 +21,16 @@ if ((int)$user['org_id'] !== $portalOrgId) {
 }
 
 // ── Branding ──────────────────────────────────────────────────────
+// Load org currency for portal pages
+try {
+    $__hcs = $pdo->prepare("SELECT setting_value FROM health_settings WHERE org_id=? AND setting_key='h_currency_symbol' LIMIT 1");
+    $__hcs->execute([$portalOrgId]);
+    $GLOBALS['hCurrencySymbol'] = $__hcs->fetchColumn() ?: (defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'KES');
+} catch (Throwable $__e) {
+    $GLOBALS['hCurrencySymbol'] = defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'KES';
+}
+unset($__hcs, $__e);
+
 $accent   = $_SESSION['health_portal_accent'] ?? '#e74c3c';
 $ptitle   = $_SESSION['health_portal_title']  ?? ($user['org_name'] ?? 'Health Portal');
 $logoUrl  = $_SESSION['health_portal_logo']   ?? '';

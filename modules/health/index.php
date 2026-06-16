@@ -293,7 +293,7 @@ $orgSlug       = $_SESSION['org_slug'] ?? '';
       <div class="s-lbl"><i class="fas fa-door-open me-1"></i>Beds Available</div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="s-val"><?= formatCurrency($outstandingTotal) ?></div>
+      <div class="s-val"><?= hMoney($outstandingTotal) ?></div>
       <div class="s-lbl"><i class="fas fa-exclamation-circle me-1"></i>Outstanding Bills</div>
     </div>
   </div>
@@ -358,7 +358,7 @@ $orgSlug       = $_SESSION['org_slug'] ?? '';
       <div class="hkpi">
         <div class="hkpi-icon" style="background:#e8f8f0"><i class="fas fa-coins" style="color:var(--hgreen)"></i></div>
         <div>
-          <div class="hkpi-val" style="font-size:1.1rem"><?= formatCurrency($collectedMonth) ?></div>
+          <div class="hkpi-val" style="font-size:1.1rem"><?= hMoney($collectedMonth) ?></div>
           <div class="hkpi-label">Revenue This Month</div>
           <div class="hkpi-trend"><?= trendBadge($collectedMonth, $revenueLastMonth) ?> <span class="text-muted" style="font-size:.72rem">vs last month</span></div>
         </div>
@@ -623,7 +623,7 @@ $orgSlug       = $_SESSION['org_slug'] ?? '';
       <div class="card-header bg-white border-0 py-3 px-4 d-flex align-items-center justify-content-between">
         <div>
           <div class="fw-bold"><i class="fas fa-receipt me-2" style="color:var(--hred)"></i>Outstanding Bills</div>
-          <div class="text-muted small"><?= formatCurrency($outstandingTotal) ?> total due</div>
+          <div class="text-muted small"><?= hMoney($outstandingTotal) ?> total due</div>
         </div>
         <a href="billing.php" class="btn btn-xs btn-outline-secondary">All</a>
       </div>
@@ -644,7 +644,7 @@ $orgSlug       = $_SESSION['org_slug'] ?? '';
             <div class="text-muted" style="font-size:.73rem"><?= e($b['bill_no'] ?? '#'.$b['id']) ?> &bull; <?= date('d M', strtotime($b['created_at'])) ?></div>
           </div>
           <div class="text-end flex-shrink-0">
-            <div class="fw-bold small text-danger"><?= formatCurrency($bal) ?></div>
+            <div class="fw-bold small text-danger"><?= hMoney($bal) ?></div>
             <span class="badge bg-<?= $stCol ?>" style="font-size:.65rem"><?= ucfirst($st) ?></span>
           </div>
         </div>

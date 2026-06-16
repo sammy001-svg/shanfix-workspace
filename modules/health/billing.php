@@ -418,9 +418,9 @@ require_once __DIR__ . '/../../includes/header-module.php';
                 <small class="text-muted"><?= htmlspecialchars($b['patient_no']) ?></small>
               </td>
               <td><span class="badge bg-light text-dark border"><?= strtoupper($b['bill_type']) ?></span></td>
-              <td><strong>KES <?= number_format($b['total'], 2) ?></strong></td>
-              <td class="text-success">KES <?= number_format($b['paid_amount'], 2) ?></td>
-              <td class="<?= $balance > 0 ? 'text-danger fw-bold' : 'text-muted' ?>">KES <?= number_format($balance, 2) ?></td>
+              <td><strong><?= hMoney((float)$b['total']) ?></strong></td>
+              <td class="text-success"><?= hMoney((float)$b['paid_amount']) ?></td>
+              <td class="<?= $balance > 0 ? 'text-danger fw-bold' : 'text-muted' ?>"><?= hMoney((float)$balance) ?></td>
               <td><span class="badge bg-<?= $stBadge ?>"><?= ucfirst($b['status']) ?></span></td>
               <td><small><?= date('d M Y', strtotime($b['created_at'])) ?></small></td>
               <td>
@@ -466,7 +466,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
             <tr>
               <td class="fw-semibold"><?= htmlspecialchars($s['name']) ?></td>
               <td><?= ucfirst($s['category']) ?></td>
-              <td><?= number_format($s['price'], 2) ?></td>
+              <td><?= hMoney((float)$s['price']) ?></td>
               <td><?= $s['status']==='active' ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>' ?></td>
               <td>
                 <div class="btn-group btn-group-sm">
@@ -571,7 +571,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
               <option value="">Add from service catalog…</option>
               <?php foreach ($services as $s): if ($s['status']!=='active') continue; ?>
                 <option value="<?= $s['id'] ?>" data-name="<?= htmlspecialchars($s['name']) ?>" data-category="<?= $s['category'] ?>" data-price="<?= $s['price'] ?>">
-                  <?= htmlspecialchars($s['name']) ?> — KES <?= number_format($s['price'],2) ?>
+                  <?= htmlspecialchars($s['name']) ?> — <?= hMoney((float)$s['price']) ?>
                 </option>
               <?php endforeach; ?>
             </select>

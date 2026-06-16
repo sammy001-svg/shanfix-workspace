@@ -41,6 +41,17 @@ function formatCurrency(float $amount, string $currency = CURRENCY_SYMBOL): stri
     return $currency . number_format($amount, 2);
 }
 
+/**
+ * Format a monetary amount using the health org's configured currency.
+ * Falls back to the platform CURRENCY_SYMBOL if none is set.
+ * The symbol is loaded into $GLOBALS['hCurrencySymbol'] by header-module.php.
+ */
+function hMoney(float $amount): string {
+    $sym = $GLOBALS['hCurrencySymbol'] ?? (defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'KES');
+    if (!preg_match('/^[A-Za-z$€£¥₹₦₵\s]{1,6}$/u', $sym)) $sym = 'KES';
+    return $sym . ' ' . number_format($amount, 2);
+}
+
 function formatDate(?string $date, string $format = 'd M Y'): string {
     if (!$date) return '—';
     return date($format, strtotime($date));

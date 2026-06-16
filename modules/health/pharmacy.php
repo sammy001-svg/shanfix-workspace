@@ -445,7 +445,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
                 <?= htmlspecialchars($m['form'] ?: '—') ?>
                 <?php if ($m['strength']): ?> <small class="text-muted">(<?= htmlspecialchars($m['strength']) ?>)</small><?php endif; ?>
               </td>
-              <td>KES <?= number_format($m['unit_price'], 2) ?></td>
+              <td><?= hMoney((float)$m['unit_price']) ?></td>
               <td>
                 <span class="<?= $stockClass ?>"><?= $m['stock_qty'] ?> <?= htmlspecialchars($m['unit']) ?></span>
                 <?php if ($m['stock_qty'] == 0): ?>
@@ -575,7 +575,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
                   <td><small><?= htmlspecialchars($d['patient_name']) ?></small></td>
                   <td><small><?= htmlspecialchars($d['medicine_name']) ?> <?= htmlspecialchars($d['form']??'') ?></small></td>
                   <td><small><?= $d['quantity'] ?></small></td>
-                  <td><small>KES <?= number_format($d['total'],2) ?></small></td>
+                  <td><small><?= hMoney((float)$d['total']) ?></small></td>
                 </tr>
               <?php endforeach; ?>
               </tbody>
@@ -641,8 +641,8 @@ require_once __DIR__ . '/../../includes/header-module.php';
               <td><?= htmlspecialchars($h['medicine_name']) ?></td>
               <td><small><?= htmlspecialchars($h['form'] ?: '—') ?> <?= htmlspecialchars($h['strength'] ?: '') ?></small></td>
               <td><?= $h['quantity'] ?> <?= htmlspecialchars($h['unit'] ?? '') ?></td>
-              <td>KES <?= number_format($h['unit_price'],2) ?></td>
-              <td><strong>KES <?= number_format($h['total'],2) ?></strong></td>
+              <td><?= hMoney((float)$h['unit_price']) ?></td>
+              <td><strong><?= hMoney((float)$h['total']) ?></strong></td>
               <td><small><?= htmlspecialchars($h['dosage_instructions'] ?: '—') ?></small></td>
               <td><small><?= htmlspecialchars($h['dispensed_by_name'] ?: '—') ?></small></td>
               <td><small><?= date('d M Y H:i', strtotime($h['dispensed_at'])) ?></small></td>

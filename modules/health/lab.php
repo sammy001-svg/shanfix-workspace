@@ -739,7 +739,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
               <td><?= htmlspecialchars($t['category'] ?: '—') ?></td>
               <td><?= htmlspecialchars($t['normal_range'] ?: '—') ?></td>
               <td><?= htmlspecialchars($t['unit'] ?: '—') ?></td>
-              <td><?= number_format($t['price'], 2) ?></td>
+              <td><?= hMoney((float)$t['price']) ?></td>
               <td><?= $t['turnaround'] ?>h</td>
               <td>
                 <?php if ($t['status']==='active'): ?>
