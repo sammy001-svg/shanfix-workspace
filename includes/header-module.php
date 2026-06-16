@@ -4,6 +4,16 @@
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/functions.php';
+
+// ── Health portal white-label intercept ───────────────────────────
+// When staff log in via a clinic's custom domain, we swap out the full
+// OrbitDesk header for a branded, health-only header with no platform branding.
+if (!empty($_SESSION['health_portal_mode']) && ($moduleSlug ?? '') === 'health') {
+    sendSecurityHeaders();
+    require_once __DIR__ . '/header-health-portal.php';
+    return; // Skip the rest of this file — portal header is now active
+}
+
 sendSecurityHeaders();
 requireModuleAccess($moduleSlug ?? '');
 $user    = currentUser();

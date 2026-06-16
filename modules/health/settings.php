@@ -266,6 +266,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ── 5. Notification settings ──────────────────────────────────
+    // ── 7. Custom Domain & White Label ───────────────────────────
+    if ($action === 'save_domain_settings') {
+        $domain = strtolower(trim($_POST['custom_domain'] ?? ''));
+        $domain = preg_replace('#^https?://#', '', $domain); // strip protocol
+        $domain = rtrim($domain, '/');                        // strip trailing slash
+        $accent = preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['portal_accent'] ?? '')
+                  ? $_POST['portal_accent'] : '#e74c3c';
+        $bg     = in_array($_POST['portal_bg'] ?? '', ['medical','gradient','white','dark'])
+                  ? $_POST['portal_bg'] : 'medical';
+
+        hSet($pdo, $orgId, 'custom_domain',       $domain);
+        hSet($pdo, $orgId, 'portal_title',         sanitize($_POST['portal_title']   ?? ''));
+        hSet($pdo, $orgId, 'portal_tagline',       sanitize($_POST['portal_tagline'] ?? ''));
+        hSet($pdo, $orgId, 'portal_accent',        $accent);
+        hSet($pdo, $orgId, 'portal_bg',            $bg);
+        hSet($pdo, $orgId, 'portal_show_powered',  empty($_POST['portal_show_powered']) ? '0' : '1');
+
+        setFlash('success', 'Custom domain settings saved.');
+        redirect('settings.php?tab=domain');
+    }
+
     if ($action === 'save_notifications') {
         $keys = [
             'notif_appt_reminder_sms', 'notif_appt_reminder_email',
@@ -336,6 +357,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
     'hours'         => ['fas fa-clock',             'Working Hours'],
     'notifications' => ['fas fa-bell',              'Notifications'],
     'portals'       => ['fas fa-external-link-alt', 'Portals & Links'],
+    'domain'        => ['fas fa-globe',             'Custom Domain'],
   ];
   foreach ($tabs as $slug => [$icon, $label]):
   ?>
@@ -669,7 +691,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
               <input type="number" name="ct_duration" id="ctDuration" class="form-control form-control-sm" value="30" min="5">
             </div>
             <div class="col-md-6">
-              <label class="form-label small fw-semibold">Consultation Fee (<?= CURRENCY_CODE ?? 'KES' ?>)</label>
+              <label class="form-label small fw-semibold">Consultation Fee (<?= defined('CURRENCY') ? CURRENCY : 'KES' ?>)</label>
               <input type="number" name="ct_fee" id="ctFee" class="form-control form-control-sm" value="0" min="0" step="0.01">
             </div>
             <div class="col-12">
@@ -1009,6 +1031,248 @@ require_once __DIR__ . '/../../includes/header-module.php';
     </div>
   </div>
 </div>
+<!-- ════════════════════════════════════════════════════
+     TAB 7: Custom Domain & White Label
+     ════════════════════════════════════════════════════ -->
+<?php elseif ($activeTab === 'domain'):
+  $cd        = hGet($notifSettings, 'custom_domain',      '');
+  $ptitle    = hGet($notifSettings, 'portal_title',       $org['name'] ?? '');
+  $ptagline  = hGet($notifSettings, 'portal_tagline',     $org['brand_tagline'] ?? '');
+  $paccent   = hGet($notifSettings, 'portal_accent',      '#e74c3c');
+  $pbg       = hGet($notifSettings, 'portal_bg',          'medical');
+  $ppowered  = hGet($notifSettings, 'portal_show_powered','1');
+
+  // DNS check
+  $dnsOk = false; $serverIp = '';
+  if ($cd) {
+      try {
+          $serverIp = gethostbyname(gethostname() ?: '') ?: ($_SERVER['SERVER_ADDR'] ?? '');
+          $domainIp = gethostbyname($cd);
+          $dnsOk    = ($domainIp && $domainIp !== $cd && filter_var($domainIp, FILTER_VALIDATE_IP));
+      } catch (Throwable $e) {}
+  }
+  if (!$serverIp) $serverIp = $_SERVER['SERVER_ADDR'] ?? '(check cPanel)';
+
+  $portalUrl = $cd
+    ? 'https://'.$cd.'/modules/health/portal-login.php'
+    : APP_URL.'/modules/health/portal-login.php?org='.rawurlencode($orgSlug);
+?>
+
+<form method="POST">
+  <?= csrfField() ?>
+  <input type="hidden" name="action" value="save_domain_settings">
+
+  <div class="row g-4">
+
+    <!-- ── Left column: Domain config ───────────────────────── -->
+    <div class="col-lg-7">
+
+      <!-- Domain input -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 py-3 px-4">
+          <h6 class="fw-bold mb-0"><i class="fas fa-globe me-2 text-danger"></i>Custom Domain</h6>
+          <div class="text-muted small">Point your clinic's domain to this health system</div>
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Domain Name</label>
+            <div class="input-group">
+              <span class="input-group-text text-muted" style="font-size:.82rem">https://</span>
+              <input type="text" name="custom_domain" class="form-control"
+                     value="<?= e($cd) ?>" placeholder="health.yourclinic.com"
+                     pattern="^[a-zA-Z0-9][a-zA-Z0-9\-\.]+[a-zA-Z0-9]$"
+                     title="Enter domain without https:// (e.g. health.yourclinic.com)">
+            </div>
+            <div class="form-text">Enter your subdomain or domain without the protocol. Do not include a trailing slash.</div>
+          </div>
+
+          <?php if ($cd): ?>
+          <!-- DNS status -->
+          <div class="alert <?= $dnsOk ? 'alert-success' : 'alert-warning' ?> py-2 mb-3">
+            <i class="fas <?= $dnsOk ? 'fa-check-circle' : 'fa-exclamation-triangle' ?> me-2"></i>
+            <?php if ($dnsOk): ?>
+              <strong>Domain resolving.</strong> DNS is pointing to a valid IP. Verify it matches your server below.
+            <?php else: ?>
+              <strong>DNS not yet verified.</strong> The domain <code><?= e($cd) ?></code> is not resolving to a reachable IP — or it may take up to 24 h to propagate.
+            <?php endif; ?>
+          </div>
+          <?php endif; ?>
+
+          <!-- Portal URL -->
+          <div class="mb-0">
+            <label class="form-label fw-semibold small">Portal Login URL</label>
+            <div class="d-flex gap-2 align-items-center">
+              <div class="bg-light rounded px-3 py-2 font-monospace small flex-grow-1 text-break" style="word-break:break-all"><?= e($portalUrl) ?></div>
+              <button type="button" class="btn btn-sm btn-outline-secondary flex-shrink-0"
+                      onclick="copyUrl('<?= e($portalUrl) ?>')"><i class="fas fa-copy"></i></button>
+              <a href="<?= e($portalUrl) ?>" target="_blank" class="btn btn-sm btn-outline-danger flex-shrink-0">
+                <i class="fas fa-external-link-alt"></i>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DNS & SSL setup guide -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 py-3 px-4">
+          <h6 class="fw-bold mb-0"><i class="fas fa-server me-2 text-danger"></i>Setup Instructions</h6>
+        </div>
+        <div class="card-body">
+
+          <!-- Step 1 -->
+          <div class="d-flex gap-3 mb-4">
+            <div style="width:28px;height:28px;border-radius:50%;background:#e74c3c;color:#fff;font-size:.8rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">1</div>
+            <div>
+              <div class="fw-semibold small mb-1">Create a DNS A Record</div>
+              <p class="text-muted small mb-2">In your domain registrar (GoDaddy, Namecheap, Cloudflare, etc.), add an <strong>A Record</strong>:</p>
+              <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0" style="font-size:.82rem">
+                  <thead class="table-light"><tr><th>Type</th><th>Name / Host</th><th>Value / Points To</th><th>TTL</th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <td><strong>A</strong></td>
+                      <td><code><?= $cd ? e(explode('.', $cd)[0]) : 'health' ?></code></td>
+                      <td>
+                        <code><?= e($serverIp) ?></code>
+                        <button type="button" class="btn btn-xs btn-outline-secondary ms-1" onclick="copyUrl('<?= e($serverIp) ?>')"><i class="fas fa-copy"></i></button>
+                      </td>
+                      <td>Auto / 3600</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="form-text mt-1">DNS propagation can take 1–24 hours. Use <a href="https://dnschecker.org" target="_blank">dnschecker.org</a> to verify.</div>
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="d-flex gap-3 mb-4">
+            <div style="width:28px;height:28px;border-radius:50%;background:#e74c3c;color:#fff;font-size:.8rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">2</div>
+            <div>
+              <div class="fw-semibold small mb-1">Add Addon Domain / Subdomain in cPanel</div>
+              <p class="text-muted small mb-1">In your cPanel account:</p>
+              <ol class="text-muted small ps-3 mb-0" style="line-height:1.8">
+                <li>Go to <strong>Domains</strong> → <strong>Addon Domains</strong> (or <strong>Subdomains</strong> if using a subdomain)</li>
+                <li>Enter <code><?= e($cd ?: 'health.yourclinic.com') ?></code> as the domain</li>
+                <li>Set the <strong>Document Root</strong> to the <em>same folder</em> as your main app (e.g. <code>public_html</code>)</li>
+                <li>Click <strong>Add Domain</strong></li>
+              </ol>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="d-flex gap-3 mb-0">
+            <div style="width:28px;height:28px;border-radius:50%;background:#1a8a4e;color:#fff;font-size:.8rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">3</div>
+            <div>
+              <div class="fw-semibold small mb-1">Enable SSL (HTTPS) — Recommended</div>
+              <p class="text-muted small mb-1">Secure your portal with a free SSL certificate:</p>
+              <ol class="text-muted small ps-3 mb-0" style="line-height:1.8">
+                <li>In cPanel go to <strong>Security</strong> → <strong>SSL/TLS Status</strong></li>
+                <li>Find <code><?= e($cd ?: 'health.yourclinic.com') ?></code> and click <strong>Run AutoSSL</strong></li>
+                <li>Or go to <strong>Let's Encrypt SSL</strong> and issue a certificate for your domain</li>
+                <li>Once installed, your portal will be available at <code>https://<?= e($cd ?: 'health.yourclinic.com') ?></code></li>
+              </ol>
+              <div class="alert alert-info py-2 mt-2 mb-0" style="font-size:.8rem">
+                <i class="fas fa-lock me-1"></i><strong>SSL is strongly recommended</strong> for a health portal since it transmits patient login credentials.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /col-lg-7 -->
+
+    <!-- ── Right column: Branding ────────────────────────────── -->
+    <div class="col-lg-5">
+
+      <!-- Branding settings -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 py-3 px-4">
+          <h6 class="fw-bold mb-0"><i class="fas fa-paint-brush me-2 text-danger"></i>Portal Branding</h6>
+          <div class="text-muted small">Customise the login page your staff see</div>
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Portal Title</label>
+            <input type="text" name="portal_title" class="form-control form-control-sm"
+                   value="<?= e($ptitle) ?>"
+                   placeholder="e.g. Sunshine Medical Centre"
+                   oninput="updatePreview()">
+            <div class="form-text">Shown as the main heading on the login page.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Tagline</label>
+            <input type="text" name="portal_tagline" class="form-control form-control-sm"
+                   value="<?= e($ptagline) ?>"
+                   placeholder="e.g. Your Health, Our Priority"
+                   oninput="updatePreview()">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Accent Colour</label>
+            <div class="d-flex align-items-center gap-2">
+              <input type="color" name="portal_accent" id="portalAccent"
+                     class="form-control form-control-color form-control-sm"
+                     value="<?= e($paccent) ?>"
+                     oninput="updatePreview()">
+              <span class="text-muted small" id="accentHex"><?= e($paccent) ?></span>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Login Page Background</label>
+            <div class="d-flex gap-2 flex-wrap">
+              <?php foreach (['medical'=>'Medical','gradient'=>'Gradient','white'=>'Clean White','dark'=>'Dark'] as $bgv=>$bgl): ?>
+              <label class="d-flex align-items-center gap-1 cursor-pointer">
+                <input type="radio" name="portal_bg" value="<?= $bgv ?>" <?= $pbg===$bgv?'checked':'' ?> onchange="updatePreview()">
+                <span class="small"><?= $bgl ?></span>
+              </label>
+              <?php endforeach; ?>
+            </div>
+          </div>
+          <div class="mb-0">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" name="portal_show_powered"
+                     id="showPowered" value="1" <?= $ppowered==='1'?'checked':'' ?>>
+              <label class="form-check-label small" for="showPowered">Show "Powered by" footer</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live preview -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 py-2 px-4">
+          <div class="fw-bold small"><i class="fas fa-eye me-1 text-danger"></i>Login Page Preview</div>
+        </div>
+        <div class="card-body p-0">
+          <div id="portalPreview" style="border-radius:0 0 8px 8px;overflow:hidden;min-height:220px;position:relative;display:flex;align-items:stretch">
+            <!-- Left branding panel -->
+            <div id="previewLeft" style="width:42%;padding:20px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:<?= e($paccent) ?>">
+              <div id="previewLogo" style="width:48px;height:48px;border-radius:12px;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:1.3rem;color:#fff;font-weight:800;margin-bottom:10px">
+                <?= strtoupper(substr($ptitle ?: ($org['name'] ?? 'C'), 0, 1)) ?>
+              </div>
+              <div id="previewTitle" style="color:#fff;font-size:.8rem;font-weight:800;text-align:center;line-height:1.3"><?= e($ptitle ?: ($org['name'] ?? 'Your Clinic')) ?></div>
+              <div id="previewTagline" style="color:rgba(255,255,255,.7);font-size:.65rem;text-align:center;margin-top:4px"><?= e($ptagline) ?></div>
+            </div>
+            <!-- Right form panel -->
+            <div style="flex:1;padding:20px 16px;background:#fff;display:flex;flex-direction:column;justify-content:center">
+              <div style="font-size:.7rem;font-weight:700;color:#1a1a2e;margin-bottom:12px">Staff Login</div>
+              <div style="background:#f8f9fa;border-radius:6px;height:28px;margin-bottom:8px;border:1px solid #e0e0e0"></div>
+              <div style="background:#f8f9fa;border-radius:6px;height:28px;margin-bottom:10px;border:1px solid #e0e0e0"></div>
+              <div id="previewBtn" style="background:<?= e($paccent) ?>;border-radius:6px;height:28px;display:flex;align-items:center;justify-content:center">
+                <span style="color:#fff;font-size:.68rem;font-weight:700">Sign In</span>
+              </div>
+              <div style="text-align:center;margin-top:8px;font-size:.6rem;color:#aaa">No OrbitDesk branding visible to staff</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-danger w-100"><i class="fas fa-save me-1"></i>Save Domain & Branding</button>
+    </div><!-- /col-lg-5 -->
+  </div>
+</form>
+
 <?php endif; ?>
 
 <?php
@@ -1078,6 +1342,19 @@ function previewLogo(input) {
   const reader = new FileReader();
   reader.onload = e => { img.src = e.target.result; wrap.classList.remove('d-none'); };
   reader.readAsDataURL(input.files[0]);
+}
+
+// ── Domain tab: live preview ────────────────────────────────────
+function updatePreview() {
+  const accent  = document.getElementById('portalAccent')?.value || '#e74c3c';
+  const title   = document.querySelector('[name=portal_title]')?.value || 'Your Clinic';
+  const tagline = document.querySelector('[name=portal_tagline]')?.value || '';
+  document.getElementById('previewLeft')?.style && (document.getElementById('previewLeft').style.background = accent);
+  if (document.getElementById('previewTitle'))   document.getElementById('previewTitle').textContent  = title;
+  if (document.getElementById('previewTagline')) document.getElementById('previewTagline').textContent = tagline;
+  if (document.getElementById('previewBtn'))     document.getElementById('previewBtn').style.background = accent;
+  if (document.getElementById('previewLogo'))    { document.getElementById('previewLogo').textContent = title.charAt(0).toUpperCase(); }
+  if (document.getElementById('accentHex'))      document.getElementById('accentHex').textContent = accent;
 }
 
 // ── Copy URL ────────────────────────────────────────────────────

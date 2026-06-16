@@ -1,3 +1,10 @@
+<?php if (!empty($_SESSION['health_portal_mode'])): ?>
+  </div><!-- /#hpContent -->
+  <footer style="padding:12px 20px;text-align:center;font-size:.75rem;color:#adb5bd;border-top:1px solid #e9ecef;background:#fff;margin-top:auto">
+    &copy; <?= date('Y') ?> <?= htmlspecialchars($_SESSION['health_portal_title'] ?? '') ?> &mdash; Health Management System
+  </footer>
+</div><!-- /#hpMain -->
+<?php else: ?>
   </main><!-- /.main-content -->
 
   <footer class="panel-footer">
@@ -5,6 +12,7 @@
     <span class="ms-auto">Powered by <strong style="color:var(--green)">OrbitDesk Technologies</strong></span>
   </footer>
 </div><!-- /.main-wrapper -->
+<?php endif; ?>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
