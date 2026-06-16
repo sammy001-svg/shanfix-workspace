@@ -5,9 +5,11 @@
  * Maps a request HOST to an organization by:
  *  1. Exact match on organizations.custom_domain
  *  2. Subdomain prefix match on *.orbitdesk.co → slug lookup
+ *  3. Health portal custom domain (health_settings key=custom_domain)
  *
  * Include ONCE near the top of config/database.php (after $pdo is set).
  * Sets globals: $detectedOrgId (int), $detectedOrgSlug (string)
+ *              $detectedHealthPortalOrgId (int), $detectedHealthPortalOrgSlug (string)
  *
  * Usage in pages: if (!empty($detectedOrgId)) { ... }
  */
@@ -56,6 +58,21 @@ function detectOrgFromDomain(PDO $pdo): ?array {
                 return $org;
             }
         }
+
+        // 3. Health portal custom domain (stored in health_settings, not organizations table)
+        $stmt = $pdo->prepare("
+            SELECT hs.org_id, o.slug
+            FROM health_settings hs
+            JOIN organizations o ON o.id = hs.org_id AND o.status = 'active'
+            WHERE hs.setting_key = 'custom_domain' AND LOWER(hs.setting_value) = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$host]);
+        $hRow = $stmt->fetch();
+        if ($hRow) {
+            $GLOBALS['detectedHealthPortalOrgId']   = (int)$hRow['org_id'];
+            $GLOBALS['detectedHealthPortalOrgSlug'] = $hRow['slug'] ?? '';
+        }
     } catch (Exception $e) {
         error_log('[domain-router] ' . $e->getMessage());
     }
@@ -89,5 +106,33 @@ function redirectToOrgLoginIfCustomDomain(PDO $pdo): void {
 
 // ── Auto-detect on include ────────────────────────────────────────
 if (isset($pdo) && $pdo instanceof PDO) {
+    // Ensure session is available for portal mode checks before any page logic runs
+    if (session_status() === PHP_SESSION_NONE) session_start();
+
     detectOrgFromDomain($pdo);
+
+    // Health portal redirect: when on a health portal custom domain, enforce portal login
+    if (!empty($GLOBALS['detectedHealthPortalOrgId'])) {
+        $reqPath = strtolower(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/');
+
+        // Pages that must always be reachable (the auth flow itself)
+        $isPortalAuth = in_array($reqPath, [
+            '/modules/health/portal-login.php',
+            '/modules/health/portal-logout.php',
+        ]);
+
+        // Allow any /modules/health/* path only when already logged into THIS portal org
+        $isHealthModule     = str_starts_with($reqPath, '/modules/health/');
+        $isLoggedInToPortal = !empty($_SESSION['health_portal_mode'])
+                              && (int)($_SESSION['health_portal_org_id'] ?? 0) === (int)$GLOBALS['detectedHealthPortalOrgId'];
+
+        if (!$isPortalAuth && !($isHealthModule && $isLoggedInToPortal)) {
+            $slug  = $GLOBALS['detectedHealthPortalOrgSlug'] ?? '';
+            $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $url   = $proto . '://' . $_SERVER['HTTP_HOST'] . '/modules/health/portal-login.php'
+                   . ($slug ? '?org=' . rawurlencode($slug) : '');
+            header('Location: ' . $url, true, 302);
+            exit;
+        }
+    }
 }

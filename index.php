@@ -3,32 +3,6 @@ session_start();
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/functions.php';
 
-// ── Custom health portal domain detection ────────────────────────
-// When a clinic points their domain (e.g. health.myclinic.com) at this
-// server via DNS + cPanel Addon Domain, we detect it here and route all
-// root requests to the white-label health portal login — before the user
-// sees any OrbitDesk branding.
-(function () use ($pdo) {
-    $reqHost = strtolower(trim($_SERVER['HTTP_HOST'] ?? ''));
-    $appHost = strtolower(parse_url(APP_URL, PHP_URL_HOST) ?? '');
-    if (!$reqHost || $reqHost === $appHost) return;
-    try {
-        $s = $pdo->prepare("
-            SELECT hs.org_id, o.slug
-            FROM health_settings hs
-            JOIN organizations o ON o.id = hs.org_id AND o.status = 'active'
-            WHERE hs.setting_key = 'custom_domain' AND LOWER(hs.setting_value) = ?
-            LIMIT 1
-        ");
-        $s->execute([$reqHost]);
-        if ($row = $s->fetch(PDO::FETCH_ASSOC)) {
-            $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-            $dest  = $proto . '://' . $reqHost . '/modules/health/portal-login.php'
-                   . ($row['slug'] ? '?org=' . rawurlencode($row['slug']) : '');
-            header('Location: ' . $dest, true, 302); exit;
-        }
-    } catch (Throwable $e) { /* health_settings table may not exist yet */ }
-})();
 
 if (isLoggedIn()) {
     if (!empty($_SESSION['health_portal_mode'])) {
