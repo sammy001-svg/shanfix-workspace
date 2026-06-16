@@ -966,6 +966,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
     ['EGP','E£', 'Egyptian Pound'],
     ['MAD','MAD','Moroccan Dirham'],
     ['XOF','CFA','West African CFA Franc'],
+    ['LRD','L$', 'Liberian Dollar'],
     ['USD','$',  'US Dollar'],
     ['EUR','€',  'Euro'],
     ['GBP','£',  'British Pound'],
