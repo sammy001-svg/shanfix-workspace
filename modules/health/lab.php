@@ -23,6 +23,7 @@ $moduleNav   = [
     ['url'=>'patient_crm.php',   'icon'=>'fas fa-users',               'label'=>'Patient CRM'],
     ['url'=>'analytics.php',     'icon'=>'fas fa-brain',               'label'=>'AI Analytics'],
     ['url'=>'reports.php',       'icon'=>'fas fa-chart-bar',           'label'=>'Reports'],
+    ['url'=>'settings.php',      'icon'=>'fas fa-cog',                 'label'=>'Settings'],
 ];
 
 // ── AJAX: fetch single test (catalog) for edit ────────────────────
@@ -136,6 +137,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('lab.php?tab=tests');
     }
 
+    // ── Seed default tests ────────────────────────────────────────
+    if ($action === 'seed_tests') {
+        $defaults = [
+            // Haematology
+            ['Haematology', 'Full Blood Count (FBC)',       '',            '',       500, 4],
+            ['Haematology', 'Haemoglobin (Hb)',             '12–17 g/dL',  'g/dL',  300, 2],
+            ['Haematology', 'White Blood Cell Count (WBC)', '4.5–11 × 10³','×10³/μL',300,2],
+            ['Haematology', 'Platelet Count',               '150–400 × 10³','×10³/μL',300,2],
+            ['Haematology', 'Erythrocyte Sedimentation Rate (ESR)', '', 'mm/hr', 300, 2],
+            // Clinical Chemistry
+            ['Clinical Chemistry', 'Random Blood Sugar (RBS)',  '3.9–11.1 mmol/L','mmol/L',200,1],
+            ['Clinical Chemistry', 'Fasting Blood Sugar (FBS)', '3.9–6.1 mmol/L', 'mmol/L',200,1],
+            ['Clinical Chemistry', 'HbA1c',                    '<7.0%',           '%',      800,4],
+            ['Clinical Chemistry', 'Urea',                     '2.5–7.1 mmol/L',  'mmol/L',400,2],
+            ['Clinical Chemistry', 'Creatinine',               '62–115 μmol/L',   'μmol/L',400,2],
+            ['Clinical Chemistry', 'Total Cholesterol',        '<5.2 mmol/L',     'mmol/L',400,4],
+            ['Clinical Chemistry', 'LDL Cholesterol',          '<3.4 mmol/L',     'mmol/L',400,4],
+            ['Clinical Chemistry', 'HDL Cholesterol',          '>1.0 mmol/L',     'mmol/L',400,4],
+            ['Clinical Chemistry', 'Triglycerides',            '<1.7 mmol/L',     'mmol/L',400,4],
+            ['Clinical Chemistry', 'Liver Function Tests (LFTs)', '',             '',       800,4],
+            ['Clinical Chemistry', 'SGPT / ALT',               '7–56 U/L',        'U/L',   400,2],
+            ['Clinical Chemistry', 'SGOT / AST',               '10–40 U/L',       'U/L',   400,2],
+            ['Clinical Chemistry', 'Total Bilirubin',          '3.4–17.1 μmol/L', 'μmol/L',400,2],
+            ['Clinical Chemistry', 'Serum Uric Acid',          '2.4–7.0 mg/dL',   'mg/dL', 400,2],
+            // Urinalysis
+            ['Urinalysis', 'Urinalysis (UA)',             '', '', 300, 1],
+            ['Urinalysis', 'Urine Culture & Sensitivity', '', '', 600, 48],
+            // Serology / Immunology
+            ['Serology / Immunology', 'HIV Rapid Test',         'Non-Reactive', '', 500, 1],
+            ['Serology / Immunology', 'HBsAg (Hepatitis B)',    'Non-Reactive', '', 600, 2],
+            ['Serology / Immunology', 'Anti-HCV (Hepatitis C)', 'Non-Reactive', '', 600, 2],
+            ['Serology / Immunology', 'VDRL / RPR (Syphilis)',  'Non-Reactive', '', 500, 1],
+            ['Serology / Immunology', 'Malaria Rapid Test',     'Negative',     '', 400, 1],
+            ['Serology / Immunology', 'CRP (C-Reactive Protein)','<10 mg/L',  'mg/L',500,2],
+            ['Serology / Immunology', 'Thyroid Stimulating Hormone (TSH)', '0.4–4.0 mIU/L','mIU/L',700,4],
+            ['Serology / Immunology', 'Free T4',                '9–25 pmol/L', 'pmol/L',700,4],
+            // Microbiology
+            ['Microbiology', 'Blood Culture & Sensitivity',  '', '', 1000, 72],
+            ['Microbiology', 'Stool Culture & Sensitivity',  '', '', 800,  48],
+            ['Microbiology', 'Sputum AFB (Tuberculosis)',    '', '', 600,  48],
+            // Radiology
+            ['Radiology', 'Chest X-Ray',   '', '', 1500, 1],
+            ['Radiology', 'Abdominal X-Ray','', '', 1500, 1],
+            ['Radiology', 'Ultrasound Abdomen', '', '', 2500, 1],
+        ];
+        $inserted = 0;
+        foreach ($defaults as [$cat, $name, $range, $unit, $price, $tat]) {
+            try {
+                $pdo->prepare("INSERT INTO health_lab_tests (org_id,name,category,normal_range,unit,price,turnaround,status) VALUES (?,?,?,?,?,?,?,'active')")
+                    ->execute([$orgId, $name, $cat, $range, $unit, $price, $tat]);
+                $inserted++;
+            } catch (Throwable $e) { /* skip duplicates */ }
+        }
+        setFlash('success', "{$inserted} default lab tests added to catalog.");
+        redirect('lab.php?tab=tests');
+    }
+
     // ── Delete test ───────────────────────────────────────────────
     if ($action === 'delete_test') {
         $id = (int)($_POST['id'] ?? 0);
@@ -211,6 +269,49 @@ session_start();
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/functions.php';
 requireLogin();
+
+// ── Ensure lab tables exist ───────────────────────────────────────
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS health_lab_tests (
+        id           INT AUTO_INCREMENT PRIMARY KEY,
+        org_id       INT NOT NULL,
+        name         VARCHAR(200) NOT NULL,
+        category     VARCHAR(100),
+        normal_range VARCHAR(200),
+        unit         VARCHAR(50),
+        price        DECIMAL(10,2) DEFAULT 0,
+        turnaround   INT DEFAULT 1,
+        status       ENUM('active','inactive') DEFAULT 'active',
+        created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_org (org_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS health_lab_orders (
+        id             INT AUTO_INCREMENT PRIMARY KEY,
+        org_id         INT NOT NULL,
+        order_no       VARCHAR(30) NOT NULL,
+        patient_id     INT NOT NULL,
+        doctor_id      INT,
+        appointment_id INT,
+        admission_id   INT,
+        test_id        INT NOT NULL,
+        priority       ENUM('routine','urgent','stat') DEFAULT 'routine',
+        status         ENUM('ordered','collected','processing','resulted','cancelled') DEFAULT 'ordered',
+        sample_type    VARCHAR(100),
+        result_value   TEXT,
+        result_notes   TEXT,
+        result_flag    ENUM('normal','low','high','critical'),
+        ordered_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        collected_at   DATETIME,
+        resulted_at    DATETIME,
+        resulted_by    INT,
+        created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_org    (org_id),
+        INDEX idx_patient(patient_id),
+        INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+} catch (Throwable $e) { /* tables already exist */ }
 
 $user  = currentUser();
 $orgId = (int)$user['org_id'];
@@ -330,6 +431,11 @@ require_once __DIR__ . '/../../includes/header-module.php';
     </div>
     <div class="d-flex gap-2">
       <?php if ($tab === 'tests'): ?>
+        <form method="POST" class="d-inline" onsubmit="return confirm('Seed 35 common lab tests into your catalog?')">
+          <?= csrfField() ?>
+          <input type="hidden" name="action" value="seed_tests">
+          <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="fas fa-database me-1"></i>Load Defaults</button>
+        </form>
         <button class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#testModal" onclick="openTestModal()">
           <i class="fas fa-plus me-1"></i>Add Test
         </button>
@@ -500,7 +606,8 @@ require_once __DIR__ . '/../../includes/header-module.php';
                     </form>
                   <?php endif; ?>
                   <?php if ($o['status'] === 'resulted'): ?>
-                    <button class="btn btn-outline-secondary btn-sm" onclick="printReport(<?= $o['id'] ?>)" title="Print Report"><i class="fas fa-print"></i></button>
+                    <a href="<?= APP_URL ?>/modules/health/lab-result-pdf.php?id=<?= $o['id'] ?>" target="_blank" class="btn btn-outline-danger btn-sm" title="View Result PDF"><i class="fas fa-file-medical-alt"></i></a>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="printReport(<?= $o['id'] ?>)" title="Quick Print"><i class="fas fa-print"></i></button>
                   <?php endif; ?>
                 </div>
               </td>
@@ -583,7 +690,8 @@ require_once __DIR__ . '/../../includes/header-module.php';
               <td>
                 <div class="btn-group btn-group-sm">
                   <button class="btn btn-outline-secondary btn-sm" onclick="openResultModal(<?= $r['id'] ?>)" title="Edit Result"><i class="fas fa-edit"></i></button>
-                  <button class="btn btn-outline-primary btn-sm" onclick="printReport(<?= $r['id'] ?>)" title="Print Report"><i class="fas fa-print"></i></button>
+                  <a href="<?= APP_URL ?>/modules/health/lab-result-pdf.php?id=<?= $r['id'] ?>" target="_blank" class="btn btn-outline-danger btn-sm" title="Result PDF"><i class="fas fa-file-medical-alt"></i></a>
+                  <button class="btn btn-outline-secondary btn-sm" onclick="printReport(<?= $r['id'] ?>)" title="Quick Print"><i class="fas fa-print"></i></button>
                 </div>
               </td>
             </tr>
