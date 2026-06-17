@@ -78,10 +78,11 @@ try {
         INDEX idx_org (org_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-    // Optional org columns
-    $pdo->exec("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS website VARCHAR(255) DEFAULT NULL AFTER country");
-    $pdo->exec("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS brand_tagline VARCHAR(255) DEFAULT NULL AFTER website");
-    $pdo->exec("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS reg_number VARCHAR(100) DEFAULT NULL AFTER brand_tagline");
+    // Optional org columns — use SHOW COLUMNS so this works on MySQL 5.7+ and all MariaDB versions
+    $orgCols = $pdo->query("SHOW COLUMNS FROM organizations")->fetchAll(PDO::FETCH_COLUMN);
+    if (!in_array('website',      $orgCols)) $pdo->exec("ALTER TABLE organizations ADD COLUMN website VARCHAR(255) DEFAULT NULL");
+    if (!in_array('brand_tagline',$orgCols)) $pdo->exec("ALTER TABLE organizations ADD COLUMN brand_tagline VARCHAR(255) DEFAULT NULL");
+    if (!in_array('reg_number',   $orgCols)) $pdo->exec("ALTER TABLE organizations ADD COLUMN reg_number VARCHAR(100) DEFAULT NULL");
 } catch (Throwable $e) {}
 
 // ── Helper: upsert a health_setting ──────────────────────────────
@@ -458,6 +459,9 @@ require_once __DIR__ . '/../../includes/header-module.php';
       </div>
 
       <button type="submit" class="btn btn-danger px-4"><i class="fas fa-save me-1"></i>Save Clinic Profile</button>
+    </form>
+    <form method="POST" id="removeLogoForm" class="d-none">
+      <?= csrfField() ?><input type="hidden" name="action" value="remove_logo">
     </form>
   </div>
 
@@ -1449,6 +1453,13 @@ require_once __DIR__ . '/../../includes/header-module.php';
 <?php
 $extraJs = <<<'JS'
 <script>
+// ── Remove logo ─────────────────────────────────────────────────
+function removeLogoConfirm() {
+  if (confirm('Remove this logo? This cannot be undone.')) {
+    document.getElementById('removeLogoForm').submit();
+  }
+}
+
 // ── Department modal ────────────────────────────────────────────
 function resetDeptForm() {
   document.getElementById('deptId').value    = '0';
