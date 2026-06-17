@@ -86,6 +86,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Throwable $e) {}
         }
 
+        // Auto-register walk-in patients into health_patients so they appear in Billing
+        if (!$patientId && $patName) {
+            try {
+                $nameParts = explode(' ', trim($patName), 2);
+                $emFn    = $nameParts[0];
+                $emLn    = $nameParts[1] ?? '';
+                $emYr    = date('Y');
+                $emSeq   = (int)$pdo->query("SELECT COUNT(*)+1 FROM health_patients WHERE org_id={$orgId} AND patient_no LIKE 'EM-{$emYr}-%'")->fetchColumn();
+                $emPatNo = 'EM-' . $emYr . '-' . str_pad($emSeq, 4, '0', STR_PAD_LEFT);
+                $emDob   = $age ? date('Y-m-d', strtotime("-{$age} years")) : null;
+                $pdo->prepare("INSERT INTO health_patients (org_id,patient_no,first_name,last_name,gender,dob,phone,status) VALUES (?,?,?,?,?,?,?,'active')")
+                    ->execute([$orgId, $emPatNo, $emFn, $emLn, $gender, $emDob, $patPhone]);
+                $newPatId = (int)$pdo->lastInsertId();
+                $pdo->prepare("UPDATE health_triage SET patient_id=? WHERE org_id=? AND triage_no=?")
+                    ->execute([$newPatId, $orgId, $trNo]);
+            } catch (Throwable $e) {}
+        }
+
         setFlash('success', "Triage registered: {$trNo}");
         redirect('emergency.php');
     }
@@ -335,6 +353,9 @@ require_once __DIR__ . '/../../includes/header-module.php';
                   <?php endif; ?>
                   <button class="btn btn-outline-success btn-sm" onclick="openDisposition(<?= $q['id'] ?>, '<?= htmlspecialchars(addslashes($q['triage_no'])) ?>')" title="Disposition"><i class="fas fa-sign-out-alt"></i></button>
                   <button class="btn btn-outline-secondary btn-sm" onclick="viewTriage(<?= $q['id'] ?>)" title="View Full"><i class="fas fa-eye"></i></button>
+                  <?php if ($q['patient_id']): ?>
+                  <a href="billing.php?prefill_patient=<?= $q['patient_id'] ?>&prefill_type=emergency" class="btn btn-outline-warning btn-sm" title="Create Emergency Bill"><i class="fas fa-file-invoice-dollar"></i></a>
+                  <?php endif; ?>
                 </div>
               </td>
             </tr>
@@ -366,7 +387,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
       <div class="table-responsive">
         <table class="table table-hover table-sm align-middle" id="histTable">
           <thead class="table-light">
-            <tr><th>Triage No</th><th>Patient</th><th>Level</th><th>Complaint</th><th>Doctor</th><th>Status</th><th>Disposition</th><th>Triaged</th></tr>
+            <tr><th>Triage No</th><th>Patient</th><th>Level</th><th>Complaint</th><th>Doctor</th><th>Status</th><th>Disposition</th><th>Triaged</th><th>Actions</th></tr>
           </thead>
           <tbody>
           <?php if (empty($history)): ?>
@@ -390,6 +411,11 @@ require_once __DIR__ . '/../../includes/header-module.php';
               <td><span class="badge bg-<?= $stBadge ?>"><?= ucfirst(str_replace('_',' ',$h['status'])) ?></span></td>
               <td><?= $h['disposition'] ? ucfirst($h['disposition']) : '—' ?></td>
               <td><small><?= date('d M Y H:i', strtotime($h['triaged_at'])) ?></small></td>
+              <td>
+                <?php if ($h['patient_id']): ?>
+                <a href="billing.php?prefill_patient=<?= $h['patient_id'] ?>&prefill_type=emergency" class="btn btn-outline-warning btn-sm" title="Create Bill"><i class="fas fa-file-invoice-dollar"></i></a>
+                <?php endif; ?>
+              </td>
             </tr>
           <?php endforeach; endif; ?>
           </tbody>

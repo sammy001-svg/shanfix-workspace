@@ -706,7 +706,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
               <input type="number" name="ct_duration" id="ctDuration" class="form-control form-control-sm" value="30" min="5">
             </div>
             <div class="col-md-6">
-              <label class="form-label small fw-semibold">Consultation Fee (<?= defined('CURRENCY') ? CURRENCY : 'KES' ?>)</label>
+              <label class="form-label small fw-semibold">Consultation Fee (<?= $GLOBALS['hCurrencySymbol'] ?? 'LRD' ?>)</label>
               <input type="number" name="ct_fee" id="ctFee" class="form-control form-control-sm" value="0" min="0" step="0.01">
             </div>
             <div class="col-12">
@@ -948,11 +948,13 @@ require_once __DIR__ . '/../../includes/header-module.php';
      TAB 6: Currency
      ════════════════════════════════════════════════════ -->
 <?php elseif ($activeTab === 'currency'):
-  $hCurrCode   = hGet($notifSettings, 'h_currency_code',   'KES');
-  $hCurrSymbol = hGet($notifSettings, 'h_currency_symbol', 'KSh');
-  $hCurrName   = hGet($notifSettings, 'h_currency_name',   'Kenyan Shilling');
+  $hCurrCode   = hGet($notifSettings, 'h_currency_code',   'LRD');
+  $hCurrSymbol = hGet($notifSettings, 'h_currency_symbol', 'L$');
+  $hCurrName   = hGet($notifSettings, 'h_currency_name',   'Liberian Dollar');
 
   $currencyList = [
+    ['LRD','L$', 'Liberian Dollar'],
+    ['USD','$',  'US Dollar'],
     ['KES','KSh','Kenyan Shilling'],
     ['UGX','USh','Ugandan Shilling'],
     ['TZS','TSh','Tanzanian Shilling'],
@@ -967,8 +969,6 @@ require_once __DIR__ . '/../../includes/header-module.php';
     ['EGP','E£', 'Egyptian Pound'],
     ['MAD','MAD','Moroccan Dirham'],
     ['XOF','CFA','West African CFA Franc'],
-    ['LRD','L$', 'Liberian Dollar'],
-    ['USD','$',  'US Dollar'],
     ['EUR','€',  'Euro'],
     ['GBP','£',  'British Pound'],
     ['INR','₹',  'Indian Rupee'],
@@ -1023,7 +1023,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
             <div class="col-md-3">
               <label class="form-label fw-semibold small">Currency Code <span class="text-danger">*</span></label>
               <input type="text" name="currency_code" id="currCode" class="form-control form-control-sm text-uppercase"
-                     value="<?= e($hCurrCode) ?>" maxlength="5" required placeholder="KES"
+                     value="<?= e($hCurrCode) ?>" maxlength="5" required placeholder="LRD"
                      oninput="this.value=this.value.toUpperCase()">
               <div class="form-text">ISO 4217 (e.g. KES, USD, EUR)</div>
             </div>
@@ -1554,7 +1554,7 @@ function selectCurrency(code, symbol, name) {
     });
 }
 function updateCurrencyPreview(sym) {
-    sym = sym || document.getElementById('currSymbol')?.value || 'KES';
+    sym = sym || document.getElementById('currSymbol')?.value || window._hCurr || 'LRD';
     ['currPreview','currPreview2','currPreview3'].forEach((id, i) => {
         const amounts = ['1,250.00','45,000.00','500.00'];
         const el = document.getElementById(id);

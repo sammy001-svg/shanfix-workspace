@@ -229,7 +229,9 @@ requireLogin();
 
 $user  = currentUser();
 $orgId = (int)$user['org_id'];
-$tab   = in_array($_GET['tab'] ?? '', ['bills','services']) ? $_GET['tab'] : 'bills';
+$tab            = in_array($_GET['tab'] ?? '', ['bills','services']) ? $_GET['tab'] : 'bills';
+$prefillPatient = (int)($_GET['prefill_patient'] ?? 0);
+$prefillType    = in_array($_GET['prefill_type'] ?? '', ['opd','ipd','emergency','other']) ? $_GET['prefill_type'] : '';
 
 // ── Patients ──────────────────────────────────────────────────────
 $patientsSt = $pdo->prepare("SELECT id, CONCAT(first_name,' ',last_name) AS name, patient_no FROM health_patients WHERE org_id=? AND status='active' ORDER BY first_name");
@@ -317,13 +319,13 @@ require_once __DIR__ . '/../../includes/header-module.php';
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
       <div class="card border-0 shadow-sm text-center py-3">
-        <div class="text-success fs-3 fw-bold">KES <?= number_format($todayRev, 0) ?></div>
+        <div class="text-success fs-3 fw-bold"><?= hMoney($todayRev) ?></div>
         <small class="text-muted">Revenue Today</small>
       </div>
     </div>
     <div class="col-6 col-md-3">
       <div class="card border-0 shadow-sm text-center py-3">
-        <div class="text-danger fs-3 fw-bold">KES <?= number_format($outstanding, 0) ?></div>
+        <div class="text-danger fs-3 fw-bold"><?= hMoney($outstanding) ?></div>
         <small class="text-muted">Outstanding</small>
       </div>
     </div>
@@ -457,7 +459,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
       <div class="table-responsive">
         <table class="table table-hover table-sm align-middle" id="svcTable">
           <thead class="table-light">
-            <tr><th>Name</th><th>Category</th><th>Price (KES)</th><th>Status</th><th>Actions</th></tr>
+            <tr><th>Name</th><th>Category</th><th>Price (<?= $GLOBALS['hCurrencySymbol'] ?? 'LRD' ?>)</th><th>Status</th><th>Actions</th></tr>
           </thead>
           <tbody>
           <?php if (empty($services)): ?>
@@ -512,11 +514,10 @@ require_once __DIR__ . '/../../includes/header-module.php';
             </div>
             <div class="col-6 col-md-3">
               <label class="form-label fw-semibold">Bill Type</label>
-              <select name="bill_type" class="form-select">
-                <option value="opd">OPD</option>
-                <option value="ipd">IPD</option>
-                <option value="emergency">Emergency</option>
-                <option value="other">Other</option>
+              <select name="bill_type" class="form-select" id="billTypeSelect">
+                <?php foreach (['opd'=>'OPD','ipd'=>'IPD','emergency'=>'Emergency','other'=>'Other'] as $v=>$l): ?>
+                <option value="<?= $v ?>" <?= $prefillType===$v?'selected':'' ?>><?= $l ?></option>
+                <?php endforeach; ?>
               </select>
             </div>
             <div class="col-6 col-md-4">
@@ -583,16 +584,16 @@ require_once __DIR__ . '/../../includes/header-module.php';
           <div class="row justify-content-end g-2">
             <div class="col-12 col-md-4">
               <table class="table table-sm">
-                <tr><td>Subtotal</td><td class="text-end fw-bold" id="subtotalDisplay">KES 0.00</td></tr>
+                <tr><td>Subtotal</td><td class="text-end fw-bold" id="subtotalDisplay"><?= $GLOBALS['hCurrencySymbol'] ?? 'LRD' ?> 0.00</td></tr>
                 <tr>
-                  <td>Discount (KES)</td>
+                  <td>Discount (<?= $GLOBALS['hCurrencySymbol'] ?? 'LRD' ?>)</td>
                   <td><input type="number" name="discount" id="discountInput" class="form-control form-control-sm text-end" min="0" step="0.01" value="0" oninput="recalcTotals()"></td>
                 </tr>
                 <tr>
-                  <td>Tax (KES)</td>
+                  <td>Tax (<?= $GLOBALS['hCurrencySymbol'] ?? 'LRD' ?>)</td>
                   <td><input type="number" name="tax" id="taxInput" class="form-control form-control-sm text-end" min="0" step="0.01" value="0" oninput="recalcTotals()"></td>
                 </tr>
-                <tr class="table-success"><td><strong>Total</strong></td><td class="text-end fw-bold" id="totalDisplay">KES 0.00</td></tr>
+                <tr class="table-success"><td><strong>Total</strong></td><td class="text-end fw-bold" id="totalDisplay"><?= $GLOBALS['hCurrencySymbol'] ?? 'LRD' ?> 0.00</td></tr>
               </table>
             </div>
           </div>
@@ -705,7 +706,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
               </select>
             </div>
             <div class="col-6">
-              <label class="form-label fw-semibold">Price (KES)</label>
+              <label class="form-label fw-semibold">Price (<?= $GLOBALS['hCurrencySymbol'] ?? 'LRD' ?>)</label>
               <input type="number" name="price" id="svcPrice" class="form-control" min="0" step="0.01" value="0">
             </div>
             <div class="col-6">
@@ -751,6 +752,29 @@ require_once __DIR__ . '/../../includes/header-module.php';
   </div>
 </div>
 
+<?php if ($prefillPatient): ?>
+<script>
+window.addEventListener('load', function() {
+  resetBillForm();
+  var patSel = document.querySelector('#billModal [name="patient_id"]');
+  if (patSel) {
+    if (window.jQuery && typeof $.fn.select2 !== 'undefined') {
+      $(patSel).val(<?= $prefillPatient ?>).trigger('change');
+    } else {
+      patSel.value = <?= $prefillPatient ?>;
+    }
+  }
+  <?php if ($prefillType): ?>
+  var typeSel = document.querySelector('#billModal [name="bill_type"]');
+  if (typeSel) typeSel.value = '<?= htmlspecialchars($prefillType) ?>';
+  <?php endif; ?>
+  setTimeout(function() {
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('billModal')).show();
+  }, 150);
+});
+</script>
+<?php endif; ?>
+
 <?php
 $extraJs = <<<'JS'
 <script>
@@ -769,7 +793,7 @@ function recalcTotals() {
     document.querySelectorAll('.row-total').forEach(el => { sub += parseFloat(el.value) || 0; });
     const disc = parseFloat(document.getElementById('discountInput').value) || 0;
     const tax  = parseFloat(document.getElementById('taxInput').value)      || 0;
-    const fmt  = n => 'KES ' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const fmt  = n => (window._hCurr || 'LRD') + ' ' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     document.getElementById('subtotalDisplay').textContent = fmt(sub);
     document.getElementById('totalDisplay').textContent    = fmt(sub - disc + tax);
 }
@@ -807,6 +831,8 @@ function removeRow(btn) {
 
 function resetBillForm() {
     document.getElementById('itemsBody').querySelectorAll('tr').forEach((r,i)=>{ if(i>0) r.remove(); });
+    const typeSel = document.getElementById('billTypeSelect');
+    if (typeSel) typeSel.value = 'opd';
     recalcTotals();
 }
 
@@ -824,13 +850,13 @@ function openPayModal(id) {
             document.getElementById('payBody').innerHTML = `
               <div class="alert alert-light border mb-3">
                 <strong>${b.bill_no}</strong> — ${b.patient_name}<br>
-                Total: <strong>KES ${parseFloat(b.total).toLocaleString()}</strong> |
-                Paid: <strong class="text-success">KES ${parseFloat(b.paid_amount).toLocaleString()}</strong> |
-                Balance: <strong class="text-danger">KES ${parseFloat(bal).toLocaleString()}</strong>
+                Total: <strong>${window._hCurr} ${parseFloat(b.total).toLocaleString()}</strong> |
+                Paid: <strong class="text-success">${window._hCurr} ${parseFloat(b.paid_amount).toLocaleString()}</strong> |
+                Balance: <strong class="text-danger">${window._hCurr} ${parseFloat(bal).toLocaleString()}</strong>
               </div>
               <div class="row g-3">
                 <div class="col-12 col-md-6">
-                  <label class="form-label fw-semibold">Amount Paid (KES)</label>
+                  <label class="form-label fw-semibold">Amount Paid (${window._hCurr})</label>
                   <input type="number" name="paid_amount" class="form-control" min="0" step="0.01" value="${b.paid_amount}">
                 </div>
                 <div class="col-12 col-md-6">
@@ -862,8 +888,10 @@ function printBill(id) {
         .then(d => {
             if (!d.bill) { document.getElementById('printBillArea').textContent = 'Not found.'; return; }
             const b = d.bill; const items = d.items;
+            const cur  = window._hCurr || 'LRD';
             const fmt = n => parseFloat(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
-            let rows = items.map(i => `<tr><td>${i.description}</td><td>${i.category||'—'}</td><td style="text-align:center">${i.quantity}</td><td style="text-align:right">${fmt(i.unit_price)}</td><td style="text-align:right;font-weight:700">${fmt(i.total)}</td></tr>`).join('');
+            const mfmt = n => cur + ' ' + fmt(n);
+            let rows = items.map(i => `<tr><td>${i.description}</td><td>${i.category||'—'}</td><td style="text-align:center">${i.quantity}</td><td style="text-align:right">${mfmt(i.unit_price)}</td><td style="text-align:right;font-weight:700">${mfmt(i.total)}</td></tr>`).join('');
             document.getElementById('printBillArea').innerHTML = `
               <div id="billContent" style="font-family:'Segoe UI',Arial,sans-serif;padding:16px;max-width:700px;margin:0 auto">
                 <div style="text-align:center;border-bottom:2px solid #c00;padding-bottom:12px;margin-bottom:16px">
@@ -884,12 +912,12 @@ function printBill(id) {
                 </table>
                 <div style="float:right;width:260px;font-size:.85rem">
                   <table style="width:100%;border-collapse:collapse">
-                    <tr><td style="padding:4px">Subtotal</td><td style="padding:4px;text-align:right">KES ${fmt(b.subtotal)}</td></tr>
-                    ${parseFloat(b.discount)>0?`<tr><td style="padding:4px;color:#c00">Discount</td><td style="padding:4px;text-align:right;color:#c00">- KES ${fmt(b.discount)}</td></tr>`:''}
-                    ${parseFloat(b.tax)>0?`<tr><td style="padding:4px">Tax</td><td style="padding:4px;text-align:right">KES ${fmt(b.tax)}</td></tr>`:''}
-                    <tr style="background:#f8f9fa;font-weight:700"><td style="padding:6px">Total</td><td style="padding:6px;text-align:right">KES ${fmt(b.total)}</td></tr>
-                    <tr style="color:#198754"><td style="padding:4px">Amount Paid</td><td style="padding:4px;text-align:right">KES ${fmt(b.paid_amount)}</td></tr>
-                    <tr style="color:${parseFloat(b.total)-parseFloat(b.paid_amount)>0?'#dc3545':'#198754'};font-weight:700"><td style="padding:4px">Balance</td><td style="padding:4px;text-align:right">KES ${fmt(parseFloat(b.total)-parseFloat(b.paid_amount))}</td></tr>
+                    <tr><td style="padding:4px">Subtotal</td><td style="padding:4px;text-align:right">${mfmt(b.subtotal)}</td></tr>
+                    ${parseFloat(b.discount)>0?`<tr><td style="padding:4px;color:#c00">Discount</td><td style="padding:4px;text-align:right;color:#c00">- ${mfmt(b.discount)}</td></tr>`:''}
+                    ${parseFloat(b.tax)>0?`<tr><td style="padding:4px">Tax</td><td style="padding:4px;text-align:right">${mfmt(b.tax)}</td></tr>`:''}
+                    <tr style="background:#f8f9fa;font-weight:700"><td style="padding:6px">Total</td><td style="padding:6px;text-align:right">${mfmt(b.total)}</td></tr>
+                    <tr style="color:#198754"><td style="padding:4px">Amount Paid</td><td style="padding:4px;text-align:right">${mfmt(b.paid_amount)}</td></tr>
+                    <tr style="color:${parseFloat(b.total)-parseFloat(b.paid_amount)>0?'#dc3545':'#198754'};font-weight:700"><td style="padding:4px">Balance</td><td style="padding:4px;text-align:right">${mfmt(parseFloat(b.total)-parseFloat(b.paid_amount))}</td></tr>
                   </table>
                 </div>
                 <div style="clear:both;border-top:1px solid #eee;padding-top:10px;font-size:.75rem;color:#999;text-align:center">
@@ -933,7 +961,7 @@ function openMpesaPay(billId, amount, patientName) {
     _mpesaBillId = billId;
     _mpesaAmount = amount;
     document.getElementById('mpesaPayDesc').textContent = 'Sending STK push to ' + patientName + '\'s phone.';
-    document.getElementById('mpesaAmtLabel').textContent = 'Amount: KES ' + amount.toLocaleString();
+    document.getElementById('mpesaAmtLabel').textContent = 'Amount: ' + (window._hCurr || 'LRD') + ' ' + amount.toLocaleString();
     document.getElementById('mpesaPhone').value = '';
     document.getElementById('mpesaStatus').innerHTML = '';
     document.getElementById('mpesaSendBtn').disabled = false;

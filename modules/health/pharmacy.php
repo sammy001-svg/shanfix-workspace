@@ -364,7 +364,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
         <div class="card-body text-center py-3">
           <div class="text-success fs-3 fw-bold"><?= $todayDisp ?></div>
           <small class="text-muted">Dispensed Today</small>
-          <div><small class="text-muted">KES <?= number_format($todayRev, 2) ?></small></div>
+          <div><small class="text-muted"><?= hMoney($todayRev) ?></small></div>
         </div>
       </div>
     </div>
@@ -520,13 +520,13 @@ require_once __DIR__ . '/../../includes/header-module.php';
                 <input type="number" name="quantity" id="qtyInput" class="form-control" min="1" value="1" required oninput="calcTotal()">
               </div>
               <div class="col-6">
-                <label class="form-label fw-semibold">Unit Price (KES)</label>
+                <label class="form-label fw-semibold">Unit Price (<?= $GLOBALS['hCurrencySymbol'] ?? 'LRD' ?>)</label>
                 <input type="number" name="unit_price" id="priceInput" class="form-control" min="0" step="0.01" value="0" oninput="calcTotal()">
               </div>
             </div>
             <div class="alert alert-light border mb-3 d-flex justify-content-between">
               <span class="fw-semibold">Total:</span>
-              <span class="fw-bold text-success" id="totalDisplay">KES 0.00</span>
+              <span class="fw-bold text-success" id="totalDisplay"><?= $GLOBALS['hCurrencySymbol'] ?? 'LRD' ?> 0.00</span>
             </div>
             <div class="mb-3">
               <label class="form-label fw-semibold">Dosage Instructions</label>
@@ -708,7 +708,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
               <input type="text" name="unit" id="medUnit" class="form-control" value="Units">
             </div>
             <div class="col-6 col-md-2">
-              <label class="form-label fw-semibold">Unit Price (KES)</label>
+              <label class="form-label fw-semibold">Unit Price (<?= $GLOBALS['hCurrencySymbol'] ?? 'LRD' ?>)</label>
               <input type="number" name="unit_price" id="medPrice" class="form-control" min="0" step="0.01" value="0">
             </div>
             <div class="col-6 col-md-2">
@@ -838,7 +838,7 @@ function fetchMedPrice(id) {
 function calcTotal() {
     const qty   = parseFloat(document.getElementById('qtyInput').value)   || 0;
     const price = parseFloat(document.getElementById('priceInput').value)  || 0;
-    document.getElementById('totalDisplay').textContent = 'KES ' + (qty * price).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    document.getElementById('totalDisplay').textContent = (window._hCurr || 'LRD') + ' ' + (qty * price).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 function checkBillApproval(pid) {

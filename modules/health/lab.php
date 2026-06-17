@@ -851,7 +851,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
               <th>Category</th>
               <th>Normal Range</th>
               <th>Unit</th>
-              <th>Price (KES)</th>
+              <th>Price (<?= $GLOBALS['hCurrencySymbol'] ?? 'LRD' ?>)</th>
               <th>TAT (hrs)</th>
               <th>Status</th>
               <th>Actions</th>
@@ -933,7 +933,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
               <input type="text" name="unit" id="testUnit" class="form-control" placeholder="e.g. mg/dL">
             </div>
             <div class="col-6 col-md-2">
-              <label class="form-label fw-semibold">Price (KES)</label>
+              <label class="form-label fw-semibold">Price (<?= $GLOBALS['hCurrencySymbol'] ?? 'LRD' ?>)</label>
               <input type="number" name="price" id="testPrice" class="form-control" min="0" step="0.01" value="0">
             </div>
             <div class="col-6 col-md-2">

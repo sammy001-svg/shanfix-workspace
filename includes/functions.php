@@ -47,8 +47,8 @@ function formatCurrency(float $amount, string $currency = CURRENCY_SYMBOL): stri
  * The symbol is loaded into $GLOBALS['hCurrencySymbol'] by header-module.php.
  */
 function hMoney(float $amount): string {
-    $sym = $GLOBALS['hCurrencySymbol'] ?? (defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'KES');
-    if (!preg_match('/^[A-Za-z$€£¥₹₦₵\s]{1,6}$/u', $sym)) $sym = 'KES';
+    $sym = $GLOBALS['hCurrencySymbol'] ?? (defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'LRD');
+    if (!preg_match('/^[A-Za-z$€£¥₹₦₵\s]{1,6}$/u', $sym)) $sym = 'LRD';
     return $sym . ' ' . number_format($amount, 2);
 }
 

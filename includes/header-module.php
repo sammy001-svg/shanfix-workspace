@@ -23,9 +23,9 @@ if (($moduleSlug ?? '') === 'health') {
     try {
         $__hcs = $pdo->prepare("SELECT setting_value FROM health_settings WHERE org_id=? AND setting_key='h_currency_symbol' LIMIT 1");
         $__hcs->execute([(int)$user['org_id']]);
-        $GLOBALS['hCurrencySymbol'] = $__hcs->fetchColumn() ?: (defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'KES');
+        $GLOBALS['hCurrencySymbol'] = $__hcs->fetchColumn() ?: (defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'LRD');
     } catch (Throwable $__e) {
-        $GLOBALS['hCurrencySymbol'] = defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'KES';
+        $GLOBALS['hCurrencySymbol'] = defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'LRD';
     }
     unset($__hcs, $__e);
 }
@@ -199,6 +199,9 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 </script>
+<?php if (($moduleSlug ?? '') === 'health'): ?>
+<script>window._hCurr = '<?= htmlspecialchars($GLOBALS['hCurrencySymbol'] ?? 'LRD', ENT_QUOTES) ?>';</script>
+<?php endif; ?>
 </head>
 <body class="client-layout">
 

@@ -788,6 +788,7 @@ $orgSlug       = $_SESSION['org_slug'] ?? '';
 </div>
 
 <?php
+$__hcSym = $GLOBALS['hCurrencySymbol'] ?? 'LRD';
 $extraJs = <<<SCRIPT
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
@@ -808,7 +809,7 @@ new Chart(apptCtx, {
         yAxisID: 'y',
       },
       {
-        label: 'Revenue (KES)',
+        label: 'Revenue ($__hcSym)',
         data: {$revData},
         type: 'line',
         borderColor: '#1a8a4e',
@@ -828,7 +829,7 @@ new Chart(apptCtx, {
     plugins: { legend:{ position:'top', labels:{ boxWidth:12, font:{size:11} } } },
     scales: {
       y:  { beginAtZero:true, grid:{color:'#f5f5f5'}, ticks:{font:{size:10}, stepSize:1}, title:{display:false} },
-      y1: { beginAtZero:true, position:'right', grid:{drawOnChartArea:false}, ticks:{font:{size:10}, callback:v=>'KES '+v.toLocaleString()} }
+      y1: { beginAtZero:true, position:'right', grid:{drawOnChartArea:false}, ticks:{font:{size:10}, callback:v=>'$__hcSym '+v.toLocaleString()} }
     }
   }
 });
