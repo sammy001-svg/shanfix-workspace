@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $specialization = sanitize($_POST['specialization'] ?? 'General Practitioner');
         $phone          = sanitize($_POST['phone']          ?? '');
         $email          = trim(strtolower($_POST['email']   ?? ''));
-        $status         = in_array($_POST['status'] ?? '', ['active','inactive']) ? $_POST['status'] : 'active';
+        $status         = in_array($_POST['status'] ?? '', ['active','on_leave','inactive']) ? $_POST['status'] : 'active';
         $createAccount  = !empty($_POST['create_account']);
         $moduleRole     = in_array($_POST['module_role'] ?? '', ['doctor','nurse','receptionist','lab_technician','pharmacist','cashier']) ? $_POST['module_role'] : 'doctor';
 
@@ -164,6 +164,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare("DELETE FROM health_doctors WHERE id=? AND org_id=?")->execute([$id, $orgId]);
         setFlash('success', 'Practitioner removed from registry.');
         logActivity('delete', 'health', "Doctor removed: #$id");
+        redirect('doctors.php');
+    }
+
+    // ── Toggle on-leave status ─────────────────────────────────────
+    if ($action === 'toggle_leave') {
+        $id = (int)($_POST['id'] ?? 0);
+        try {
+            $cur = $pdo->prepare("SELECT status FROM health_doctors WHERE id=? AND org_id=?");
+            $cur->execute([$id, $orgId]);
+            $curStatus = $cur->fetchColumn();
+            $newStatus = ($curStatus === 'on_leave') ? 'active' : 'on_leave';
+            $pdo->prepare("UPDATE health_doctors SET status=? WHERE id=? AND org_id=?")
+                ->execute([$newStatus, $id, $orgId]);
+            $msg = ($newStatus === 'on_leave') ? 'Doctor marked as on leave.' : 'Doctor returned from leave — marked active.';
+            setFlash('success', $msg);
+        } catch (Throwable $e) { setFlash('error', 'Could not update leave status.'); }
         redirect('doctors.php');
     }
 }
@@ -296,6 +312,14 @@ if (!empty($_SESSION['_doctor_creds'])) {
     $flashCreds = $_SESSION['_doctor_creds'];
     unset($_SESSION['_doctor_creds']);
 }
+
+// Expand health_doctors.status ENUM to include 'on_leave' if needed
+try {
+    $__dc = $pdo->query("SHOW COLUMNS FROM health_doctors LIKE 'status'")->fetch();
+    if ($__dc && strpos((string)$__dc['Type'], 'on_leave') === false) {
+        $pdo->exec("ALTER TABLE health_doctors MODIFY COLUMN status ENUM('active','on_leave','inactive') NOT NULL DEFAULT 'active'");
+    }
+} catch (Throwable $__de) {}
 
 // ── Data ──────────────────────────────────────────────────────────
 $doctorsList = [];
@@ -436,10 +460,26 @@ $roleLabels = [
               <span class="text-muted small">—</span>
               <?php endif; ?>
             </td>
-            <td><span class="badge bg-<?= $d['status'] === 'active' ? 'success' : 'secondary' ?>"><?= ucfirst($d['status']) ?></span></td>
+            <td>
+              <?php
+              [$sBadgeLbl, $sBadgeCls] = match($d['status']) {
+                'on_leave' => ['On Leave',  'warning text-dark'],
+                'inactive' => ['Inactive',  'secondary'],
+                default    => ['On Duty',   'success'],
+              };
+              ?>
+              <span class="badge bg-<?= $sBadgeCls ?>"><?= $sBadgeLbl ?></span>
+            </td>
             <td class="text-center">
               <div class="btn-group btn-group-sm">
                 <button class="btn btn-outline-primary" onclick="openEdit(<?= $d['id'] ?>)" title="Edit"><i class="fas fa-edit"></i></button>
+                <?php if ($d['status'] !== 'inactive'): ?>
+                <button class="btn btn-outline-<?= $d['status'] === 'on_leave' ? 'success' : 'warning' ?>"
+                        onclick="toggleLeave(<?= $d['id'] ?>, '<?= e($d['first_name'].' '.$d['last_name']) ?>', '<?= $d['status'] ?>')"
+                        title="<?= $d['status'] === 'on_leave' ? 'Return from Leave' : 'Put on Leave' ?>">
+                  <i class="fas fa-<?= $d['status'] === 'on_leave' ? 'user-check' : 'user-clock' ?>"></i>
+                </button>
+                <?php endif; ?>
                 <?php if ($d['user_id']): ?>
                 <button class="btn btn-outline-warning" onclick="resetPassword(<?= $d['id'] ?>, '<?= e($d['first_name'].' '.$d['last_name']) ?>')" title="Reset Password">
                   <i class="fas fa-key"></i>
@@ -493,7 +533,8 @@ $roleLabels = [
           <div class="col-md-4">
             <label class="form-label fw-semibold">Status</label>
             <select name="status" id="docStatus" class="form-select">
-              <option value="active">Active</option>
+              <option value="active">Active (On Duty)</option>
+              <option value="on_leave">On Leave</option>
               <option value="inactive">Inactive</option>
             </select>
           </div>
@@ -568,6 +609,13 @@ $roleLabels = [
   <?= csrfField() ?>
   <input type="hidden" name="action" value="delete">
   <input type="hidden" name="id" id="delDocId">
+</form>
+
+<!-- Toggle leave form (hidden) -->
+<form method="POST" id="toggleLeaveForm" style="display:none">
+  <?= csrfField() ?>
+  <input type="hidden" name="action" value="toggle_leave">
+  <input type="hidden" name="id" id="toggleLeaveId">
 </form>
 
 <?php
@@ -662,6 +710,26 @@ function delDoc(id, name) {
     if (r.isConfirmed) {
       document.getElementById('delDocId').value = id;
       document.getElementById('delDocForm').submit();
+    }
+  });
+}
+
+function toggleLeave(id, name, currentStatus) {
+  const goingOnLeave = currentStatus !== 'on_leave';
+  Swal.fire({
+    title: goingOnLeave ? 'Mark as On Leave?' : 'Return from Leave?',
+    html: goingOnLeave
+      ? 'Dr. <strong>' + name + '</strong> will be marked <strong>On Leave</strong> and removed from available duty rosters.'
+      : 'Dr. <strong>' + name + '</strong> will be marked <strong>On Duty</strong> and returned to active roster.',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: goingOnLeave ? '#e67e22' : '#27ae60',
+    confirmButtonText: goingOnLeave ? 'Yes, Put on Leave' : 'Yes, Return to Duty',
+    cancelButtonText: 'Cancel'
+  }).then(r => {
+    if (r.isConfirmed) {
+      document.getElementById('toggleLeaveId').value = id;
+      document.getElementById('toggleLeaveForm').submit();
     }
   });
 }

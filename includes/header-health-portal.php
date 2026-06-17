@@ -25,9 +25,9 @@ if ((int)$user['org_id'] !== $portalOrgId) {
 try {
     $__hcs = $pdo->prepare("SELECT setting_value FROM health_settings WHERE org_id=? AND setting_key='h_currency_symbol' LIMIT 1");
     $__hcs->execute([$portalOrgId]);
-    $GLOBALS['hCurrencySymbol'] = $__hcs->fetchColumn() ?: (defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'KES');
+    $GLOBALS['hCurrencySymbol'] = $__hcs->fetchColumn() ?: (defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'LRD');
 } catch (Throwable $__e) {
-    $GLOBALS['hCurrencySymbol'] = defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'KES';
+    $GLOBALS['hCurrencySymbol'] = defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'LRD';
 }
 unset($__hcs, $__e);
 

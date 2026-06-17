@@ -125,7 +125,9 @@ $pendingAppts     = (int)safeVal($pdo,"SELECT COUNT(*) FROM health_appointments 
 $yesterdayAppts   = (int)safeVal($pdo,"SELECT COUNT(*) FROM health_appointments WHERE org_id=? AND date=DATE_SUB(CURDATE(),INTERVAL 1 DAY)",[$orgId]);
 
 // ── KPI Row 1: Doctors, Revenue ──────────────────────────────────
-$totalDoctors     = (int)safeVal($pdo,"SELECT COUNT(*) FROM health_doctors WHERE org_id=? AND status='active'",[$orgId]);
+$doctorsAvailable = (int)safeVal($pdo,"SELECT COUNT(*) FROM health_doctors WHERE org_id=? AND status='active'",[$orgId]);
+$doctorsOnLeave   = (int)safeVal($pdo,"SELECT COUNT(*) FROM health_doctors WHERE org_id=? AND status='on_leave'",[$orgId]);
+$totalDoctors     = $doctorsAvailable + $doctorsOnLeave + (int)safeVal($pdo,"SELECT COUNT(*) FROM health_doctors WHERE org_id=? AND status='inactive'",[$orgId]);
 $totalStaff       = (int)safeVal($pdo,"SELECT COUNT(*) FROM health_staff WHERE org_id=? AND status='active'",[$orgId]);
 
 $collectedMonth   = (float)safeVal($pdo,"SELECT COALESCE(SUM(paid_amount),0) FROM health_bills WHERE org_id=? AND DATE_FORMAT(created_at,'%Y-%m')=?",[$orgId,$month]);
@@ -204,6 +206,12 @@ $pendingBills = safeRows($pdo,"
       AND (b.total_amount - b.paid_amount) > 0
     ORDER BY (b.total_amount-b.paid_amount) DESC
     LIMIT 6",[$orgId]);
+
+// ── Doctor availability list ──────────────────────────────────────
+$doctorAvailability = safeRows($pdo,"
+    SELECT first_name, last_name, specialization, status
+    FROM health_doctors WHERE org_id=? AND status IN ('active','on_leave')
+    ORDER BY status ASC, first_name ASC LIMIT 12",[$orgId]);
 
 // ── Ward occupancy ────────────────────────────────────────────────
 $wardOccupancy = safeRows($pdo,"
@@ -408,15 +416,22 @@ $orgSlug       = $_SESSION['org_slug'] ?? '';
     </a>
   </div>
 
-  <!-- Doctors on duty -->
+  <!-- Doctors availability -->
   <div class="col-6 col-lg-3">
     <a href="doctors.php" class="text-decoration-none">
       <div class="hkpi">
         <div class="hkpi-icon" style="background:#e8f0f8"><i class="fas fa-user-md" style="color:var(--hblue)"></i></div>
         <div>
-          <div class="hkpi-val"><?= number_format($totalDoctors) ?></div>
-          <div class="hkpi-label">Active Doctors</div>
-          <div class="hkpi-trend"><span class="text-muted" style="font-size:.72rem"><?= $totalStaff ?> clinical staff</span></div>
+          <div class="hkpi-val"><?= number_format($doctorsAvailable) ?></div>
+          <div class="hkpi-label">Doctors Available</div>
+          <div class="hkpi-trend">
+            <?php if ($doctorsOnLeave > 0): ?>
+            <span class="text-warning" style="font-size:.72rem"><i class="fas fa-user-clock me-1"></i><?= $doctorsOnLeave ?> on leave</span>
+            <?php else: ?>
+            <span class="text-success" style="font-size:.72rem"><i class="fas fa-check me-1"></i>All on duty</span>
+            <?php endif; ?>
+            &bull; <span class="text-muted" style="font-size:.72rem"><?= $totalStaff ?> staff</span>
+          </div>
         </div>
       </div>
     </a>
@@ -641,6 +656,57 @@ $orgSlug       = $_SESSION['org_slug'] ?? '';
           <div class="text-muted small">No appointment data yet.</div>
           <?php endif; ?>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────
+     ROW: DOCTOR AVAILABILITY
+     ───────────────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-3">
+  <div class="col-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 py-3 px-4 d-flex align-items-center justify-content-between">
+        <div>
+          <div class="fw-bold"><i class="fas fa-user-md me-2" style="color:var(--hblue)"></i>Doctor Availability</div>
+          <div class="text-muted small">
+            <span class="text-success fw-semibold"><?= $doctorsAvailable ?></span> on duty
+            <?php if ($doctorsOnLeave > 0): ?>
+            &bull; <span class="text-warning fw-semibold"><?= $doctorsOnLeave ?></span> on leave
+            <?php endif; ?>
+          </div>
+        </div>
+        <a href="doctors.php" class="btn btn-sm btn-outline-secondary">Manage Doctors</a>
+      </div>
+      <div class="card-body py-3 px-4">
+        <?php if (empty($doctorAvailability)): ?>
+        <div class="text-muted small text-center py-3">
+          <i class="fas fa-user-md fa-2x mb-2 d-block opacity-25"></i>No doctors registered yet.
+          <a href="doctors.php" class="d-block mt-1">Register Practitioners</a>
+        </div>
+        <?php else: ?>
+        <div class="row g-2">
+          <?php foreach ($doctorAvailability as $doc):
+            $isLeave = $doc['status'] === 'on_leave';
+          ?>
+          <div class="col-6 col-md-4 col-lg-3">
+            <div class="d-flex align-items-center gap-2 p-2 rounded border <?= $isLeave ? 'border-warning bg-warning bg-opacity-10' : 'border-success bg-success bg-opacity-10' ?>">
+              <div style="width:38px;height:38px;border-radius:50%;background:<?= $isLeave ? '#e67e22' : '#27ae60' ?>;display:flex;align-items:center;justify-content:center;font-size:.85rem;font-weight:700;color:#fff;flex-shrink:0">
+                <?= strtoupper(substr($doc['first_name'],0,1).substr($doc['last_name'],0,1)) ?>
+              </div>
+              <div style="min-width:0">
+                <div class="fw-semibold small text-truncate">Dr. <?= e($doc['first_name'].' '.$doc['last_name']) ?></div>
+                <div class="text-muted text-truncate" style="font-size:.72rem"><?= e($doc['specialization']) ?></div>
+                <div class="<?= $isLeave ? 'text-warning' : 'text-success' ?> fw-semibold" style="font-size:.68rem">
+                  <i class="fas fa-<?= $isLeave ? 'user-clock' : 'circle' ?> me-1"></i><?= $isLeave ? 'On Leave' : 'On Duty' ?>
+                </div>
+              </div>
+            </div>
+          </div>
+          <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
       </div>
     </div>
   </div>

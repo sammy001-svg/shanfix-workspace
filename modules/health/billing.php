@@ -538,11 +538,13 @@ require_once __DIR__ . '/../../includes/header-module.php';
             <table class="table table-sm border" id="itemsTable">
               <thead class="table-light">
                 <tr>
-                  <th style="min-width:220px">Description</th>
-                  <th style="min-width:140px">Category</th>
-                  <th style="width:80px">Qty</th>
-                  <th style="width:120px">Unit Price</th>
-                  <th style="width:120px">Total</th>
+                  <th style="min-width:200px">Description</th>
+                  <th style="min-width:130px">Category</th>
+                  <th style="min-width:110px;text-align:center">
+                    <span class="text-danger"><i class="fas fa-hashtag me-1" style="font-size:.75rem"></i>Quantity</span>
+                  </th>
+                  <th style="min-width:130px">Unit Price</th>
+                  <th style="min-width:130px">Line Total</th>
                   <th style="width:40px"></th>
                 </tr>
               </thead>
@@ -558,9 +560,14 @@ require_once __DIR__ . '/../../includes/header-module.php';
                       <option value="room">Room/Bed</option><option value="other">Other</option>
                     </select>
                   </td>
-                  <td><input type="number" name="item_quantity[]" class="form-control form-control-sm qty-input" min="1" value="1" oninput="calcRow(this)"></td>
+                  <td style="text-align:center">
+                    <input type="number" name="item_quantity[]"
+                           class="form-control form-control-sm qty-input text-center fw-bold"
+                           min="1" value="1" oninput="calcRow(this)"
+                           style="border-color:#0d6efd;background:#f0f6ff">
+                  </td>
                   <td><input type="number" name="item_unit_price[]" class="form-control form-control-sm price-input" min="0" step="0.01" value="0" oninput="calcRow(this)"></td>
-                  <td><input type="text" class="form-control form-control-sm row-total" readonly value="0.00"></td>
+                  <td><input type="text" class="form-control form-control-sm row-total fw-semibold" readonly value="0.00" style="background:#f8fff8;border-color:#198754;color:#198754"></td>
                   <td><button type="button" class="btn btn-outline-danger btn-sm" onclick="removeRow(this)"><i class="fas fa-minus"></i></button></td>
                 </tr>
               </tbody>

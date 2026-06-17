@@ -18,7 +18,7 @@ sendSecurityHeaders();
 requireModuleAccess($moduleSlug ?? '');
 $user    = currentUser();
 
-// ── Health module: load org currency so hMoney() works on all pages ──
+// ── Health module: load org currency + logo so hMoney() works on all pages ──
 if (($moduleSlug ?? '') === 'health') {
     try {
         $__hcs = $pdo->prepare("SELECT setting_value FROM health_settings WHERE org_id=? AND setting_key='h_currency_symbol' LIMIT 1");
@@ -27,7 +27,14 @@ if (($moduleSlug ?? '') === 'health') {
     } catch (Throwable $__e) {
         $GLOBALS['hCurrencySymbol'] = defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'LRD';
     }
-    unset($__hcs, $__e);
+    try {
+        $__hlo = $pdo->prepare("SELECT logo FROM organizations WHERE id=? LIMIT 1");
+        $__hlo->execute([(int)$user['org_id']]);
+        $GLOBALS['hOrgLogo'] = $__hlo->fetchColumn() ?: '';
+    } catch (Throwable $__e2) {
+        $GLOBALS['hOrgLogo'] = '';
+    }
+    unset($__hcs, $__hlo, $__e, $__e2);
 }
 
 // Staff see only their granted modules; admins/super_admin see all
@@ -207,7 +214,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <nav class="sidebar" id="sidebar">
   <div class="sidebar-brand">
+    <?php if (!empty($GLOBALS['hOrgLogo'])): ?>
+    <div class="brand-logo" style="background:#fff;padding:4px;display:flex;align-items:center;justify-content:center">
+      <img src="<?= APP_URL ?>/uploads/logos/<?= e($GLOBALS['hOrgLogo']) ?>" alt="Logo" style="max-height:44px;max-width:44px;object-fit:contain">
+    </div>
+    <?php else: ?>
     <div class="brand-logo" style="background:<?= $moduleColor ?? 'var(--green)' ?>"><i class="<?= $moduleIcon ?? 'fas fa-cubes' ?>"></i></div>
+    <?php endif; ?>
     <div class="brand-text">
       <span class="brand-name"><?= e($moduleName ?? 'Module') ?></span>
       <span class="brand-role"><?= e($user['org_name']) ?></span>
