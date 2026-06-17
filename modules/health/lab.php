@@ -141,56 +141,108 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'seed_tests') {
         $defaults = [
             // Haematology
-            ['Haematology', 'Full Blood Count (FBC)',       '',            '',       500, 4],
-            ['Haematology', 'Haemoglobin (Hb)',             '12–17 g/dL',  'g/dL',  300, 2],
-            ['Haematology', 'White Blood Cell Count (WBC)', '4.5–11 × 10³','×10³/μL',300,2],
-            ['Haematology', 'Platelet Count',               '150–400 × 10³','×10³/μL',300,2],
-            ['Haematology', 'Erythrocyte Sedimentation Rate (ESR)', '', 'mm/hr', 300, 2],
+            ['Haematology', 'Full Blood Count (FBC)',                        '',               '',        500, 4],
+            ['Haematology', 'Haemoglobin (Hb)',                              '12–17 g/dL',     'g/dL',    300, 2],
+            ['Haematology', 'White Blood Cell Count (WBC)',                  '4.5–11 ×10³/μL', '×10³/μL', 300, 2],
+            ['Haematology', 'Platelet Count',                                '150–400 ×10³/μL','×10³/μL', 300, 2],
+            ['Haematology', 'Erythrocyte Sedimentation Rate (ESR)',          '',               'mm/hr',   300, 2],
+            ['Haematology', 'Blood Group & Rh Factor',                       '',               '',        400, 4],
+            ['Haematology', 'Reticulocyte Count',                            '0.5–2.5%',        '%',       400, 4],
+            ['Haematology', 'Peripheral Blood Film',                         '',               '',        500, 4],
             // Clinical Chemistry
-            ['Clinical Chemistry', 'Random Blood Sugar (RBS)',  '3.9–11.1 mmol/L','mmol/L',200,1],
-            ['Clinical Chemistry', 'Fasting Blood Sugar (FBS)', '3.9–6.1 mmol/L', 'mmol/L',200,1],
-            ['Clinical Chemistry', 'HbA1c',                    '<7.0%',           '%',      800,4],
-            ['Clinical Chemistry', 'Urea',                     '2.5–7.1 mmol/L',  'mmol/L',400,2],
-            ['Clinical Chemistry', 'Creatinine',               '62–115 μmol/L',   'μmol/L',400,2],
-            ['Clinical Chemistry', 'Total Cholesterol',        '<5.2 mmol/L',     'mmol/L',400,4],
-            ['Clinical Chemistry', 'LDL Cholesterol',          '<3.4 mmol/L',     'mmol/L',400,4],
-            ['Clinical Chemistry', 'HDL Cholesterol',          '>1.0 mmol/L',     'mmol/L',400,4],
-            ['Clinical Chemistry', 'Triglycerides',            '<1.7 mmol/L',     'mmol/L',400,4],
-            ['Clinical Chemistry', 'Liver Function Tests (LFTs)', '',             '',       800,4],
-            ['Clinical Chemistry', 'SGPT / ALT',               '7–56 U/L',        'U/L',   400,2],
-            ['Clinical Chemistry', 'SGOT / AST',               '10–40 U/L',       'U/L',   400,2],
-            ['Clinical Chemistry', 'Total Bilirubin',          '3.4–17.1 μmol/L', 'μmol/L',400,2],
-            ['Clinical Chemistry', 'Serum Uric Acid',          '2.4–7.0 mg/dL',   'mg/dL', 400,2],
+            ['Clinical Chemistry', 'Random Blood Sugar (RBS)',               '3.9–11.1 mmol/L','mmol/L',  200, 1],
+            ['Clinical Chemistry', 'Fasting Blood Sugar (FBS)',              '3.9–6.1 mmol/L', 'mmol/L',  200, 1],
+            ['Clinical Chemistry', 'HbA1c',                                  '<7.0%',           '%',       800, 4],
+            ['Clinical Chemistry', 'Urea',                                   '2.5–7.1 mmol/L',  'mmol/L',  400, 2],
+            ['Clinical Chemistry', 'Creatinine',                             '62–115 μmol/L',   'μmol/L',  400, 2],
+            ['Clinical Chemistry', 'eGFR',                                   '>60 mL/min/1.73m²','mL/min', 400, 2],
+            ['Clinical Chemistry', 'Total Cholesterol',                      '<5.2 mmol/L',     'mmol/L',  400, 4],
+            ['Clinical Chemistry', 'LDL Cholesterol',                        '<3.4 mmol/L',     'mmol/L',  400, 4],
+            ['Clinical Chemistry', 'HDL Cholesterol',                        '>1.0 mmol/L',     'mmol/L',  400, 4],
+            ['Clinical Chemistry', 'Triglycerides',                          '<1.7 mmol/L',     'mmol/L',  400, 4],
+            ['Clinical Chemistry', 'Liver Function Tests (LFTs)',            '',               '',        800, 4],
+            ['Clinical Chemistry', 'SGPT / ALT',                             '7–56 U/L',        'U/L',     400, 2],
+            ['Clinical Chemistry', 'SGOT / AST',                             '10–40 U/L',       'U/L',     400, 2],
+            ['Clinical Chemistry', 'Total Bilirubin',                        '3.4–17.1 μmol/L', 'μmol/L',  400, 2],
+            ['Clinical Chemistry', 'Direct Bilirubin',                       '0–5 μmol/L',      'μmol/L',  400, 2],
+            ['Clinical Chemistry', 'Alkaline Phosphatase (ALP)',             '44–147 U/L',      'U/L',     400, 2],
+            ['Clinical Chemistry', 'Gamma-GT (GGT)',                         '8–61 U/L',        'U/L',     400, 2],
+            ['Clinical Chemistry', 'Serum Uric Acid',                        '2.4–7.0 mg/dL',   'mg/dL',   400, 2],
+            ['Clinical Chemistry', 'Serum Electrolytes (Na/K/Cl)',           '',               'mmol/L',  600, 4],
+            ['Clinical Chemistry', 'Total Protein & Albumin',               '',               'g/dL',    500, 4],
+            ['Clinical Chemistry', 'Serum Calcium',                          '2.1–2.6 mmol/L',  'mmol/L',  400, 4],
+            ['Clinical Chemistry', 'Serum Phosphate',                        '0.8–1.5 mmol/L',  'mmol/L',  400, 4],
+            ['Clinical Chemistry', 'Serum Magnesium',                        '0.7–1.0 mmol/L',  'mmol/L',  400, 4],
+            ['Clinical Chemistry', 'Amylase',                                '30–110 U/L',      'U/L',     400, 4],
+            ['Clinical Chemistry', 'Lipase',                                 '13–60 U/L',       'U/L',     400, 4],
             // Urinalysis
-            ['Urinalysis', 'Urinalysis (UA)',             '', '', 300, 1],
-            ['Urinalysis', 'Urine Culture & Sensitivity', '', '', 600, 48],
+            ['Urinalysis', 'Urinalysis (UA)',                                 '',               '',        300, 1],
+            ['Urinalysis', 'Urine Microscopy',                               '',               '',        400, 2],
+            ['Urinalysis', 'Urine Culture & Sensitivity',                    '',               '',        600, 48],
+            ['Urinalysis', 'Urine Pregnancy Test (UPT)',                     'Negative',       '',        300, 1],
+            ['Urinalysis', '24-Hour Urine Protein',                          '<150 mg/24h',    'mg/24h',  400, 4],
             // Serology / Immunology
-            ['Serology / Immunology', 'HIV Rapid Test',         'Non-Reactive', '', 500, 1],
-            ['Serology / Immunology', 'HBsAg (Hepatitis B)',    'Non-Reactive', '', 600, 2],
-            ['Serology / Immunology', 'Anti-HCV (Hepatitis C)', 'Non-Reactive', '', 600, 2],
-            ['Serology / Immunology', 'VDRL / RPR (Syphilis)',  'Non-Reactive', '', 500, 1],
-            ['Serology / Immunology', 'Malaria Rapid Test',     'Negative',     '', 400, 1],
-            ['Serology / Immunology', 'CRP (C-Reactive Protein)','<10 mg/L',  'mg/L',500,2],
-            ['Serology / Immunology', 'Thyroid Stimulating Hormone (TSH)', '0.4–4.0 mIU/L','mIU/L',700,4],
-            ['Serology / Immunology', 'Free T4',                '9–25 pmol/L', 'pmol/L',700,4],
+            ['Serology / Immunology', 'HIV Rapid Test',                      'Non-Reactive',   '',        500, 1],
+            ['Serology / Immunology', 'HIV CD4 Count',                       '',               'cells/μL',1200, 4],
+            ['Serology / Immunology', 'HBsAg (Hepatitis B)',                 'Non-Reactive',   '',        600, 2],
+            ['Serology / Immunology', 'Anti-HBs (Hepatitis B Antibody)',     '',               'IU/L',    700, 4],
+            ['Serology / Immunology', 'Anti-HCV (Hepatitis C)',              'Non-Reactive',   '',        600, 2],
+            ['Serology / Immunology', 'VDRL / RPR (Syphilis)',               'Non-Reactive',   '',        500, 1],
+            ['Serology / Immunology', 'TPHA (Syphilis Confirmatory)',        'Negative',       '',        700, 4],
+            ['Serology / Immunology', 'Malaria Rapid Test (RDT)',            'Negative',       '',        400, 1],
+            ['Serology / Immunology', 'Malaria Thick / Thin Film',           'Negative',       '',        400, 2],
+            ['Serology / Immunology', 'Widal Test (Typhoid)',                '',               '',        500, 2],
+            ['Serology / Immunology', 'CRP (C-Reactive Protein)',            '<10 mg/L',       'mg/L',    500, 2],
+            ['Serology / Immunology', 'Procalcitonin (PCT)',                 '<0.25 ng/mL',    'ng/mL',   800, 4],
+            ['Serology / Immunology', 'Rheumatoid Factor (RF)',              'Negative',       '',        500, 4],
+            ['Serology / Immunology', 'Anti-Nuclear Antibody (ANA)',         'Negative',       '',        900, 4],
+            ['Serology / Immunology', 'Thyroid Stimulating Hormone (TSH)',   '0.4–4.0 mIU/L',  'mIU/L',   700, 4],
+            ['Serology / Immunology', 'Free T4 (FT4)',                       '9–25 pmol/L',    'pmol/L',  700, 4],
+            ['Serology / Immunology', 'Free T3 (FT3)',                       '3.5–7.8 pmol/L', 'pmol/L',  700, 4],
+            ['Serology / Immunology', 'Beta-HCG (Quantitative)',             '',               'mIU/mL',  800, 4],
+            ['Serology / Immunology', 'Prostate Specific Antigen (PSA)',     '<4.0 ng/mL',     'ng/mL',   900, 4],
+            ['Serology / Immunology', 'CA-125',                              '<35 U/mL',       'U/mL',    900, 4],
+            ['Serology / Immunology', 'CEA (Carcinoembryonic Antigen)',      '<5 ng/mL',       'ng/mL',   900, 4],
+            ['Serology / Immunology', 'Dengue NS1 Antigen',                  'Negative',       '',        800, 2],
             // Microbiology
-            ['Microbiology', 'Blood Culture & Sensitivity',  '', '', 1000, 72],
-            ['Microbiology', 'Stool Culture & Sensitivity',  '', '', 800,  48],
-            ['Microbiology', 'Sputum AFB (Tuberculosis)',    '', '', 600,  48],
+            ['Microbiology', 'Blood Culture & Sensitivity',                  '',               '',       1000, 72],
+            ['Microbiology', 'Stool Culture & Sensitivity',                  '',               '',        800, 48],
+            ['Microbiology', 'Stool Routine Examination',                    '',               '',        400,  4],
+            ['Microbiology', 'Sputum Culture & Sensitivity',                 '',               '',        800, 48],
+            ['Microbiology', 'Sputum AFB (Tuberculosis × 3)',                '',               '',        600, 48],
+            ['Microbiology', 'GeneXpert MTB/RIF (TB PCR)',                   '',               '',       1500, 24],
+            ['Microbiology', 'High Vaginal Swab (HVS) C&S',                 '',               '',        700, 48],
+            ['Microbiology', 'Wound Swab C&S',                               '',               '',        700, 48],
+            ['Microbiology', 'Ear Swab C&S',                                 '',               '',        700, 48],
+            ['Microbiology', 'Throat Swab C&S',                              '',               '',        700, 48],
+            ['Microbiology', 'Urethral Swab C&S',                            '',               '',        700, 48],
+            ['Microbiology', 'CSF Analysis',                                 '',               '',       1200, 24],
+            // Coagulation
+            ['Coagulation', 'Prothrombin Time (PT)',                          '11–13.5 sec',    'sec',     500, 4],
+            ['Coagulation', 'Activated Partial Thromboplastin Time (APTT)',   '30–40 sec',      'sec',     500, 4],
+            ['Coagulation', 'INR',                                            '0.8–1.2',        '',        500, 4],
+            ['Coagulation', 'D-Dimer',                                        '<0.5 μg/mL',     'μg/mL',   700, 4],
+            ['Coagulation', 'Fibrinogen',                                     '2.0–4.0 g/L',    'g/L',     700, 4],
             // Radiology
-            ['Radiology', 'Chest X-Ray',   '', '', 1500, 1],
-            ['Radiology', 'Abdominal X-Ray','', '', 1500, 1],
-            ['Radiology', 'Ultrasound Abdomen', '', '', 2500, 1],
+            ['Radiology', 'Chest X-Ray (PA View)',                            '',               '',       1500, 1],
+            ['Radiology', 'Abdominal X-Ray',                                  '',               '',       1500, 1],
+            ['Radiology', 'Ultrasound Abdomen & Pelvis',                      '',               '',       2500, 1],
+            ['Radiology', 'Ultrasound Obstetric',                             '',               '',       2500, 1],
+            ['Radiology', 'Ultrasound Renal (Kidneys, Ureters, Bladder)',     '',               '',       2500, 1],
+            ['Radiology', 'Ultrasound Thyroid',                               '',               '',       2500, 1],
         ];
         $inserted = 0;
+        $chkSt = $pdo->prepare("SELECT COUNT(*) FROM health_lab_tests WHERE org_id=? AND name=?");
         foreach ($defaults as [$cat, $name, $range, $unit, $price, $tat]) {
+            $chkSt->execute([$orgId, $name]);
+            if ($chkSt->fetchColumn() > 0) continue; // skip if already exists
             try {
                 $pdo->prepare("INSERT INTO health_lab_tests (org_id,name,category,normal_range,unit,price,turnaround,status) VALUES (?,?,?,?,?,?,?,'active')")
                     ->execute([$orgId, $name, $cat, $range, $unit, $price, $tat]);
                 $inserted++;
-            } catch (Throwable $e) { /* skip duplicates */ }
+            } catch (Throwable $e) {}
         }
-        setFlash('success', "{$inserted} default lab tests added to catalog.");
+        setFlash('success', $inserted > 0 ? "{$inserted} default lab tests added to catalog." : "Catalog already up to date — no new tests added.");
         redirect('lab.php?tab=tests');
     }
 
@@ -208,22 +260,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $doctorId  = (int)($_POST['doctor_id']      ?? 0) ?: null;
         $apptId    = (int)($_POST['appointment_id'] ?? 0) ?: null;
         $admId     = (int)($_POST['admission_id']   ?? 0) ?: null;
-        $testId    = (int)($_POST['test_id']        ?? 0);
+        $testIds   = array_unique(array_filter(array_map('intval', (array)($_POST['test_ids'] ?? []))));
         $priority  = in_array($_POST['priority'] ?? '', ['routine','urgent','stat']) ? $_POST['priority'] : 'routine';
         $sample    = sanitize($_POST['sample_type'] ?? '');
 
-        if (!$patientId || !$testId) { setFlash('error', 'Patient and test are required.'); redirect('lab.php?tab=orders'); }
+        if (!$patientId || empty($testIds)) { setFlash('error', 'Patient and at least one test are required.'); redirect('lab.php?tab=orders'); }
 
-        // Generate order number
-        $yr     = date('Y');
-        $cntSt  = $pdo->prepare("SELECT COUNT(*)+1 FROM health_lab_orders WHERE org_id=? AND YEAR(ordered_at)=?");
-        $cntSt->execute([$orgId, $yr]);
-        $seq    = str_pad((int)$cntSt->fetchColumn(), 4, '0', STR_PAD_LEFT);
-        $orderNo = 'LAB-' . $yr . '-' . $seq;
-
-        $pdo->prepare("INSERT INTO health_lab_orders (org_id, order_no, patient_id, doctor_id, appointment_id, admission_id, test_id, priority, status, sample_type) VALUES (?,?,?,?,?,?,?,?,'ordered',?)")
-            ->execute([$orgId, $orderNo, $patientId, $doctorId, $apptId, $admId, $testId, $priority, $sample]);
-        setFlash('success', "Lab order {$orderNo} created.");
+        $yr = date('Y');
+        $created = [];
+        foreach ($testIds as $testId) {
+            $cntSt = $pdo->prepare("SELECT COUNT(*)+1 FROM health_lab_orders WHERE org_id=? AND YEAR(ordered_at)=?");
+            $cntSt->execute([$orgId, $yr]);
+            $seq     = str_pad((int)$cntSt->fetchColumn(), 4, '0', STR_PAD_LEFT);
+            $orderNo = 'LAB-' . $yr . '-' . $seq;
+            $pdo->prepare("INSERT INTO health_lab_orders (org_id, order_no, patient_id, doctor_id, appointment_id, admission_id, test_id, priority, status, sample_type) VALUES (?,?,?,?,?,?,?,?,'ordered',?)")
+                ->execute([$orgId, $orderNo, $patientId, $doctorId, $apptId, $admId, $testId, $priority, $sample]);
+            $created[] = $orderNo;
+        }
+        $n = count($created);
+        setFlash('success', $n === 1 ? "Lab order {$created[0]} created." : "{$n} lab orders created.");
         redirect('lab.php?tab=orders');
     }
 
@@ -332,6 +387,78 @@ $testsSt = $pdo->prepare("SELECT * FROM health_lab_tests WHERE org_id=? ORDER BY
 $testsSt->execute([$orgId]);
 $tests = $testsSt->fetchAll(PDO::FETCH_ASSOC);
 
+// Auto-seed comprehensive defaults when this org has no tests yet
+if (empty($tests)) {
+    $autoDefaults = [
+        ['Haematology',           'Full Blood Count (FBC)',                        '',               '',        500, 4],
+        ['Haematology',           'Haemoglobin (Hb)',                              '12–17 g/dL',     'g/dL',    300, 2],
+        ['Haematology',           'White Blood Cell Count (WBC)',                  '4.5–11 ×10³/μL', '×10³/μL', 300, 2],
+        ['Haematology',           'Platelet Count',                                '150–400 ×10³/μL','×10³/μL', 300, 2],
+        ['Haematology',           'Erythrocyte Sedimentation Rate (ESR)',          '',               'mm/hr',   300, 2],
+        ['Haematology',           'Blood Group & Rh Factor',                       '',               '',        400, 4],
+        ['Haematology',           'Peripheral Blood Film',                         '',               '',        500, 4],
+        ['Clinical Chemistry',    'Random Blood Sugar (RBS)',                       '3.9–11.1 mmol/L','mmol/L',  200, 1],
+        ['Clinical Chemistry',    'Fasting Blood Sugar (FBS)',                      '3.9–6.1 mmol/L', 'mmol/L',  200, 1],
+        ['Clinical Chemistry',    'HbA1c',                                          '<7.0%',           '%',       800, 4],
+        ['Clinical Chemistry',    'Urea',                                           '2.5–7.1 mmol/L',  'mmol/L',  400, 2],
+        ['Clinical Chemistry',    'Creatinine',                                     '62–115 μmol/L',   'μmol/L',  400, 2],
+        ['Clinical Chemistry',    'Total Cholesterol',                              '<5.2 mmol/L',     'mmol/L',  400, 4],
+        ['Clinical Chemistry',    'LDL Cholesterol',                                '<3.4 mmol/L',     'mmol/L',  400, 4],
+        ['Clinical Chemistry',    'HDL Cholesterol',                                '>1.0 mmol/L',     'mmol/L',  400, 4],
+        ['Clinical Chemistry',    'Triglycerides',                                  '<1.7 mmol/L',     'mmol/L',  400, 4],
+        ['Clinical Chemistry',    'Liver Function Tests (LFTs)',                    '',               '',        800, 4],
+        ['Clinical Chemistry',    'SGPT / ALT',                                     '7–56 U/L',        'U/L',     400, 2],
+        ['Clinical Chemistry',    'SGOT / AST',                                     '10–40 U/L',       'U/L',     400, 2],
+        ['Clinical Chemistry',    'Total Bilirubin',                                '3.4–17.1 μmol/L', 'μmol/L',  400, 2],
+        ['Clinical Chemistry',    'Serum Uric Acid',                                '2.4–7.0 mg/dL',   'mg/dL',   400, 2],
+        ['Clinical Chemistry',    'Serum Electrolytes (Na/K/Cl)',                   '',               'mmol/L',  600, 4],
+        ['Clinical Chemistry',    'Total Protein & Albumin',                       '',               'g/dL',    500, 4],
+        ['Clinical Chemistry',    'Serum Calcium',                                  '2.1–2.6 mmol/L',  'mmol/L',  400, 4],
+        ['Clinical Chemistry',    'Amylase',                                        '30–110 U/L',      'U/L',     400, 4],
+        ['Urinalysis',            'Urinalysis (UA)',                                 '',               '',        300, 1],
+        ['Urinalysis',            'Urine Microscopy',                               '',               '',        400, 2],
+        ['Urinalysis',            'Urine Culture & Sensitivity',                    '',               '',        600, 48],
+        ['Urinalysis',            'Urine Pregnancy Test (UPT)',                     'Negative',       '',        300, 1],
+        ['Serology / Immunology', 'HIV Rapid Test',                                 'Non-Reactive',   '',        500, 1],
+        ['Serology / Immunology', 'HBsAg (Hepatitis B)',                            'Non-Reactive',   '',        600, 2],
+        ['Serology / Immunology', 'Anti-HCV (Hepatitis C)',                         'Non-Reactive',   '',        600, 2],
+        ['Serology / Immunology', 'VDRL / RPR (Syphilis)',                          'Non-Reactive',   '',        500, 1],
+        ['Serology / Immunology', 'Malaria Rapid Test (RDT)',                       'Negative',       '',        400, 1],
+        ['Serology / Immunology', 'Malaria Thick / Thin Film',                      'Negative',       '',        400, 2],
+        ['Serology / Immunology', 'Widal Test (Typhoid)',                           '',               '',        500, 2],
+        ['Serology / Immunology', 'CRP (C-Reactive Protein)',                       '<10 mg/L',       'mg/L',    500, 2],
+        ['Serology / Immunology', 'Thyroid Stimulating Hormone (TSH)',              '0.4–4.0 mIU/L',  'mIU/L',   700, 4],
+        ['Serology / Immunology', 'Free T4 (FT4)',                                  '9–25 pmol/L',    'pmol/L',  700, 4],
+        ['Serology / Immunology', 'Free T3 (FT3)',                                  '3.5–7.8 pmol/L', 'pmol/L',  700, 4],
+        ['Serology / Immunology', 'Beta-HCG (Quantitative)',                        '',               'mIU/mL',  800, 4],
+        ['Serology / Immunology', 'Dengue NS1 Antigen',                             'Negative',       '',        800, 2],
+        ['Microbiology',          'Blood Culture & Sensitivity',                    '',               '',       1000, 72],
+        ['Microbiology',          'Stool Culture & Sensitivity',                    '',               '',        800, 48],
+        ['Microbiology',          'Stool Routine Examination',                      '',               '',        400,  4],
+        ['Microbiology',          'Sputum Culture & Sensitivity',                   '',               '',        800, 48],
+        ['Microbiology',          'Sputum AFB (Tuberculosis × 3)',                  '',               '',        600, 48],
+        ['Microbiology',          'High Vaginal Swab (HVS) C&S',                   '',               '',        700, 48],
+        ['Microbiology',          'Wound Swab C&S',                                 '',               '',        700, 48],
+        ['Microbiology',          'Throat Swab C&S',                                '',               '',        700, 48],
+        ['Coagulation',           'Prothrombin Time (PT)',                           '11–13.5 sec',    'sec',     500, 4],
+        ['Coagulation',           'Activated Partial Thromboplastin Time (APTT)',    '30–40 sec',      'sec',     500, 4],
+        ['Coagulation',           'INR',                                             '0.8–1.2',        '',        500, 4],
+        ['Radiology',             'Chest X-Ray (PA View)',                           '',               '',       1500, 1],
+        ['Radiology',             'Abdominal X-Ray',                                 '',               '',       1500, 1],
+        ['Radiology',             'Ultrasound Abdomen & Pelvis',                     '',               '',       2500, 1],
+        ['Radiology',             'Ultrasound Obstetric',                            '',               '',       2500, 1],
+    ];
+    foreach ($autoDefaults as [$cat, $name, $range, $unit, $price, $tat]) {
+        try {
+            $pdo->prepare("INSERT INTO health_lab_tests (org_id,name,category,normal_range,unit,price,turnaround,status) VALUES (?,?,?,?,?,?,?,'active')")
+                ->execute([$orgId, $name, $cat, $range, $unit, $price, $tat]);
+        } catch (Throwable $e) {}
+    }
+    // Re-fetch after seeding
+    $testsSt->execute([$orgId]);
+    $tests = $testsSt->fetchAll(PDO::FETCH_ASSOC);
+}
+
 // ── Active tests for order dropdown ──────────────────────────────
 $activeTests = array_filter($tests, fn($t) => $t['status'] === 'active');
 
@@ -438,7 +565,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
     </div>
     <div class="d-flex gap-2">
       <?php if ($tab === 'tests'): ?>
-        <form method="POST" class="d-inline" onsubmit="return confirm('Seed 35 common lab tests into your catalog?')">
+        <form method="POST" class="d-inline" onsubmit="return confirm('Add comprehensive default lab tests to your catalog? Existing tests will not be duplicated.')">
           <?= csrfField() ?>
           <input type="hidden" name="action" value="seed_tests">
           <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="fas fa-database me-1"></i>Load Defaults</button>
@@ -853,14 +980,24 @@ require_once __DIR__ . '/../../includes/header-module.php';
                 <?php endforeach; ?>
               </select>
             </div>
-            <div class="col-12 col-md-6">
-              <label class="form-label fw-semibold">Test <span class="text-danger">*</span></label>
-              <select name="test_id" class="form-select select2" required>
-                <option value="">Select Test</option>
-                <?php foreach ($activeTests as $t): ?>
-                  <option value="<?= $t['id'] ?>"><?= htmlspecialchars($t['name']) ?> <?= $t['category'] ? '— '.$t['category'] : '' ?></option>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Tests <span class="text-danger">*</span></label>
+              <select name="test_ids[]" id="orderTestSelect" class="form-select" multiple required>
+                <?php
+                $byCategory = [];
+                foreach ($activeTests as $t) {
+                    $byCategory[$t['category'] ?: 'General'][] = $t;
+                }
+                ksort($byCategory);
+                foreach ($byCategory as $cat => $catTests): ?>
+                  <optgroup label="<?= htmlspecialchars($cat) ?>">
+                    <?php foreach ($catTests as $t): ?>
+                      <option value="<?= $t['id'] ?>"><?= htmlspecialchars($t['name']) ?></option>
+                    <?php endforeach; ?>
+                  </optgroup>
                 <?php endforeach; ?>
               </select>
+              <div class="form-text">Search by name. Select multiple tests to create batched orders.</div>
             </div>
             <div class="col-6 col-md-4">
               <label class="form-label fw-semibold">Ordering Doctor</label>
@@ -1102,8 +1239,23 @@ $(document).ready(function () {
     if ($('#resultsTable').length) $('#resultsTable').DataTable({ pageLength: 25, order: [[7,'desc']], columnDefs:[{orderable:false,targets:[8]}] });
     if ($('#testsTable').length)   $('#testsTable').DataTable({ pageLength: 25, order: [[0,'asc']], columnDefs:[{orderable:false,targets:[7]}] });
     if (typeof $.fn.select2 !== 'undefined') {
+        // Single-select dropdowns
         $('.select2').select2({ theme:'bootstrap-5', dropdownParent: document.body, width:'100%' });
+        // Multi-select test picker inside the order modal
+        $('#orderTestSelect').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Search and select tests…',
+            allowClear: true,
+            dropdownParent: $('#orderModal'),
+            width: '100%'
+        });
     }
+    // Clear test selection when order modal is closed/reopened
+    $('#orderModal').on('hidden.bs.modal', function () {
+        if (typeof $.fn.select2 !== 'undefined') {
+            $('#orderTestSelect').val(null).trigger('change');
+        }
+    });
 });
 </script>
 JS;
