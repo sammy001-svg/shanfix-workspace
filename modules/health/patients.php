@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $moduleSlug  = 'health';
 $moduleName  = 'Health & Clinic';
 $moduleIcon  = 'fas fa-heartbeat';
@@ -8,6 +8,7 @@ $moduleNav   = [
     ['url'=>'patients.php',      'icon'=>'fas fa-procedures',          'label'=>'Patients'],
     ['url'=>'appointments.php',  'icon'=>'fas fa-calendar-check',      'label'=>'Appointments'],
     ['url'=>'doctors.php',       'icon'=>'fas fa-user-md',             'label'=>'Doctors'],
+    ['url'=>'schedule.php',      'icon'=>'fas fa-calendar-alt',        'label'=>'Doctor Schedule'],
     ['url'=>'staff.php',         'icon'=>'fas fa-id-badge',            'label'=>'Clinical Staff'],
     ['url'=>'records.php',       'icon'=>'fas fa-file-medical',        'label'=>'Medical Records'],
     ['url'=>'vitals.php',        'icon'=>'fas fa-heartbeat',           'label'=>'Vital Signs'],
@@ -410,6 +411,7 @@ try {
             <td><span class="badge bg-<?= $p['status']==='active'?'success':'secondary' ?>"><?= ucfirst($p['status']) ?></span></td>
             <td class="text-center">
               <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-success" onclick="openView(<?= $p['id'] ?>)" title="View Details"><i class="fas fa-eye"></i></button>
                 <button class="btn btn-outline-primary" onclick="openEdit(<?= $p['id'] ?>)" title="Edit"><i class="fas fa-edit"></i></button>
                 <a href="<?= APP_URL ?>/modules/health/invoice-pdf.php?patient_id=<?= $p['id'] ?>" target="_blank" class="btn btn-outline-danger" title="Invoice PDF"><i class="fas fa-file-invoice"></i></a>
                 <a href="<?= APP_URL ?>/modules/health/medical-certificate-pdf.php?patient_id=<?= $p['id'] ?>" target="_blank" class="btn btn-outline-info" title="Medical Certificate"><i class="fas fa-file-medical"></i></a>
@@ -523,6 +525,95 @@ try {
 <form method="POST" id="delPatForm" style="display:none">
   <?= csrfField() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" id="delPatId">
 </form>
+
+<!-- ── Patient View Modal ─────────────────────────────────────────── -->
+<div class="modal fade" id="viewPatModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header text-white" id="viewPatHeader" style="background:<?= $moduleColor ?>">
+        <div>
+          <h5 class="modal-title mb-0" id="viewPatName">Patient Details</h5>
+          <small id="viewPatNo" class="opacity-75"></small>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+
+        <!-- Loading spinner -->
+        <div id="viewPatLoading" class="text-center py-5">
+          <div class="spinner-border text-danger" role="status"></div>
+          <div class="text-muted mt-2 small">Loading patient record…</div>
+        </div>
+
+        <!-- Content (hidden until loaded) -->
+        <div id="viewPatContent" style="display:none">
+
+          <!-- Status banner -->
+          <div id="viewPatBanner" class="px-4 py-2 d-flex align-items-center gap-3" style="background:#f8f9fa;border-bottom:1px solid #e9ecef">
+            <div id="viewPatAvatar" style="width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:800;color:#fff;flex-shrink:0;background:#e74c3c"></div>
+            <div class="flex-grow-1">
+              <div class="fw-bold" id="viewPatFullName"></div>
+              <div class="text-muted small" id="viewPatDobGender"></div>
+            </div>
+            <div id="viewPatStatusBadge"></div>
+          </div>
+
+          <div class="row g-0">
+
+            <!-- Left: Personal & Contact -->
+            <div class="col-md-6 p-4 border-end">
+              <h6 class="fw-bold text-muted small text-uppercase mb-3"><i class="fas fa-user me-2"></i>Personal Information</h6>
+              <table class="table table-sm table-borderless mb-4" style="font-size:.87rem">
+                <tr><td class="text-muted" style="width:38%">Patient No</td><td class="fw-semibold" id="vPatNo">—</td></tr>
+                <tr><td class="text-muted">Date of Birth</td><td id="vDob">—</td></tr>
+                <tr><td class="text-muted">Gender</td><td id="vGender">—</td></tr>
+                <tr><td class="text-muted">Blood Group</td><td id="vBlood">—</td></tr>
+                <tr><td class="text-muted">Phone</td><td id="vPhone">—</td></tr>
+                <tr><td class="text-muted">Email</td><td id="vEmail">—</td></tr>
+                <tr><td class="text-muted">Address</td><td id="vAddress">—</td></tr>
+              </table>
+
+              <h6 class="fw-bold text-muted small text-uppercase mb-3"><i class="fas fa-ambulance me-2"></i>Emergency Contact</h6>
+              <table class="table table-sm table-borderless" style="font-size:.87rem">
+                <tr><td class="text-muted" style="width:38%">Contact Name</td><td class="fw-semibold" id="vEcName">—</td></tr>
+                <tr><td class="text-muted">Contact Phone</td><td id="vEcPhone">—</td></tr>
+              </table>
+            </div>
+
+            <!-- Right: Medical & Insurance -->
+            <div class="col-md-6 p-4">
+              <h6 class="fw-bold text-muted small text-uppercase mb-3"><i class="fas fa-heartbeat me-2"></i>Medical Information</h6>
+              <div class="mb-3">
+                <div class="text-muted small mb-1">Allergies</div>
+                <div id="vAllergies" class="p-2 rounded" style="background:#fff5f5;border:1px solid #ffd6d6;font-size:.87rem;min-height:36px">—</div>
+              </div>
+              <div class="mb-4">
+                <div class="text-muted small mb-1">Chronic Conditions</div>
+                <div id="vChronic" class="p-2 rounded" style="background:#f0f8ff;border:1px solid #d0e8ff;font-size:.87rem;min-height:36px">—</div>
+              </div>
+
+              <h6 class="fw-bold text-muted small text-uppercase mb-3"><i class="fas fa-shield-alt me-2"></i>Insurance</h6>
+              <table class="table table-sm table-borderless mb-4" style="font-size:.87rem">
+                <tr><td class="text-muted" style="width:38%">Provider</td><td class="fw-semibold" id="vInsProvider">—</td></tr>
+                <tr><td class="text-muted">Policy / ID No</td><td id="vInsNo">—</td></tr>
+              </table>
+
+              <h6 class="fw-bold text-muted small text-uppercase mb-3"><i class="fas fa-globe me-2"></i>Patient Portal</h6>
+              <div id="vPortalInfo" style="font-size:.87rem"></div>
+            </div>
+
+          </div><!-- /row -->
+        </div><!-- /viewPatContent -->
+      </div>
+      <div class="modal-footer gap-2">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-outline-primary" id="viewEditBtn" onclick="openEditFromView()"><i class="fas fa-edit me-1"></i>Edit Patient</button>
+        <a id="viewTimelineBtn" href="#" class="btn btn-outline-info" target="_blank"><i class="fas fa-history me-1"></i>Timeline</a>
+        <a id="viewBillBtn" href="#" class="btn text-white" style="background:<?= $moduleColor ?>"><i class="fas fa-file-invoice-dollar me-1"></i>Create Bill</a>
+      </div>
+    </div>
+  </div>
+</div>
 
 <?php
 $extraJs = <<<'JS'
@@ -640,6 +731,98 @@ function pCopyField(id) {
     btn.innerHTML = '<i class="fas fa-check text-success"></i>';
     setTimeout(() => btn.innerHTML = orig, 1800);
   });
+}
+
+// ── Patient View Modal ───────────────────────────────────────────
+let _viewPatId = null;
+
+function openView(id) {
+  _viewPatId = id;
+  document.getElementById('viewPatLoading').style.display = '';
+  document.getElementById('viewPatContent').style.display = 'none';
+  document.getElementById('viewPatName').textContent = 'Patient Details';
+  document.getElementById('viewPatNo').textContent = '';
+  new bootstrap.Modal(document.getElementById('viewPatModal')).show();
+
+  fetch('patients.php?fetch_details=' + id)
+    .then(r => r.json())
+    .then(d => {
+      if (!d || !d.id) return;
+
+      const fmt = v => v || '—';
+      const age = d.dob ? Math.floor((Date.now() - new Date(d.dob)) / 3.15576e10) : null;
+
+      // Header
+      const initials = ((d.first_name||'').charAt(0) + (d.last_name||'').charAt(0)).toUpperCase();
+      document.getElementById('viewPatName').textContent = 'Dr./Pt. ' + (d.first_name||'') + ' ' + (d.last_name||'');
+      document.getElementById('viewPatNo').textContent = 'Patient No: ' + (d.patient_no || '—');
+
+      // Avatar
+      const av = document.getElementById('viewPatAvatar');
+      av.textContent = initials;
+
+      // Full name & dob/gender line
+      document.getElementById('viewPatFullName').textContent = (d.first_name||'') + ' ' + (d.last_name||'');
+      document.getElementById('viewPatDobGender').textContent =
+        (d.dob ? new Date(d.dob).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) : '—') +
+        (age !== null ? ' · ' + age + ' yrs' : '') +
+        (d.gender ? ' · ' + d.gender.charAt(0).toUpperCase() + d.gender.slice(1) : '');
+
+      // Status badge
+      const sb = document.getElementById('viewPatStatusBadge');
+      sb.innerHTML = '<span class="badge bg-' + (d.status === 'active' ? 'success' : 'secondary') + ' fs-6">' + (d.status||'').charAt(0).toUpperCase() + (d.status||'').slice(1) + '</span>';
+
+      // Personal fields
+      document.getElementById('vPatNo').textContent       = fmt(d.patient_no);
+      document.getElementById('vDob').textContent         = d.dob ? new Date(d.dob).toLocaleDateString('en-GB', {day:'2-digit',month:'long',year:'numeric'}) : '—';
+      document.getElementById('vGender').textContent      = d.gender ? d.gender.charAt(0).toUpperCase() + d.gender.slice(1) : '—';
+      document.getElementById('vPhone').textContent       = fmt(d.phone);
+      document.getElementById('vEmail').textContent       = fmt(d.email);
+      document.getElementById('vAddress').textContent     = fmt(d.address);
+
+      // Blood group
+      const bg = document.getElementById('vBlood');
+      bg.innerHTML = d.blood_group
+        ? '<span class="badge bg-danger px-2 py-1">' + d.blood_group + '</span>'
+        : '<span class="text-muted">—</span>';
+
+      // Medical
+      document.getElementById('vAllergies').textContent  = fmt(d.allergies);
+      document.getElementById('vChronic').textContent    = fmt(d.chronic_conditions);
+
+      // Emergency
+      document.getElementById('vEcName').textContent     = fmt(d.emergency_contact);
+      document.getElementById('vEcPhone').textContent    = fmt(d.emergency_phone);
+
+      // Insurance
+      document.getElementById('vInsProvider').textContent = fmt(d.insurance_provider) === '—' ? 'Self Pay' : d.insurance_provider;
+      document.getElementById('vInsNo').textContent      = fmt(d.insurance_no);
+
+      // Portal
+      const pi = document.getElementById('vPortalInfo');
+      if (d.user_id) {
+        pi.innerHTML = '<span class="text-success fw-semibold"><i class="fas fa-check-circle me-1"></i>Portal account active</span>' +
+          '<div class="text-muted small mt-1"><i class="fas fa-envelope me-1"></i>' + (d.account_email || d.email || '—') + '</div>';
+      } else {
+        pi.innerHTML = '<span class="text-muted"><i class="fas fa-times-circle me-1 text-danger"></i>No portal account — edit patient to create one</span>';
+      }
+
+      // Footer action links
+      document.getElementById('viewTimelineBtn').href = 'timeline.php?patient_id=' + d.id;
+      document.getElementById('viewBillBtn').href     = 'billing.php?prefill_patient=' + d.id + '&prefill_type=opd';
+
+      document.getElementById('viewPatLoading').style.display  = 'none';
+      document.getElementById('viewPatContent').style.display  = '';
+    })
+    .catch(() => {
+      document.getElementById('viewPatLoading').innerHTML =
+        '<div class="text-danger py-5 text-center"><i class="fas fa-exclamation-circle fa-2x mb-2 d-block"></i>Could not load patient details.</div>';
+    });
+}
+
+function openEditFromView() {
+  bootstrap.Modal.getInstance(document.getElementById('viewPatModal')).hide();
+  setTimeout(() => openEdit(_viewPatId), 300);
 }
 </script>
 JS;
