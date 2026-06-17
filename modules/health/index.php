@@ -86,6 +86,18 @@ try { $pdo->exec("CREATE TABLE IF NOT EXISTS health_prescriptions (
     INDEX idx_org(org_id), INDEX idx_date(prescription_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (Throwable $e) {}
 
+// EHR records — ensures records module works from day one
+try { $pdo->exec("CREATE TABLE IF NOT EXISTS health_records (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    org_id INT NOT NULL, patient_id INT NOT NULL,
+    doctor_id INT, appointment_id INT,
+    date DATE NOT NULL, diagnosis TEXT, treatment TEXT,
+    prescription TEXT, notes TEXT, follow_up_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_org(org_id), INDEX idx_patient(patient_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (Throwable $e) {}
+
 // Lab orders — used for Lab Tests Pending KPI
 try { $pdo->exec("CREATE TABLE IF NOT EXISTS health_lab_orders (
     id INT AUTO_INCREMENT PRIMARY KEY,

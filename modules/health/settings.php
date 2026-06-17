@@ -444,10 +444,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
           <div class="d-flex align-items-center gap-3 mb-3">
             <img src="<?= APP_URL ?>/uploads/logos/<?= e($org['logo']) ?>" alt="Logo"
                  style="height:64px;max-width:160px;object-fit:contain;border:1px solid #dee2e6;border-radius:8px;padding:6px;background:#fff">
-            <form method="POST" class="d-inline" onsubmit="return confirm('Remove this logo?')">
-              <?= csrfField() ?><input type="hidden" name="action" value="remove_logo">
-              <button class="btn btn-sm btn-outline-danger"><i class="fas fa-trash me-1"></i>Remove Logo</button>
-            </form>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeLogoConfirm()"><i class="fas fa-trash me-1"></i>Remove Logo</button>
           </div>
           <?php else: ?>
           <p class="text-muted small mb-3"><i class="fas fa-image me-1"></i>No logo uploaded — initials will be used on documents and portals.</p>

@@ -52,40 +52,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'save') {
-        $id = (int)($_POST['id'] ?? 0);
-        $patientId = (int)$_POST['patient_id'];
-        $doctorId = (int)($_POST['doctor_id'] ?? 0) ?: null;
+        $id            = (int)($_POST['id']             ?? 0);
+        $patientId     = (int)($_POST['patient_id']     ?? 0);
+        $doctorId      = (int)($_POST['doctor_id']      ?? 0) ?: null;
         $appointmentId = (int)($_POST['appointment_id'] ?? 0) ?: null;
-        $date = $_POST['date'] ?? date('Y-m-d');
-        $diagnosis = sanitize($_POST['diagnosis'] ?? '');
-        $treatment = sanitize($_POST['treatment'] ?? '');
-        $prescription = sanitize($_POST['prescription'] ?? '');
-        $notes = sanitize($_POST['notes'] ?? '');
-        $followUp = $_POST['follow_up_date'] ?? null;
+        $date          = preg_replace('/[^0-9\-]/', '', $_POST['date'] ?? date('Y-m-d'));
+        $diagnosis     = sanitize($_POST['diagnosis']   ?? '');
+        $treatment     = sanitize($_POST['treatment']   ?? '');
+        $prescription  = sanitize($_POST['prescription'] ?? '');
+        $notes         = sanitize($_POST['notes']        ?? '');
+        $followUp      = $_POST['follow_up_date']        ?? null;
         if ($followUp === '') $followUp = null;
 
-        if ($id > 0) {
-            $stmt = $pdo->prepare("UPDATE health_records SET patient_id = ?, doctor_id = ?, appointment_id = ?, date = ?, diagnosis = ?, treatment = ?, prescription = ?, notes = ?, follow_up_date = ? WHERE id = ? AND org_id = ?");
-            $stmt->execute([$patientId, $doctorId, $appointmentId, $date, $diagnosis, $treatment, $prescription, $notes, $followUp, $id, $orgId]);
-            setFlash('success', 'Medical record entry updated.');
-        } else {
-            $stmt = $pdo->prepare("INSERT INTO health_records (org_id, patient_id, doctor_id, appointment_id, date, diagnosis, treatment, prescription, notes, follow_up_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$orgId, $patientId, $doctorId, $appointmentId, $date, $diagnosis, $treatment, $prescription, $notes, $followUp]);
-            
-            // Auto complete appointment status if matched
-            if ($appointmentId > 0) {
-                $pdo->prepare("UPDATE health_appointments SET status = 'completed' WHERE id = ? AND org_id = ?")->execute([$appointmentId, $orgId]);
-            }
-            setFlash('success', 'EHR medical entry recorded successfully.');
+        if (!$patientId || !$diagnosis) {
+            setFlash('error', 'Patient and diagnosis are required.');
+            redirect('records.php');
         }
-        logActivity($id > 0 ? 'update' : 'create', 'health', "Medical record registered (Patient: $patientId, Diagnosis: $diagnosis)");
+
+        try {
+            if ($id > 0) {
+                $pdo->prepare("UPDATE health_records SET patient_id=?, doctor_id=?, appointment_id=?, date=?, diagnosis=?, treatment=?, prescription=?, notes=?, follow_up_date=? WHERE id=? AND org_id=?")
+                    ->execute([$patientId, $doctorId, $appointmentId, $date, $diagnosis, $treatment, $prescription, $notes, $followUp, $id, $orgId]);
+                setFlash('success', 'Medical record updated.');
+            } else {
+                $pdo->prepare("INSERT INTO health_records (org_id, patient_id, doctor_id, appointment_id, date, diagnosis, treatment, prescription, notes, follow_up_date) VALUES (?,?,?,?,?,?,?,?,?,?)")
+                    ->execute([$orgId, $patientId, $doctorId, $appointmentId, $date, $diagnosis, $treatment, $prescription, $notes, $followUp]);
+                // Mark appointment as completed when a record is linked to it
+                if ($appointmentId > 0) {
+                    try { $pdo->prepare("UPDATE health_appointments SET status='completed' WHERE id=? AND org_id=?")->execute([$appointmentId, $orgId]); } catch (Throwable $e) {}
+                }
+                setFlash('success', 'EHR entry recorded successfully.');
+            }
+            logActivity($id > 0 ? 'update' : 'create', 'health', "Medical record (Patient: $patientId, Diagnosis: $diagnosis)");
+        } catch (Throwable $e) {
+            setFlash('error', 'Failed to save record. Please try again.');
+        }
         redirect('records.php');
     }
 
     if ($action === 'delete') {
-        $id = (int)$_POST['id'];
-        $pdo->prepare("DELETE FROM health_records WHERE id = ? AND org_id = ?")->execute([$id, $orgId]);
-        setFlash('success', 'Medical record entry removed.');
+        try {
+            $id = (int)$_POST['id'];
+            $pdo->prepare("DELETE FROM health_records WHERE id=? AND org_id=?")->execute([$id, $orgId]);
+            setFlash('success', 'Medical record removed.');
+        } catch (Throwable $e) {
+            setFlash('error', 'Could not delete the record.');
+        }
         redirect('records.php');
     }
 }
@@ -93,6 +105,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 require_once __DIR__ . '/../../includes/header-module.php';
 $user = currentUser();
 $orgId = (int)$user['org_id'];
+
+// Self-provision table so the module works without running schema.sql
+try { $pdo->exec("CREATE TABLE IF NOT EXISTS health_records (
+    id             INT AUTO_INCREMENT PRIMARY KEY,
+    org_id         INT NOT NULL,
+    patient_id     INT NOT NULL,
+    doctor_id      INT,
+    appointment_id INT,
+    date           DATE NOT NULL,
+    diagnosis      TEXT,
+    treatment      TEXT,
+    prescription   TEXT,
+    notes          TEXT,
+    follow_up_date DATE,
+    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_org    (org_id),
+    INDEX idx_patient(patient_id),
+    INDEX idx_date   (date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (Throwable $e) {}
 
 $fPatient = $_GET['patient_id'] ?? '';
 $where = 'r.org_id = ?';
@@ -105,17 +137,18 @@ if ($fPatient !== '') {
 
 $recordsList = [];
 try {
-    $stmt = $pdo->prepare("SELECT r.*, 
-                                  CONCAT(p.first_name, ' ', p.last_name) AS patient_name, p.patient_no, p.blood_group,
-                                  CONCAT(d.first_name, ' ', d.last_name) AS doctor_name, d.specialization
+    $stmt = $pdo->prepare("SELECT r.*,
+                                  COALESCE(CONCAT(p.first_name,' ',p.last_name), '[Patient Removed]') AS patient_name,
+                                  p.patient_no, p.blood_group,
+                                  CONCAT(d.first_name,' ',d.last_name) AS doctor_name, d.specialization
                            FROM health_records r
-                           JOIN health_patients p ON r.patient_id = p.id
-                           LEFT JOIN health_doctors d ON r.doctor_id = d.id
+                           LEFT JOIN health_patients p ON r.patient_id = p.id
+                           LEFT JOIN health_doctors  d ON r.doctor_id  = d.id
                            WHERE $where
                            ORDER BY r.date DESC, r.id DESC");
     $stmt->execute($params);
     $recordsList = $stmt->fetchAll();
-} catch (Exception $e) {}
+} catch (Throwable $e) {}
 
 $patientsList = [];
 try {
@@ -252,9 +285,9 @@ try {
         </select>
       </div>
       <div class="col-md-6">
-        <label class="form-label fw-semibold">Attending Doctor / Specialist <span class="text-danger">*</span></label>
-        <select name="doctor_id" id="recDoctorId" class="form-select" required>
-          <option value="">-- select doctor --</option>
+        <label class="form-label fw-semibold">Attending Doctor / Specialist</label>
+        <select name="doctor_id" id="recDoctorId" class="form-select">
+          <option value="">-- None / Not specified --</option>
           <?php foreach ($doctorsList as $doc): ?>
           <option value="<?= $doc['id'] ?>">Dr. <?= e($doc['first_name'] . ' ' . $doc['last_name']) ?> (<?= e($doc['specialization']) ?>)</option>
           <?php endforeach; ?>
@@ -328,20 +361,28 @@ function openEdit(id) {
   fetch('records.php?fetch_details=' + id)
     .then(r => r.json())
     .then(data => {
-      document.getElementById('recTitle').innerHTML = '<i class="fas fa-edit me-2"></i>Edit Clinical Record Details';
-      document.getElementById('recId').value = data.id;
-      document.getElementById('recPatientId').value = data.patient_id;
-      document.getElementById('recDoctorId').value = data.doctor_id || '';
-      document.getElementById('recApptId').value = data.appointment_id || '';
-      document.getElementById('recDate').value = data.date;
-      document.getElementById('recDiagnosis').value = data.diagnosis;
-      document.getElementById('recTreatment').value = data.treatment || '';
-      document.getElementById('recPrescription').value = data.prescription || '';
-      document.getElementById('recNotes').value = data.notes || '';
-      document.getElementById('recFollowUp').value = data.follow_up_date || '';
-      
+      if (!data.id) { alert('Record not found.'); return; }
+      document.getElementById('recTitle').innerHTML = '<i class="fas fa-edit me-2"></i>Edit Clinical Record';
+      document.getElementById('recId').value            = data.id;
+      document.getElementById('recDoctorId').value      = data.doctor_id      || '';
+      document.getElementById('recApptId').value        = data.appointment_id || '';
+      document.getElementById('recDate').value          = data.date           || '';
+      document.getElementById('recDiagnosis').value     = data.diagnosis      || '';
+      document.getElementById('recTreatment').value     = data.treatment      || '';
+      document.getElementById('recPrescription').value  = data.prescription   || '';
+      document.getElementById('recNotes').value         = data.notes          || '';
+      document.getElementById('recFollowUp').value      = data.follow_up_date || '';
+
+      // Select2 requires val() + trigger('change') to update its display
+      if (typeof $ !== 'undefined' && typeof $.fn.select2 !== 'undefined') {
+        $('#recPatientId').val(data.patient_id).trigger('change');
+      } else {
+        document.getElementById('recPatientId').value = data.patient_id || '';
+      }
+
       new bootstrap.Modal(document.getElementById('recordModal')).show();
-    });
+    })
+    .catch(() => alert('Could not load record details.'));
 }
 function delRecord(id) {
   Swal.fire({
