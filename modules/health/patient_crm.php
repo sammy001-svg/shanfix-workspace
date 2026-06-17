@@ -23,6 +23,7 @@ $moduleNav   = [
     ['url'=>'patient_crm.php',   'icon'=>'fas fa-heart',               'label'=>'Patient CRM'],
     ['url'=>'analytics.php',     'icon'=>'fas fa-brain',               'label'=>'Analytics & AI'],
     ['url'=>'reports.php',       'icon'=>'fas fa-chart-bar',           'label'=>'Reports'],
+    ['url'=>'settings.php',      'icon'=>'fas fa-cog',                 'label'=>'Settings'],
 ];
 
 // ── AJAX: fetch follow-up ─────────────────────────────────────────
