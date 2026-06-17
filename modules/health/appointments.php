@@ -80,6 +80,16 @@ require_once __DIR__ . '/../../includes/header-module.php';
 $user = currentUser();
 $orgId = (int)$user['org_id'];
 
+try { $pdo->exec("CREATE TABLE IF NOT EXISTS health_appointments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    org_id INT NOT NULL, patient_id INT NOT NULL, doctor_id INT,
+    date DATE NOT NULL, time TIME,
+    type VARCHAR(100), complaint TEXT,
+    status ENUM('scheduled','completed','cancelled','no_show') DEFAULT 'scheduled',
+    notes TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_org(org_id), INDEX idx_date(date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (Throwable $e) {}
+
 $appointmentsList = [];
 try {
     $stmt = $pdo->prepare("SELECT a.*, 

@@ -132,6 +132,22 @@ $user  = currentUser();
 $orgId = (int)$user['org_id'];
 $tab   = in_array($_GET['tab'] ?? '', ['queue','history']) ? $_GET['tab'] : 'queue';
 
+try { $pdo->exec("CREATE TABLE IF NOT EXISTS health_triage (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    org_id INT NOT NULL, triage_no VARCHAR(30) NOT NULL,
+    patient_id INT, patient_name VARCHAR(200), patient_phone VARCHAR(25),
+    age TINYINT, gender ENUM('male','female','other'),
+    triage_level ENUM('1_immediate','2_emergent','3_urgent','4_semi_urgent','5_non_urgent') DEFAULT '3_urgent',
+    chief_complaint TEXT, bp_systolic SMALLINT, bp_diastolic SMALLINT,
+    pulse SMALLINT, temperature DECIMAL(5,2), spo2 TINYINT, gcs TINYINT,
+    status ENUM('waiting','in_progress','admitted','discharged','referred','left_without_seen') DEFAULT 'waiting',
+    triaged_by INT, triaged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    doctor_id INT, seen_at DATETIME,
+    disposition ENUM('admit','discharge','refer','observation','died'),
+    disposition_notes TEXT,
+    INDEX idx_org(org_id), INDEX idx_triaged_at(triaged_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (Throwable $e) {}
+
 // ── Registered patients for dropdown ─────────────────────────────
 $patientsSt = $pdo->prepare("SELECT id, CONCAT(first_name,' ',last_name) AS name, patient_no FROM health_patients WHERE org_id=? AND status='active' ORDER BY first_name");
 $patientsSt->execute([$orgId]);

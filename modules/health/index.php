@@ -44,6 +44,64 @@ function safeRows(PDO $pdo, string $sql, array $p = []): array {
     try { $s=$pdo->prepare($sql); $s->execute($p); return $s->fetchAll(); } catch (Throwable $e) { return []; }
 }
 
+// ── Ensure health module tables exist (self-provisioning) ─────────
+// Appointments — used for Today's Appointments KPI and queue widget
+try { $pdo->exec("CREATE TABLE IF NOT EXISTS health_appointments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    org_id INT NOT NULL, patient_id INT NOT NULL, doctor_id INT,
+    date DATE NOT NULL, time TIME,
+    type VARCHAR(100), complaint TEXT,
+    status ENUM('scheduled','completed','cancelled','no_show') DEFAULT 'scheduled',
+    notes TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_org(org_id), INDEX idx_date(date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (Throwable $e) {}
+
+// Triage — used for Emergency Cases Today KPI
+try { $pdo->exec("CREATE TABLE IF NOT EXISTS health_triage (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    org_id INT NOT NULL, triage_no VARCHAR(30) NOT NULL,
+    patient_id INT, patient_name VARCHAR(200), patient_phone VARCHAR(25),
+    age TINYINT, gender ENUM('male','female','other'),
+    triage_level ENUM('1_immediate','2_emergent','3_urgent','4_semi_urgent','5_non_urgent') DEFAULT '3_urgent',
+    chief_complaint TEXT, bp_systolic SMALLINT, bp_diastolic SMALLINT,
+    pulse SMALLINT, temperature DECIMAL(5,2), spo2 TINYINT, gcs TINYINT,
+    status ENUM('waiting','in_progress','admitted','discharged','referred','left_without_seen') DEFAULT 'waiting',
+    triaged_by INT, triaged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    doctor_id INT, seen_at DATETIME,
+    disposition ENUM('admit','discharge','refer','observation','died'),
+    disposition_notes TEXT,
+    INDEX idx_org(org_id), INDEX idx_triaged_at(triaged_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (Throwable $e) {}
+
+// Prescriptions — used for Prescriptions This Month KPI
+try { $pdo->exec("CREATE TABLE IF NOT EXISTS health_prescriptions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    org_id INT NOT NULL, prescription_no VARCHAR(30),
+    patient_id INT, doctor_id INT,
+    prescription_date DATE NOT NULL,
+    diagnosis TEXT, medicines JSON, notes TEXT,
+    status ENUM('draft','dispensed','cancelled') DEFAULT 'draft',
+    dispensed_by INT, dispensed_at DATETIME, created_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_org(org_id), INDEX idx_date(prescription_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (Throwable $e) {}
+
+// Lab orders — used for Lab Tests Pending KPI
+try { $pdo->exec("CREATE TABLE IF NOT EXISTS health_lab_orders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    org_id INT NOT NULL, order_no VARCHAR(30) NOT NULL,
+    patient_id INT NOT NULL, doctor_id INT, appointment_id INT, admission_id INT,
+    test_id INT NOT NULL,
+    priority ENUM('routine','urgent','stat') DEFAULT 'routine',
+    status ENUM('ordered','collected','processing','resulted','cancelled') DEFAULT 'ordered',
+    sample_type VARCHAR(100), result_value TEXT, result_notes TEXT,
+    result_flag ENUM('normal','low','high','critical'),
+    ordered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    collected_at DATETIME, resulted_at DATETIME, resulted_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_org(org_id), INDEX idx_status(status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (Throwable $e) {}
+
 // ── KPI Row 1: Patients, Appointments ───────────────────────────
 $totalPatients    = (int)safeVal($pdo,"SELECT COUNT(*) FROM health_patients WHERE org_id=?",[$orgId]);
 $newPatientsMonth = (int)safeVal($pdo,"SELECT COUNT(*) FROM health_patients WHERE org_id=? AND DATE_FORMAT(created_at,'%Y-%m')=?",[$orgId,$month]);
@@ -69,10 +127,10 @@ $bedsAvailable    = max(0, $bedsTotal - $bedsOccupied);
 
 $activeAdmissions = (int)safeVal($pdo,"SELECT COUNT(*) FROM health_admissions WHERE org_id=? AND discharge_date IS NULL",[$orgId]);
 
-$labPending       = (int)safeVal($pdo,"SELECT COUNT(*) FROM health_lab WHERE org_id=? AND status='pending'",[$orgId]);
-$labToday         = (int)safeVal($pdo,"SELECT COUNT(*) FROM health_lab WHERE org_id=? AND DATE(created_at)=CURDATE()",[$orgId]);
+$labPending       = (int)safeVal($pdo,"SELECT COUNT(*) FROM health_lab_orders WHERE org_id=? AND status NOT IN ('resulted','cancelled')",[$orgId]);
+$labToday         = (int)safeVal($pdo,"SELECT COUNT(*) FROM health_lab_orders WHERE org_id=? AND DATE(ordered_at)=CURDATE()",[$orgId]);
 
-$emergencyToday   = (int)safeVal($pdo,"SELECT COUNT(*) FROM health_emergency WHERE org_id=? AND DATE(created_at)=CURDATE()",[$orgId]);
+$emergencyToday   = (int)safeVal($pdo,"SELECT COUNT(*) FROM health_triage WHERE org_id=? AND DATE(triaged_at)=CURDATE()",[$orgId]);
 
 $rxThisMonth      = (int)safeVal($pdo,"SELECT COUNT(*) FROM health_prescriptions WHERE org_id=? AND DATE_FORMAT(prescription_date,'%Y-%m')=?",[$orgId,$month]);
 
@@ -148,7 +206,7 @@ $wardOccupancy = safeRows($pdo,"
     LIMIT 8",[$orgId]);
 
 // Trend helpers
-function trendBadge(float $curr, float $prev, string $unit = ''): string {
+function trendBadge(float $curr, float $prev): string {
     if ($prev == 0) return '';
     $pct = round(($curr - $prev) / $prev * 100, 1);
     $up  = $pct >= 0;
