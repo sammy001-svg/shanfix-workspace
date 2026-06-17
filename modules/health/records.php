@@ -255,6 +255,8 @@ try {
             </td>
             <td class="text-center">
               <div class="btn-group btn-group-sm">
+                <a href="prescription.php?patient_id=<?= $r['patient_id'] ?>&doctor_id=<?= $r['doctor_id'] ?>" class="btn btn-outline-success" title="Write Prescription"><i class="fas fa-prescription"></i></a>
+                <a href="lab.php?tab=orders&patient_id=<?= $r['patient_id'] ?>&doctor_id=<?= $r['doctor_id'] ?>" class="btn btn-outline-info" title="Order Lab Test"><i class="fas fa-flask"></i></a>
                 <a href="<?= APP_URL ?>/modules/health/medical-certificate-pdf.php?patient_id=<?= $r['patient_id'] ?>" target="_blank" class="btn btn-outline-danger" title="Medical Certificate"><i class="fas fa-file-medical"></i></a>
                 <button class="btn btn-outline-primary" onclick="openEdit(<?= $r['id'] ?>)" title="Edit Details"><i class="fas fa-edit"></i></button>
                 <button class="btn btn-outline-danger" onclick="delRecord(<?= $r['id'] ?>)" title="Remove Entry"><i class="fas fa-trash"></i></button>

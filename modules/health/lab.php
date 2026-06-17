@@ -306,6 +306,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $pdo->prepare("UPDATE health_lab_orders SET result_value=?, result_notes=?, result_flag=?, status='resulted', resulted_at=NOW(), resulted_by=? WHERE id=? AND org_id=?")
             ->execute([$value, $notes, $flag, $uid, $id, $orgId]);
+
+        // Notify ordering doctor by SMS
+        try {
+            $__lr = $pdo->prepare("
+                SELECT o.order_no, t.name AS test_name,
+                       CONCAT(p.first_name,' ',p.last_name) AS patient_name,
+                       d.phone AS doctor_phone
+                FROM health_lab_orders o
+                LEFT JOIN health_lab_tests t  ON t.id = o.test_id
+                LEFT JOIN health_patients p   ON p.id = o.patient_id
+                LEFT JOIN health_doctors d    ON d.id = o.doctor_id
+                WHERE o.id=? AND o.org_id=?
+            ");
+            $__lr->execute([$id, $orgId]);
+            $__row = $__lr->fetch(PDO::FETCH_ASSOC);
+            if ($__row && !empty($__row['doctor_phone'])) {
+                $__flagStr = $flag ? ' [' . strtoupper($flag) . ']' : '';
+                $__msg     = "Lab result ready for {$__row['patient_name']} — {$__row['test_name']}: {$value}{$__flagStr}. Order: {$__row['order_no']}.";
+                notifySms($__row['doctor_phone'], $__msg, $orgId, 'lab_result');
+            }
+            unset($__lr, $__row, $__flagStr, $__msg);
+        } catch (Throwable $__le) {}
+
         setFlash('success', 'Result entered successfully.');
         redirect('lab.php?tab=results');
     }
@@ -1260,5 +1283,17 @@ $(document).ready(function () {
 });
 </script>
 JS;
+
+// Auto-open order modal when arriving from Records quick-action link
+$__pid = (int)($_GET['patient_id'] ?? 0);
+$__did = (int)($_GET['doctor_id']  ?? 0);
+if ($__pid && $tab === 'orders') {
+    $extraJs .= '<script>$(document).ready(function(){' .
+        'const sel=document.querySelector("#orderModal select[name=\'patient_id\']");' .
+        'if(sel){sel.value=' . $__pid . ';if($.fn.select2)$(sel).trigger("change.select2");}' .
+        'new bootstrap.Modal(document.getElementById("orderModal")).show();' .
+        '});</script>';
+}
+unset($__pid, $__did);
 
 require_once __DIR__ . '/../../includes/footer.php';

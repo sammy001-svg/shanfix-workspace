@@ -102,6 +102,31 @@ if (isset($_GET['check_approval'])) {
     exit;
 }
 
+// ── AJAX: fetch prescription for fulfil modal ─────────────────────
+if (isset($_GET['fetch_prescription'])) {
+    session_start();
+    require_once __DIR__ . '/../../config/database.php';
+    require_once __DIR__ . '/../../includes/functions.php';
+    requireLogin();
+    $orgId = (int)currentUser()['org_id'];
+    $id    = (int)$_GET['fetch_prescription'];
+    header('Content-Type: application/json');
+    try {
+        $st = $pdo->prepare("
+            SELECT px.*,
+                   CONCAT(p.first_name,' ',p.last_name) AS patient_name, p.patient_no,
+                   CONCAT(d.first_name,' ',d.last_name) AS doctor_name
+            FROM health_prescriptions px
+            LEFT JOIN health_patients p ON p.id = px.patient_id
+            LEFT JOIN health_doctors d  ON d.id = px.doctor_id
+            WHERE px.id=? AND px.org_id=? AND px.status='draft'
+        ");
+        $st->execute([$id, $orgId]);
+        echo json_encode($st->fetch(PDO::FETCH_ASSOC) ?: (object)[]);
+    } catch (Exception $e) { echo '{}'; }
+    exit;
+}
+
 // ── POST handlers ─────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once __DIR__ . '/../../config/database.php';
@@ -221,6 +246,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         redirect('pharmacy.php?tab=dispense');
     }
+
+    // ── Fulfil prescription from queue ────────────────────────────
+    if ($action === 'dispense_prescription') {
+        $prxId = (int)($_POST['prescription_id'] ?? 0);
+        $items = $_POST['items'] ?? [];
+
+        if (!$prxId) { setFlash('error', 'Invalid prescription.'); redirect('pharmacy.php?tab=prescriptions'); }
+
+        $prxSt = $pdo->prepare("SELECT * FROM health_prescriptions WHERE id=? AND org_id=? AND status='draft'");
+        $prxSt->execute([$prxId, $orgId]);
+        $prx = $prxSt->fetch(PDO::FETCH_ASSOC);
+        if (!$prx) { setFlash('error', 'Prescription not found or already fulfilled.'); redirect('pharmacy.php?tab=prescriptions'); }
+
+        $patientId = (int)$prx['patient_id'];
+
+        // Bill check
+        try {
+            $billChk = $pdo->prepare("SELECT COUNT(*) FROM health_bills WHERE patient_id=? AND org_id=? AND status IN ('approved','paid')");
+            $billChk->execute([$patientId, $orgId]);
+            if ((int)$billChk->fetchColumn() === 0) {
+                setFlash('error', 'Cannot dispense: patient has no approved bill. Ask billing to approve the bill first.');
+                redirect('pharmacy.php?tab=prescriptions');
+            }
+        } catch (Exception $e) {}
+
+        // Collect valid rows (medicine selected, qty > 0)
+        $toDispense = [];
+        foreach ($items as $item) {
+            $medId = (int)($item['medicine_id'] ?? 0);
+            $qty   = (int)($item['quantity']    ?? 1);
+            $price = (float)($item['unit_price'] ?? 0);
+            if ($medId && $qty > 0) {
+                $toDispense[] = ['medicine_id' => $medId, 'quantity' => $qty, 'unit_price' => $price];
+            }
+        }
+
+        if (empty($toDispense)) {
+            setFlash('error', 'Please match at least one medicine to a stock item before confirming.');
+            redirect('pharmacy.php?tab=prescriptions');
+        }
+
+        // Pre-validate stock for all items
+        foreach ($toDispense as $item) {
+            $chkSt = $pdo->prepare("SELECT stock_qty, name FROM health_medicines WHERE id=? AND org_id=?");
+            $chkSt->execute([$item['medicine_id'], $orgId]);
+            $med = $chkSt->fetch(PDO::FETCH_ASSOC);
+            if (!$med || $med['stock_qty'] < $item['quantity']) {
+                $avail = $med ? $med['stock_qty'] : 0;
+                $mname = $med ? $med['name'] : 'Unknown';
+                setFlash('error', "Insufficient stock for {$mname}. Available: {$avail} units.");
+                redirect('pharmacy.php?tab=prescriptions');
+            }
+        }
+
+        // Dispense sequence start
+        $yr    = date('Y');
+        $cntSt = $pdo->prepare("SELECT COUNT(*)+1 FROM health_dispensing WHERE org_id=? AND YEAR(dispensed_at)=?");
+        $cntSt->execute([$orgId, $yr]);
+        $seqBase = (int)$cntSt->fetchColumn();
+
+        $pdo->beginTransaction();
+        try {
+            foreach ($toDispense as $idx => $item) {
+                $seq    = str_pad($seqBase + $idx, 4, '0', STR_PAD_LEFT);
+                $dispNo = 'RX-' . $yr . '-' . $seq;
+                $total  = $item['quantity'] * $item['unit_price'];
+                $pdo->prepare("INSERT INTO health_dispensing (org_id,dispense_no,patient_id,medicine_id,quantity,unit_price,total,dispensed_by,notes) VALUES (?,?,?,?,?,?,?,?,?)")
+                    ->execute([$orgId, $dispNo, $patientId, $item['medicine_id'], $item['quantity'], $item['unit_price'], $total, $uid, 'From prescription #' . $prxId]);
+                $pdo->prepare("UPDATE health_medicines SET stock_qty = stock_qty - ? WHERE id=? AND org_id=?")
+                    ->execute([$item['quantity'], $item['medicine_id'], $orgId]);
+            }
+            $pdo->prepare("UPDATE health_prescriptions SET status='dispensed', dispensed_by=?, dispensed_at=NOW() WHERE id=? AND org_id=?")
+                ->execute([$uid, $prxId, $orgId]);
+            $pdo->commit();
+            setFlash('success', 'Prescription fulfilled — ' . count($toDispense) . ' medicine(s) dispensed.');
+        } catch (Exception $ex) {
+            $pdo->rollBack();
+            setFlash('error', 'Dispensing failed: ' . $ex->getMessage());
+        }
+        redirect('pharmacy.php?tab=prescriptions');
+    }
 }
 
 // ── Page setup ────────────────────────────────────────────────────
@@ -231,7 +337,7 @@ requireLogin();
 
 $user  = currentUser();
 $orgId = (int)$user['org_id'];
-$tab   = in_array($_GET['tab'] ?? '', ['inventory','dispense','history']) ? $_GET['tab'] : 'inventory';
+$tab   = in_array($_GET['tab'] ?? '', ['inventory','dispense','history','prescriptions']) ? $_GET['tab'] : 'inventory';
 
 // ── Patients ──────────────────────────────────────────────────────
 $patientsSt = $pdo->prepare("SELECT id, CONCAT(first_name,' ',last_name) AS name, patient_no FROM health_patients WHERE org_id=? AND status='active' ORDER BY first_name");
@@ -286,6 +392,23 @@ $histSt = $pdo->prepare("
 $histSt->execute($histParams);
 $history = $histSt->fetchAll(PDO::FETCH_ASSOC);
 
+// ── Pending prescriptions (prescription queue tab) ─────────────────
+$pendingPrxSt = $pdo->prepare("
+    SELECT px.id, px.prescription_no, px.prescription_date, px.diagnosis, px.notes, px.medicines,
+           CONCAT(p.first_name,' ',p.last_name) AS patient_name, p.patient_no,
+           CONCAT(d.first_name,' ',d.last_name) AS doctor_name
+    FROM health_prescriptions px
+    LEFT JOIN health_patients p ON p.id = px.patient_id
+    LEFT JOIN health_doctors d  ON d.id = px.doctor_id
+    WHERE px.org_id=? AND px.status='draft'
+    ORDER BY px.created_at DESC
+    LIMIT 100
+");
+try {
+    $pendingPrxSt->execute([$orgId]);
+    $pendingPrescriptions = $pendingPrxSt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) { $pendingPrescriptions = []; }
+
 // ── Summary stats ─────────────────────────────────────────────────
 $totalMedsSt = $pdo->prepare("SELECT COUNT(*) FROM health_medicines WHERE org_id=? AND status='active'");
 $totalMedsSt->execute([$orgId]);
@@ -330,6 +453,10 @@ require_once __DIR__ . '/../../includes/header-module.php';
         <button class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#dispenseModal">
           <i class="fas fa-prescription-bottle-alt me-1"></i>Dispense Medicine
         </button>
+      <?php elseif ($tab === 'prescriptions'): ?>
+        <a href="prescription.php" class="btn btn-outline-success btn-sm">
+          <i class="fas fa-prescription me-1"></i>Go to Prescriptions
+        </a>
       <?php endif; ?>
     </div>
   </div>
@@ -377,6 +504,14 @@ require_once __DIR__ . '/../../includes/header-module.php';
     <li class="nav-item"><a class="nav-link <?= $tab==='inventory'?'active':'' ?>" href="?tab=inventory"><i class="fas fa-warehouse me-1"></i>Inventory</a></li>
     <li class="nav-item"><a class="nav-link <?= $tab==='dispense' ?'active':'' ?>" href="?tab=dispense"><i class="fas fa-prescription-bottle-alt me-1"></i>Dispense</a></li>
     <li class="nav-item"><a class="nav-link <?= $tab==='history' ?'active':'' ?>" href="?tab=history"><i class="fas fa-history me-1"></i>History</a></li>
+    <li class="nav-item">
+      <a class="nav-link <?= $tab==='prescriptions'?'active':'' ?>" href="?tab=prescriptions">
+        <i class="fas fa-prescription me-1"></i>Prescription Queue
+        <?php if (!empty($pendingPrescriptions)): ?>
+          <span class="badge bg-danger ms-1"><?= count($pendingPrescriptions) ?></span>
+        <?php endif; ?>
+      </a>
+    </li>
   </ul>
 
   <!-- ══════════════════════════════════════════════════════════════
@@ -657,6 +792,69 @@ require_once __DIR__ . '/../../includes/header-module.php';
   </div>
   <?php endif; ?>
 
+  <!-- ══════════════════════════════════════════════════════════════
+       TAB: PRESCRIPTION QUEUE
+  ════════════════════════════════════════════════════════════════ -->
+  <?php if ($tab === 'prescriptions'): ?>
+  <div class="card shadow-sm border-0">
+    <div class="card-body">
+      <?php if (empty($pendingPrescriptions)): ?>
+        <div class="text-center text-muted py-5">
+          <i class="fas fa-prescription fa-3x mb-3 d-block text-success opacity-50"></i>
+          <h6>No pending prescriptions</h6>
+          <p class="small">All prescriptions have been fulfilled or there are none yet.</p>
+        </div>
+      <?php else: ?>
+      <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle" id="prxQueueTable">
+          <thead class="table-light">
+            <tr>
+              <th>Rx No</th>
+              <th>Patient</th>
+              <th>Doctor</th>
+              <th>Medicines Prescribed</th>
+              <th>Diagnosis</th>
+              <th>Date</th>
+              <th class="text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+          <?php foreach ($pendingPrescriptions as $px):
+            $meds = json_decode($px['medicines'] ?? '[]', true) ?: [];
+          ?>
+            <tr>
+              <td><strong><?= e($px['prescription_no'] ?: '—') ?></strong></td>
+              <td>
+                <div class="fw-semibold"><?= e($px['patient_name'] ?: '—') ?></div>
+                <small class="text-muted"><?= e($px['patient_no'] ?: '') ?></small>
+              </td>
+              <td><?= $px['doctor_name'] ? 'Dr. ' . e($px['doctor_name']) : '<span class="text-muted">—</span>' ?></td>
+              <td>
+                <?php foreach ($meds as $m): ?>
+                  <div class="small"><i class="fas fa-pills text-danger me-1"></i><?= e($m['name'] ?? '?') ?>
+                    <?php if (!empty($m['dosage'])): ?><span class="text-muted"><?= e($m['dosage']) ?></span><?php endif; ?>
+                    <?php if (!empty($m['frequency'])): ?><span class="badge bg-light text-dark border ms-1"><?= e($m['frequency']) ?></span><?php endif; ?>
+                  </div>
+                <?php endforeach; ?>
+                <?php if (empty($meds)): ?><span class="text-muted small">No medicines listed</span><?php endif; ?>
+              </td>
+              <td><small class="text-muted"><?= e($px['diagnosis'] ?: '—') ?></small></td>
+              <td><small><?= date('d M Y', strtotime($px['prescription_date'] ?: $px['created_at'] ?? 'now')) ?></small></td>
+              <td class="text-center">
+                <button class="btn btn-success btn-sm" onclick="openFulfilModal(<?= $px['id'] ?>)">
+                  <i class="fas fa-check-circle me-1"></i>Fulfil
+                </button>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+      <?php endif; ?>
+    </div>
+  </div>
+  <?php endif; ?>
+
 </div><!-- /container -->
 
 <!-- ── Modal: Add / Edit Medicine ────────────────────────────────── -->
@@ -780,6 +978,51 @@ require_once __DIR__ . '/../../includes/header-module.php';
   </div>
 </div>
 
+<!-- ── Modal: Fulfil Prescription ───────────────────────────────── -->
+<div class="modal fade" id="fulfilModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <form method="POST" id="fulfilForm">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="dispense_prescription">
+      <input type="hidden" name="prescription_id" id="fulfilPrxId">
+      <div class="modal-content">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title"><i class="fas fa-check-circle me-2"></i>Fulfil Prescription</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-info py-2 mb-3">
+            <strong id="fulfilPatient"></strong>
+            <span class="ms-3 text-muted" id="fulfilDoctor"></span>
+          </div>
+          <p class="text-muted small mb-2">Match each prescribed medicine to a stock item. Leave the dropdown blank to skip a line item.</p>
+          <div id="fulfilMedsContainer">
+            <div class="text-center py-4"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success"><i class="fas fa-check me-1"></i>Confirm Dispensing</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<?php
+// Inject stock meds for JS use (outside nowdoc so PHP can interpolate)
+$__stockJson = json_encode(array_map(fn($m) => [
+    'id'        => (int)$m['id'],
+    'name'      => $m['name'],
+    'form'      => $m['form']      ?? '',
+    'strength'  => $m['strength']  ?? '',
+    'stock_qty' => (int)$m['stock_qty'],
+    'unit_price'=> (float)$m['unit_price'],
+], $activeMeds));
+?>
+<script>const _stockMeds = <?= $__stockJson ?>;</script>
+<?php unset($__stockJson); ?>
+
 <?php
 $extraJs = <<<'JS'
 <script>
@@ -859,10 +1102,90 @@ function checkBillApproval(pid) {
         .catch(() => { el.innerHTML = ''; });
 }
 
+// ── Fulfil Prescription modal ─────────────────────────────────────
+function openFulfilModal(id) {
+    document.getElementById('fulfilPrxId').value = id;
+    document.getElementById('fulfilPatient').textContent = '';
+    document.getElementById('fulfilDoctor').textContent  = '';
+    document.getElementById('fulfilMedsContainer').innerHTML =
+        '<div class="text-center py-4"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i></div>';
+    new bootstrap.Modal(document.getElementById('fulfilModal')).show();
+
+    fetch('pharmacy.php?fetch_prescription=' + id)
+        .then(r => r.json())
+        .then(d => {
+            if (!d.id) {
+                document.getElementById('fulfilMedsContainer').innerHTML =
+                    '<p class="text-danger">Prescription not found or already fulfilled.</p>';
+                return;
+            }
+            document.getElementById('fulfilPatient').textContent =
+                (d.patient_name || '—') + ' (' + (d.patient_no || '') + ')';
+            document.getElementById('fulfilDoctor').textContent =
+                d.doctor_name ? 'Dr. ' + d.doctor_name : '';
+
+            const meds = (typeof d.medicines === 'string') ? JSON.parse(d.medicines) : (d.medicines || []);
+            const stockOpts = _stockMeds.map(m =>
+                `<option value="${m.id}" data-price="${m.unit_price}">${m.name}${m.form ? ' ('+m.form+')' : ''}${m.strength ? ' '+m.strength : ''} — Stock: ${m.stock_qty}</option>`
+            ).join('');
+
+            let html = `<div class="table-responsive"><table class="table table-sm align-middle">
+              <thead class="table-light"><tr>
+                <th>Prescribed Medicine</th>
+                <th style="min-width:260px">Match to Stock Item</th>
+                <th style="width:80px">Qty</th>
+                <th style="width:110px">Unit Price</th>
+                <th style="width:90px">Total</th>
+              </tr></thead><tbody>`;
+
+            meds.forEach((m, i) => {
+                html += `<tr>
+                  <td>
+                    <div class="fw-semibold">${m.name || '?'}</div>
+                    <small class="text-muted">${[m.dosage, m.frequency, m.duration].filter(Boolean).join(' · ')}</small>
+                  </td>
+                  <td>
+                    <select name="items[${i}][medicine_id]" class="form-select form-select-sm fulfil-stock-sel"
+                            onchange="onFulfilStockChange(this,${i})">
+                      <option value="">— skip this item —</option>
+                      ${stockOpts}
+                    </select>
+                  </td>
+                  <td><input type="number" name="items[${i}][quantity]" class="form-control form-control-sm"
+                             id="fqty_${i}" min="1" value="${m.quantity || 1}" oninput="calcFulfilRow(${i})"></td>
+                  <td><input type="number" name="items[${i}][unit_price]" class="form-control form-control-sm"
+                             id="fprice_${i}" min="0" step="0.01" value="0" oninput="calcFulfilRow(${i})"></td>
+                  <td class="fw-semibold text-end" id="ftotal_${i}">0.00</td>
+                </tr>`;
+            });
+
+            html += '</tbody></table></div>';
+            document.getElementById('fulfilMedsContainer').innerHTML = html;
+        })
+        .catch(() => {
+            document.getElementById('fulfilMedsContainer').innerHTML =
+                '<p class="text-danger">Failed to load prescription. Please try again.</p>';
+        });
+}
+
+function onFulfilStockChange(sel, i) {
+    const opt = sel.selectedOptions[0];
+    const price = opt ? (parseFloat(opt.dataset.price) || 0) : 0;
+    document.getElementById('fprice_' + i).value = price.toFixed(2);
+    calcFulfilRow(i);
+}
+
+function calcFulfilRow(i) {
+    const qty   = parseFloat(document.getElementById('fqty_'   + i).value) || 0;
+    const price = parseFloat(document.getElementById('fprice_' + i).value) || 0;
+    document.getElementById('ftotal_' + i).textContent = (qty * price).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
 // ── DataTables ────────────────────────────────────────────────────
 $(document).ready(function () {
-    if ($('#medsTable').length)  $('#medsTable').DataTable({ pageLength: 25, order: [[0,'asc']], columnDefs:[{orderable:false,targets:[8]}] });
-    if ($('#histTable').length)  $('#histTable').DataTable({ pageLength: 25, order: [[9,'desc']], columnDefs:[{orderable:false,targets:[]}] });
+    if ($('#medsTable').length)     $('#medsTable').DataTable({ pageLength: 25, order: [[0,'asc']], columnDefs:[{orderable:false,targets:[8]}] });
+    if ($('#histTable').length)     $('#histTable').DataTable({ pageLength: 25, order: [[9,'desc']], columnDefs:[{orderable:false,targets:[]}] });
+    if ($('#prxQueueTable').length) $('#prxQueueTable').DataTable({ pageLength: 25, order: [[5,'desc']], columnDefs:[{orderable:false,targets:[6]}] });
     if (typeof $.fn.select2 !== 'undefined') {
         $('.select2').select2({ theme:'bootstrap-5', dropdownParent: document.body, width:'100%' });
     }

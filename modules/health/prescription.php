@@ -364,5 +364,19 @@ function editRx(rx) {
 }
 </script>
 JS;
+
+// Auto-open new prescription modal when arriving from Records quick-action link
+$__pid = (int)($_GET['patient_id'] ?? 0);
+$__did = (int)($_GET['doctor_id']  ?? 0);
+if ($__pid) {
+    $extraJs .= '<script>$(document).ready(function(){' .
+        'document.getElementById("rxPatient").value=' . $__pid . ';' .
+        ($__did ? 'document.getElementById("rxDoctor").value=' . $__did . ';' : '') .
+        'if(!document.getElementById("medRows").children.length) addMedRow();' .
+        'new bootstrap.Modal(document.getElementById("rxModal")).show();' .
+        '});</script>';
+}
+unset($__pid, $__did);
+
 require_once __DIR__ . '/../../includes/footer.php';
 ?>
