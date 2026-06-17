@@ -174,6 +174,24 @@ $currentUrl = basename($_SERVER['PHP_SELF'] ?? '');
 .alert { border-radius: 10px; }
 </style>
 
+<script>
+function toggleSidebar() {
+  const sb = document.getElementById('hpSidebar');
+  const bd = document.getElementById('hpBackdrop');
+  if (!sb) return;
+  sb.classList.toggle('open');
+  if (bd) bd.classList.toggle('show');
+  document.body.style.overflow = sb.classList.contains('open') ? 'hidden' : '';
+}
+function closeSidebar() {
+  const sb = document.getElementById('hpSidebar');
+  const bd = document.getElementById('hpBackdrop');
+  if (sb) sb.classList.remove('open');
+  if (bd) bd.classList.remove('show');
+  document.body.style.overflow = '';
+}
+</script>
+
 <!-- Sidebar -->
 <div id="hpSidebar">
   <!-- Brand -->
@@ -238,7 +256,7 @@ $currentUrl = basename($_SERVER['PHP_SELF'] ?? '');
   <!-- Top bar -->
   <div class="hp-topbar">
     <div class="d-flex align-items-center gap-3">
-      <button class="btn btn-sm btn-outline-secondary d-lg-none" onclick="toggleSidebar()">
+      <button class="btn btn-sm btn-outline-secondary" onclick="toggleSidebar()" aria-label="Toggle navigation">
         <i class="fas fa-bars"></i>
       </button>
       <div class="hp-breadcrumb">

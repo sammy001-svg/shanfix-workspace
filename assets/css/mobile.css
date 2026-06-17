@@ -1,68 +1,173 @@
 /**
  * OrbitDesk — Mobile & Responsive CSS
- * Fixes and enhancements for small-screen devices.
- * Loaded after style.css in header-client.php and header-module.php.
+ * Covers: phone (<576px), tablet (576–991px), small laptop (992–1199px).
+ * Loaded after style.css.
  */
 
-/* ── Touch targets ────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .btn { min-height: 38px; }
-  .btn-xs { min-height: 30px; font-size: .75rem; }
-  .nav-item { min-height: 44px; }
-  .form-control, .form-select { font-size: 16px; } /* prevents iOS zoom */
+/* ================================================================
+   SIDEBAR — Tablet & Mobile overlay behaviour
+   Breakpoint matches JS MOBILE_BP constant (991px)
+   ================================================================ */
+
+@media (max-width: 991px) {
+  /* Slide sidebar off-screen by default */
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    position: fixed;
+    z-index: 1040;
+    height: 100vh;
+    box-shadow: none;
+  }
+
+  /* Slide in when JS adds .active */
+  .sidebar.active {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0,0,0,.25);
+  }
+
+  /* Content fills full width */
+  .main-wrapper { margin-left: 0 !important; }
 }
 
-/* ── DataTables responsive ───────────────────────────────────────── */
-@media (max-width: 768px) {
-  .table-responsive { -webkit-overflow-scrolling: touch; }
-  .dataTables_wrapper .dataTables_length,
-  .dataTables_wrapper .dataTables_filter { float: none !important; text-align: left !important; }
-  .dataTables_wrapper .dataTables_info,
-  .dataTables_wrapper .dataTables_paginate { float: none !important; text-align: left !important; margin-top: 6px; }
-  .dataTables_wrapper .dataTables_paginate .paginate_button { padding: .25em .5em; }
+/* Sidebar backdrop overlay */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 1035;
+  cursor: pointer;
+}
+.sidebar-overlay.active {
+  display: block;
 }
 
-/* ── Hide non-essential table columns on mobile ──────────────────── */
+/* ================================================================
+   TOP HEADER — prevent crowding on tablets & small laptops
+   ================================================================ */
+
+/* Search bar: constrain on small screens so header doesn't overflow */
+@media (max-width: 991px) {
+  .header-search-form:focus-within { width: 200px !important; }
+  /* Give the header title some breathing room */
+  .header-title { font-size: .9rem; }
+}
+
+@media (max-width: 640px) {
+  .header-search-form:focus-within { width: 160px !important; }
+  .header-title { display: none !important; }
+}
+
+@media (max-width: 480px) {
+  .header-search-form:focus-within { width: 130px !important; }
+  .top-header { padding: 0 .75rem; gap: .5rem; }
+}
+
+/* Compact user pill — avatar only on small screens, text appears at lg+ */
+@media (max-width: 991px) {
+  .user-pill { padding: .25rem; }
+}
+
+/* ================================================================
+   MAIN CONTENT — padding adjustments
+   ================================================================ */
+
+@media (max-width: 991px) {
+  .main-content { padding: 1rem; }
+}
+
 @media (max-width: 576px) {
-  .d-none-xs { display: none !important; }
-  th.hide-mobile, td.hide-mobile { display: none !important; }
+  .main-content { padding: .75rem; }
+  .card-body    { padding: .75rem; }
+  .card-header  { padding: .65rem .75rem; }
 }
 
-/* ── Stat cards: 2-col on mobile ─────────────────────────────────── */
-@media (max-width: 576px) {
-  .row.g-3 > .col-sm-3,
-  .row.g-3 > .col-sm-4,
-  .row.g-3 > .col-sm-6 {
+/* ================================================================
+   STAT CARDS — responsive column fallbacks
+   Bootstrap col-md-3 = 4-col at 768px+ which can be too narrow
+   at tablet widths. These rules force 2-col on tablets.
+   ================================================================ */
+
+@media (max-width: 991px) {
+  /* 4-column KPI rows → 2-column on tablets */
+  .row.g-3 > .col-md-3,
+  .row.g-4 > .col-md-3 {
     flex: 0 0 50%;
     max-width: 50%;
   }
 }
 
-/* ── Modals: near full-screen on mobile ──────────────────────────── */
 @media (max-width: 576px) {
-  .modal-dialog {
-    margin: 8px;
-    max-width: calc(100vw - 16px);
+  /* All multi-col rows → 2-column on phones */
+  .row.g-3 > .col-sm-3,
+  .row.g-3 > .col-sm-4,
+  .row.g-3 > .col-sm-6,
+  .row.g-3 > .col-md-3,
+  .row.g-3 > .col-md-4,
+  .row.g-4 > .col-md-3,
+  .row.g-4 > .col-md-4 {
+    flex: 0 0 50%;
+    max-width: 50%;
   }
-  .modal-content { border-radius: 12px; }
-  .modal-xl { max-width: calc(100vw - 16px); }
+
+  /* Very small stat cards: stack icon above text */
+  .stat-card { flex-direction: column; text-align: center; gap: .5rem; padding: .85rem; }
+  .stat-value { font-size: 1.3rem; }
 }
 
-/* ── Header search: full-width on mobile when focused ───────────── */
-@media (max-width: 640px) {
-  .header-search-form:focus-within { width: 180px !important; }
-}
-@media (max-width: 480px) {
-  .header-search-form:focus-within { width: 140px !important; }
+/* ================================================================
+   TABLES — horizontal scroll & touch
+   ================================================================ */
+
+.table-responsive {
+  overflow-x: auto;
 }
 
-/* ── Page header: stack on mobile ────────────────────────────────── */
+@media (max-width: 768px) {
+  .dataTables_wrapper .dataTables_length,
+  .dataTables_wrapper .dataTables_filter {
+    float: none !important;
+    text-align: left !important;
+  }
+  .dataTables_wrapper .dataTables_info,
+  .dataTables_wrapper .dataTables_paginate {
+    float: none !important;
+    text-align: left !important;
+    margin-top: 6px;
+  }
+  .dataTables_wrapper .dataTables_paginate .paginate_button {
+    padding: .25em .5em;
+  }
+}
+
+/* Hide non-essential columns on small phones */
 @media (max-width: 576px) {
+  .d-none-xs         { display: none !important; }
+  th.hide-mobile,
+  td.hide-mobile      { display: none !important; }
+}
+
+/* ================================================================
+   ACTION BUTTONS in table rows
+   ================================================================ */
+
+@media (max-width: 576px) {
+  .table td .d-flex.gap-1 { flex-wrap: wrap; gap: .2rem !important; }
+  .btn-xs { padding: .2rem .4rem; }
+}
+
+/* ================================================================
+   PAGE HEADER — stack on narrow screens
+   ================================================================ */
+
+@media (max-width: 767px) {
   .page-header {
     flex-direction: column !important;
     align-items: flex-start !important;
-    gap: 12px;
+    gap: .6rem;
   }
+  .page-header > .d-flex,
   .page-header > div:last-child,
   .page-header > a:last-child,
   .page-header > button:last-child {
@@ -70,44 +175,77 @@
   }
 }
 
-/* ── Action button groups in tables ─────────────────────────────── */
-@media (max-width: 576px) {
-  .table td .d-flex.gap-1 { flex-wrap: wrap; }
-  .btn-xs { padding: .2rem .4rem; }
-}
+/* ================================================================
+   MODALS — near full-screen on phones, better on tablets
+   ================================================================ */
 
-/* ── Sidebar overlay on small screens ───────────────────────────── */
-@media (max-width: 991px) {
-  .sidebar { transform: translateX(-100%); transition: transform .25s ease; position: fixed; z-index: 1040; height: 100vh; }
-  .sidebar.active { transform: translateX(0); }
-  .main-wrapper { margin-left: 0 !important; }
-  body.sidebar-open .sidebar-overlay { display: block; }
-  .sidebar-overlay {
-    display: none;
-    position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1035;
+@media (max-width: 576px) {
+  .modal-dialog {
+    margin: 8px;
+    max-width: calc(100vw - 16px);
   }
+  .modal-content { border-radius: 12px; }
+  .modal-xl,
+  .modal-lg { max-width: calc(100vw - 16px); }
 }
 
-/* ── Card body padding reduce on mobile ─────────────────────────── */
+@media (min-width: 577px) and (max-width: 991px) {
+  .modal-xl { max-width: calc(100vw - 40px); }
+  .modal-lg { max-width: calc(100vw - 60px); }
+}
+
+/* ================================================================
+   TOUCH TARGETS
+   ================================================================ */
+
+@media (max-width: 991px) {
+  .btn    { min-height: 36px; }
+  .btn-xs { min-height: 28px; font-size: .75rem; }
+  .nav-item { min-height: 42px; }
+  /* Prevent iOS auto-zoom on inputs */
+  .form-control,
+  .form-select { font-size: 16px; }
+}
+
+/* ================================================================
+   HEALTH PORTAL — report tab bar scrollable on small screens
+   ================================================================ */
+
+@media (max-width: 767px) {
+  /* Reports tab strip */
+  .border-bottom .d-flex.overflow-auto { flex-wrap: nowrap; }
+  .tab-btn { padding: 8px 12px; font-size: .8rem; }
+}
+
+/* ================================================================
+   TIMELINE
+   ================================================================ */
+
 @media (max-width: 576px) {
-  .card-body { padding: 12px; }
-  .card-header { padding: 10px 12px; }
+  .timeline-container { padding-left: 8px; }
 }
 
-/* ── Timeline: reduce left padding on mobile ─────────────────────── */
-@media (max-width: 576px) {
-  .timeline-container { padding-left: 12px; }
+/* ================================================================
+   HEALTH PORTAL SIDEBAR — responsiveness
+   ================================================================ */
+
+@media (max-width: 991px) {
+  #hpMain { margin-left: 0 !important; }
 }
 
-/* ── ═══ PRINT STYLES ═══ ─────────────────────────────────────────── */
+/* ================================================================
+   PRINT STYLES
+   ================================================================ */
+
 @media print {
-  /* Hide navigation and interactive elements */
   .sidebar,
+  #hpSidebar,
   .top-header,
+  .hp-topbar,
   .header-actions,
   .no-print,
-  .btn,
-  .dropdown,
+  .sidebar-overlay,
+  #hpBackdrop,
   .alert-dismissible .btn-close,
   .dataTables_wrapper .dataTables_length,
   .dataTables_wrapper .dataTables_filter,
@@ -118,30 +256,25 @@
     display: none !important;
   }
 
-  /* Full-width content */
   .main-wrapper { margin-left: 0 !important; }
-  .main-content { padding: 0 !important; }
-  body { background: #fff !important; }
+  #hpMain       { margin-left: 0 !important; }
+  .main-content,
+  #hpContent    { padding: 0 !important; }
+  body          { background: #fff !important; }
 
-  /* Tables: full width, show all columns */
   .table-responsive { overflow: visible !important; }
-  .table { width: 100% !important; font-size: 11px; }
-  .table th, .table td { padding: 4px 6px !important; }
+  .table            { width: 100% !important; font-size: 11px; }
+  .table th,
+  .table td         { padding: 4px 6px !important; }
 
-  /* Stat cards in print */
-  .stat-card { break-inside: avoid; border: 1px solid #ccc !important; box-shadow: none !important; }
+  .stat-card  { break-inside: avoid; border: 1px solid #ccc !important; box-shadow: none !important; }
+  .card       { box-shadow: none !important; border: 1px solid #ddd !important; break-inside: avoid; }
 
-  /* Cards */
-  .card { box-shadow: none !important; border: 1px solid #ddd !important; break-inside: avoid; }
-
-  /* Page breaks */
   .page-break-before { page-break-before: always; }
-  .page-break-after  { page-break-after: always; }
-  .no-break { break-inside: avoid; }
+  .page-break-after  { page-break-after:  always; }
+  .no-break          { break-inside: avoid; }
 
-  /* Color backgrounds visible in print */
   .badge, .alert { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
-  /* Page margins */
   @page { margin: 15mm; }
 }

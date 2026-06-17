@@ -11,7 +11,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 $admId = (int)($_GET['id'] ?? 0);
 if (!$admId) { http_response_code(404); exit('Admission record not found.'); }
 
-$isAdmin  = isLoggedIn() && in_array($_SESSION['user_role'] ?? '', ['super_admin','admin','staff']);
+$isAdmin  = isLoggedIn() && in_array($_SESSION['user_role'] ?? '', ['super_admin','admin','client_admin','staff']);
 $isDoctor = !empty($_SESSION['doc_id']);
 
 if (!$isAdmin && !$isDoctor) {

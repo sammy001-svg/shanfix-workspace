@@ -11,7 +11,7 @@ $orderId = (int)($_GET['id'] ?? 0);
 if (!$orderId) { http_response_code(404); exit('Lab order not found.'); }
 
 // ── Auth ──────────────────────────────────────────────────────────
-$isAdmin   = isLoggedIn() && in_array($_SESSION['user_role'] ?? '', ['super_admin','admin','staff']);
+$isAdmin   = isLoggedIn() && in_array($_SESSION['user_role'] ?? '', ['super_admin','admin','client_admin','staff']);
 $isDoctor  = !empty($_SESSION['doc_id']);
 $isPatient = !empty($_SESSION['patient_id']);
 

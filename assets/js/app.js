@@ -5,29 +5,47 @@
 document.addEventListener('DOMContentLoaded', () => {
 
   // ── Sidebar toggle ──────────────────────────────────────────────
+  const MOBILE_BP = 991; // must match mobile.css breakpoint
   const sidebarToggle = document.getElementById('sidebarToggle');
+  const sidebarOverlay = document.getElementById('sidebarOverlay');
+
   if (sidebarToggle) {
     sidebarToggle.addEventListener('click', () => {
-      if (window.innerWidth <= 768) {
+      if (window.innerWidth <= MOBILE_BP) {
         document.body.classList.toggle('sidebar-open');
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar) sidebar.classList.toggle('active');
+        if (sidebarOverlay) sidebarOverlay.classList.toggle('active');
       } else {
         document.body.classList.toggle('sidebar-collapsed');
         localStorage.setItem('sidebarCollapsed', document.body.classList.contains('sidebar-collapsed'));
       }
     });
 
-    // Restore state
-    if (localStorage.getItem('sidebarCollapsed') === 'true' && window.innerWidth > 768) {
+    // Restore collapsed state on desktop
+    if (localStorage.getItem('sidebarCollapsed') === 'true' && window.innerWidth > MOBILE_BP) {
       document.body.classList.add('sidebar-collapsed');
     }
   }
 
-  // Close sidebar on overlay click (mobile)
-  document.addEventListener('click', (e) => {
-    if (window.innerWidth <= 768 && document.body.classList.contains('sidebar-open')) {
+  // Close sidebar when overlay is clicked
+  if (sidebarOverlay) {
+    sidebarOverlay.addEventListener('click', () => {
+      document.body.classList.remove('sidebar-open');
       const sidebar = document.getElementById('sidebar');
-      if (!sidebar.contains(e.target) && e.target !== sidebarToggle) {
+      if (sidebar) sidebar.classList.remove('active');
+      sidebarOverlay.classList.remove('active');
+    });
+  }
+
+  // Close sidebar on outside click (fallback)
+  document.addEventListener('click', (e) => {
+    if (window.innerWidth <= MOBILE_BP && document.body.classList.contains('sidebar-open')) {
+      const sidebar = document.getElementById('sidebar');
+      if (sidebar && !sidebar.contains(e.target) && e.target !== sidebarToggle) {
         document.body.classList.remove('sidebar-open');
+        sidebar.classList.remove('active');
+        if (sidebarOverlay) sidebarOverlay.classList.remove('active');
       }
     }
   });

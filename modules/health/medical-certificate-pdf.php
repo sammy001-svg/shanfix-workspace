@@ -8,7 +8,7 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
-$isAdmin  = isLoggedIn() && in_array($_SESSION['user_role'] ?? '', ['super_admin','admin','staff']);
+$isAdmin  = isLoggedIn() && in_array($_SESSION['user_role'] ?? '', ['super_admin','admin','client_admin','staff']);
 $isDoctor = !empty($_SESSION['doc_id']);
 
 if (!$isAdmin && !$isDoctor) {

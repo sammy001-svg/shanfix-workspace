@@ -235,6 +235,9 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 </nav>
 
+<!-- Sidebar backdrop overlay (tablet/mobile) -->
+<div id="sidebarOverlay" class="sidebar-overlay"></div>
+
 <div class="main-wrapper">
   <header class="top-header">
     <button class="sidebar-toggle" id="sidebarToggle"><i class="fas fa-bars"></i></button>
@@ -261,17 +264,17 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 
     <div class="header-actions">
-      <a href="<?= APP_URL ?>/client/index.php" class="btn btn-sm btn-outline-secondary">
-        <i class="fas fa-home me-1"></i> Dashboard
+      <a href="<?= APP_URL ?>/client/index.php" class="btn btn-sm btn-outline-secondary" title="Dashboard">
+        <i class="fas fa-home"></i><span class="d-none d-xl-inline ms-1">Dashboard</span>
       </a>
       <div class="dropdown">
         <button class="user-pill" data-bs-toggle="dropdown">
           <div class="avatar-sm"><?= strtoupper(substr($user['name'],0,2)) ?></div>
-          <div class="user-info">
+          <div class="user-info d-none d-lg-flex">
             <span class="user-name"><?= e($user['name']) ?></span>
             <span class="user-role"><?= e($user['org_name']) ?></span>
           </div>
-          <i class="fas fa-chevron-down ms-1 small"></i>
+          <i class="fas fa-chevron-down ms-1 small d-none d-lg-inline"></i>
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
           <li><a class="dropdown-item" href="<?= APP_URL ?>/client/profile.php"><i class="fas fa-user me-2"></i>Profile</a></li>

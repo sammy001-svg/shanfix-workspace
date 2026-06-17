@@ -11,7 +11,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 $billId = (int)($_GET['id'] ?? 0);
 if (!$billId) { http_response_code(404); exit('Bill not found.'); }
 
-$isAdmin   = isLoggedIn() && in_array($_SESSION['user_role'] ?? '', ['super_admin','admin','staff']);
+$isAdmin   = isLoggedIn() && in_array($_SESSION['user_role'] ?? '', ['super_admin','admin','client_admin','staff']);
 $isPatient = !empty($_SESSION['patient_id']) && ($_SESSION['user_role'] ?? '') === 'patient';
 
 if (!$isAdmin && !$isPatient) {
