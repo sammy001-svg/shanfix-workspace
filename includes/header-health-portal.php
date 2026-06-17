@@ -36,6 +36,9 @@ $ptitle   = $_SESSION['health_portal_title']  ?? ($user['org_name'] ?? 'Health P
 $logoUrl  = $_SESSION['health_portal_logo']   ?? '';
 $initial  = strtoupper(substr($ptitle, 0, 1));
 
+// Load org logo for hOrgLogo global (used by sidebar brand area)
+$GLOBALS['hOrgLogo'] = '';
+
 // Darken accent for hover/active states
 function hpAdjust(string $hex, int $amt): string {
     $h = ltrim($hex, '#');
@@ -173,6 +176,7 @@ $currentUrl = basename($_SERVER['PHP_SELF'] ?? '');
 /* ── Flash alert ─────────────────────────────────────────────────── */
 .alert { border-radius: 10px; }
 </style>
+<script>window._hCurr = '<?= htmlspecialchars($GLOBALS['hCurrencySymbol'] ?? 'LRD', ENT_QUOTES) ?>';</script>
 
 <script>
 function toggleSidebar() {
@@ -214,14 +218,41 @@ function closeSidebar() {
     <?php
     $navSections = [
       'Overview'    => ['index.php'],
-      'Patients'    => ['patients.php','appointments.php','records.php','vitals.php'],
-      'Clinical'    => ['doctors.php','staff.php','lab.php','pharmacy.php','nursing.php'],
+      'Patients'    => ['patients.php','appointments.php','timeline.php','records.php','vitals.php'],
+      'Clinical'    => ['doctors.php','schedule.php','staff.php','prescription.php','lab.php','pharmacy.php','nursing.php','telemedicine.php'],
       'Inpatient'   => ['wards.php','admissions.php','surgery.php','emergency.php'],
       'Finance'     => ['billing.php'],
-      'Management'  => ['reports.php','settings.php'],
+      'Management'  => ['patient_crm.php','analytics.php','reports.php','settings.php'],
+    ];
+    // Authoritative portal nav — always complete, regardless of per-module $moduleNav
+    $__portalNav = [
+        ['url'=>'index.php',         'icon'=>'fas fa-tachometer-alt',      'label'=>'Dashboard'],
+        ['url'=>'patients.php',      'icon'=>'fas fa-procedures',          'label'=>'Patients'],
+        ['url'=>'appointments.php',  'icon'=>'fas fa-calendar-check',      'label'=>'Appointments'],
+        ['url'=>'timeline.php',      'icon'=>'fas fa-history',             'label'=>'Patient Timeline'],
+        ['url'=>'records.php',       'icon'=>'fas fa-file-medical',        'label'=>'Medical Records'],
+        ['url'=>'vitals.php',        'icon'=>'fas fa-heartbeat',           'label'=>'Vital Signs'],
+        ['url'=>'doctors.php',       'icon'=>'fas fa-user-md',             'label'=>'Doctors'],
+        ['url'=>'schedule.php',      'icon'=>'fas fa-calendar-alt',        'label'=>'Doctor Schedule'],
+        ['url'=>'staff.php',         'icon'=>'fas fa-id-badge',            'label'=>'Clinical Staff'],
+        ['url'=>'prescription.php',  'icon'=>'fas fa-prescription',        'label'=>'Prescriptions'],
+        ['url'=>'lab.php',           'icon'=>'fas fa-flask',               'label'=>'Laboratory'],
+        ['url'=>'pharmacy.php',      'icon'=>'fas fa-pills',               'label'=>'Pharmacy'],
+        ['url'=>'nursing.php',       'icon'=>'fas fa-user-nurse',          'label'=>'Nursing'],
+        ['url'=>'telemedicine.php',  'icon'=>'fas fa-video',               'label'=>'Telemedicine'],
+        ['url'=>'wards.php',         'icon'=>'fas fa-bed',                 'label'=>'Wards & Beds'],
+        ['url'=>'admissions.php',    'icon'=>'fas fa-hospital-user',       'label'=>'Admissions (IPD)'],
+        ['url'=>'surgery.php',       'icon'=>'fas fa-syringe',             'label'=>'Surgery / Theatre'],
+        ['url'=>'emergency.php',     'icon'=>'fas fa-ambulance',           'label'=>'Emergency / Triage'],
+        ['url'=>'billing.php',       'icon'=>'fas fa-file-invoice-dollar', 'label'=>'Billing'],
+        ['url'=>'patient_crm.php',   'icon'=>'fas fa-users',               'label'=>'Patient CRM'],
+        ['url'=>'analytics.php',     'icon'=>'fas fa-brain',               'label'=>'AI Analytics'],
+        ['url'=>'reports.php',       'icon'=>'fas fa-chart-bar',           'label'=>'Reports'],
+        ['url'=>'settings.php',      'icon'=>'fas fa-cog',                 'label'=>'Settings'],
     ];
     $navByUrl = [];
-    foreach ($moduleNav ?? [] as $item) { $navByUrl[$item['url']] = $item; }
+    foreach ($__portalNav as $item) { $navByUrl[$item['url']] = $item; }
+    unset($__portalNav);
 
     foreach ($navSections as $section => $urls):
       $sectionItems = array_filter(array_map(fn($u) => $navByUrl[$u] ?? null, $urls));

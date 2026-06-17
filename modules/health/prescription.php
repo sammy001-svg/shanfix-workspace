@@ -101,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 setFlash('success', 'Prescription created.');
             }
         }
-        redirect(APP_URL . '/modules/health/prescription.php');
+        redirect('prescription.php');
     }
 
     if ($action === 'dispense') {
@@ -109,14 +109,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare("UPDATE health_prescriptions SET status='dispensed', dispensed_by=?, dispensed_at=NOW() WHERE id=? AND org_id=?")
             ->execute([$user['id'], $id, (int)$user['org_id']]);
         setFlash('success', 'Prescription marked as dispensed.');
-        redirect(APP_URL . '/modules/health/prescription.php');
+        redirect('prescription.php');
     }
 
     if ($action === 'cancel') {
         $pdo->prepare("UPDATE health_prescriptions SET status='cancelled' WHERE id=? AND org_id=? AND status='draft'")
             ->execute([(int)$_POST['prescription_id'], (int)$user['org_id']]);
         setFlash('success', 'Prescription cancelled.');
-        redirect(APP_URL . '/modules/health/prescription.php');
+        redirect('prescription.php');
     }
 
     if ($action === 'export_pdf') {
@@ -142,7 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 [231, 76, 60]
             );
         }
-        redirect(APP_URL . '/modules/health/prescription.php');
+        redirect('prescription.php');
     }
 }
 

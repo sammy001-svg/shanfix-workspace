@@ -133,7 +133,10 @@ function isLoggedIn(): bool {
 }
 
 function requireLogin(string $redirect = '/auth/login.php'): void {
+    $isPortal = !empty($_SESSION['health_portal_mode']);
+
     if (!isLoggedIn()) {
+        if ($isPortal) redirect('/modules/health/portal-login.php');
         redirect(APP_URL . $redirect);
     }
 
@@ -153,6 +156,7 @@ function requireLogin(string $redirect = '/auth/login.php'): void {
         $orgSlug = $_SESSION['org_slug']  ?? null;
         session_unset();
         session_destroy();
+        if ($isPortal) redirect('/modules/health/portal-login.php?expired=1');
         if ($orgSlug && in_array($role, ['staff', 'client_admin'], true)) {
             redirect(APP_URL . '/auth/org-login.php?org=' . rawurlencode($orgSlug) . '&expired=1');
         }
@@ -166,6 +170,7 @@ function requireLogin(string $redirect = '/auth/login.php'): void {
         $orgSlug = $_SESSION['org_slug']  ?? null;
         session_unset();
         session_destroy();
+        if ($isPortal) redirect('/modules/health/portal-login.php?hijack=1');
         if ($orgSlug && in_array($role, ['staff', 'client_admin'], true)) {
             redirect(APP_URL . '/auth/org-login.php?org=' . rawurlencode($orgSlug) . '&hijack=1');
         }
