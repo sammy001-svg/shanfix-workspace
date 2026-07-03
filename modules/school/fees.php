@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once __DIR__ . '/_nav.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -27,9 +27,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $feeType = sanitize($_POST['fee_type'] ?? 'tuition');
         $termId = (int)($_POST['term_id'] ?? 0) ?: null;
         $amount = (float)$_POST['amount'];
+        $discount = max(0, (float)($_POST['discount'] ?? 0));
+        $discountReason = sanitize($_POST['discount_reason'] ?? '');
+        $netAmount = max(0, $amount - $discount);
         $currency = in_array($_POST['currency'] ?? '', ['KES','USD','LRD']) ? $_POST['currency'] : 'KES';
         $dueDate = $_POST['due_date'] ?: date('Y-m-d', strtotime('+30 days'));
         $notes = sanitize($_POST['notes'] ?? '');
+        if ($discountReason) $notes = "Discount: $discountReason" . ($notes ? " | $notes" : '');
 
         // Fetch term name for compatible rendering if term_id is set
         $termName = 'Term 1';
@@ -41,10 +45,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $stmt = $pdo->prepare("INSERT INTO sch_fees (org_id, student_id, fee_type, term_id, term, year, amount, paid, balance, currency, due_date, status, notes) 
                                VALUES (?, ?, ?, ?, ?, ?, ?, 0.00, ?, ?, ?, 'unpaid', ?)");
-        $stmt->execute([$orgId, $studentId, $feeType, $termId, $termName, (int)date('Y'), $amount, $amount, $currency, $dueDate, $notes]);
+        $stmt->execute([$orgId, $studentId, $feeType, $termId, $termName, (int)date('Y'), $netAmount, $netAmount, $currency, $dueDate, $notes]);
 
-        setFlash('success', 'Fee invoice generated successfully.');
-        logActivity('create', 'school', "Fee Invoice issued: $feeType ($currency $amount)");
+        setFlash('success', 'Fee invoice generated successfully.' . ($discount > 0 ? " Discount of $currency $discount applied." : ''));
+        logActivity('create', 'school', "Fee Invoice issued: $feeType ($currency $netAmount, discount: $discount)");
         redirect('fees.php');
     }
 
@@ -246,15 +250,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ── GET Handlers ──────────────────────────────────────────────────
+// CSV Export
+if (isset($_GET['export_csv'])) {
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="fee_invoices_' . date('Ymd') . '.csv"');
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['Admission No','Student Name','Class','Fee Type','Currency','Invoice Amount','Paid','Balance','Due Date','Status']);
+    try {
+        $s = $pdo->prepare("SELECT f.*, s.first_name, s.last_name, s.admission_no, c.name AS class_name FROM sch_fees f JOIN sch_students s ON f.student_id=s.id LEFT JOIN sch_classes c ON s.class_id=c.id WHERE f.org_id=? ORDER BY f.created_at DESC");
+        $s->execute([$orgId]);
+        foreach ($s->fetchAll() as $row) {
+            fputcsv($out, [$row['admission_no'], $row['first_name'].' '.$row['last_name'], $row['class_name']??'', ucfirst(str_replace('-',' ',$row['fee_type'])), $row['currency'], number_format($row['amount'],2), number_format($row['paid'],2), number_format($row['balance'],2), $row['due_date'], ucfirst($row['status'])]);
+        }
+    } catch (Exception $e) {}
+    fclose($out); exit;
+}
+
+// Filters
+$fFilterClass  = (int)($_GET['filter_class']  ?? 0);
+$fFilterTerm   = (int)($_GET['filter_term']   ?? 0);
+$fFilterStatus = $_GET['filter_status']  ?? '';
+$fFilterCurr   = $_GET['filter_currency'] ?? '';
+
+$feesWhere = 'f.org_id = ?'; $feesParams = [$orgId];
+if ($fFilterClass)  { $feesWhere .= ' AND s.class_id = ?';     $feesParams[] = $fFilterClass; }
+if ($fFilterTerm)   { $feesWhere .= ' AND f.term_id = ?';      $feesParams[] = $fFilterTerm; }
+if ($fFilterStatus) { $feesWhere .= ' AND f.status = ?';       $feesParams[] = $fFilterStatus; }
+if ($fFilterCurr)   { $feesWhere .= ' AND f.currency = ?';     $feesParams[] = $fFilterCurr; }
+
 $feesList = [];
 try {
     $stmt = $pdo->prepare("SELECT f.*, s.first_name, s.last_name, s.admission_no, c.name AS class_name 
                            FROM sch_fees f
                            JOIN sch_students s ON f.student_id = s.id
                            LEFT JOIN sch_classes c ON s.class_id = c.id
-                           WHERE f.org_id = ?
+                           WHERE $feesWhere
                            ORDER BY f.created_at DESC");
-    $stmt->execute([$orgId]);
+    $stmt->execute($feesParams);
     $feesList = $stmt->fetchAll();
 } catch (Exception $e) {}
 
@@ -300,7 +332,8 @@ require_once __DIR__ . '/../../includes/header-module.php';
     <h4 class="mb-1"><i class="fas fa-money-bill me-2" style="color:<?= $moduleColor ?>"></i>Fee Accounts & Billing</h4>
     <p class="text-muted mb-0">Record school fees in multi-currencies (KES, USD, LRD), issue invoices, and track payments</p>
   </div>
-  <div class="d-flex gap-2">
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="fees.php?export_csv=1&filter_class=<?=$fFilterClass?>&filter_term=<?=$fFilterTerm?>&filter_status=<?=e($fFilterStatus)?>&filter_currency=<?=e($fFilterCurr)?>" class="btn btn-outline-secondary"><i class="fas fa-file-csv me-2"></i>Export CSV</a>
     <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#payModal"><i class="fas fa-cash-register me-2"></i>Receive Payment</button>
     <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#bulkInvoiceModal"><i class="fas fa-layer-group me-2"></i>Bulk Class Invoice</button>
     <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#reminderModal"><i class="fas fa-bell me-2"></i>Send Reminders</button>
@@ -308,9 +341,57 @@ require_once __DIR__ . '/../../includes/header-module.php';
   </div>
 </div>
 
+<!-- Fees Filter Bar -->
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="GET" class="row g-2 align-items-end">
+      <div class="col-sm-3">
+        <label class="form-label small fw-semibold mb-1">Class</label>
+        <select name="filter_class" class="form-select form-select-sm">
+          <option value="">All Classes</option>
+          <?php foreach ($classesList as $cl): ?>
+          <option value="<?= $cl['id'] ?>" <?= $fFilterClass == $cl['id'] ? 'selected' : '' ?>><?= e($cl['name']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="col-sm-3">
+        <label class="form-label small fw-semibold mb-1">Term</label>
+        <select name="filter_term" class="form-select form-select-sm">
+          <option value="">All Terms</option>
+          <?php foreach ($termsList as $t): ?>
+          <option value="<?= $t['id'] ?>" <?= $fFilterTerm == $t['id'] ? 'selected' : '' ?>><?= e($t['name']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label small fw-semibold mb-1">Status</label>
+        <select name="filter_status" class="form-select form-select-sm">
+          <option value="">All</option>
+          <option value="unpaid" <?= $fFilterStatus==='unpaid' ? 'selected':'' ?>>Unpaid</option>
+          <option value="partial" <?= $fFilterStatus==='partial' ? 'selected':'' ?>>Partial</option>
+          <option value="paid" <?= $fFilterStatus==='paid' ? 'selected':'' ?>>Paid</option>
+        </select>
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label small fw-semibold mb-1">Currency</label>
+        <select name="filter_currency" class="form-select form-select-sm">
+          <option value="">All</option>
+          <option value="KES" <?= $fFilterCurr==='KES' ? 'selected':'' ?>>KES</option>
+          <option value="USD" <?= $fFilterCurr==='USD' ? 'selected':'' ?>>USD</option>
+          <option value="LRD" <?= $fFilterCurr==='LRD' ? 'selected':'' ?>>LRD</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-success"><i class="fas fa-filter me-1"></i>Filter</button>
+        <a href="fees.php" class="btn btn-sm btn-outline-secondary ms-1">Reset</a>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Tabs for Invoices vs Receipts Ledger -->
 <ul class="nav nav-pills mb-3" id="feeModuleTabs">
-  <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-invoices" type="button"><i class="fas fa-file-invoice-dollar me-2"></i>Fee Invoices</button></li>
+  <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-invoices" type="button"><i class="fas fa-file-invoice-dollar me-2"></i>Fee Invoices <span class="badge bg-secondary ms-1"><?= count($feesList) ?></span></button></li>
   <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-payments" type="button"><i class="fas fa-receipt me-2"></i>Payment Receipts Ledger</button></li>
 </ul>
 
@@ -345,6 +426,7 @@ require_once __DIR__ . '/../../includes/header-module.php';
                 $badges = ['paid' => 'success', 'partial' => 'warning text-dark', 'unpaid' => 'danger'];
                 $bg = $badges[$f['status']] ?? 'secondary';
                 $sym = getCurrencySymbol($f['currency']);
+                $isOverdue = ($f['status'] !== 'paid' && !empty($f['due_date']) && strtotime($f['due_date']) < strtotime('today'));
               ?>
               <tr>
                 <td>
@@ -358,10 +440,17 @@ require_once __DIR__ . '/../../includes/header-module.php';
                 <td class="text-end text-success fw-semibold"><?=$sym?><?= number_format($f['paid'], 2) ?></td>
                 <td class="text-end text-danger fw-bold"><?=$sym?><?= number_format($f['balance'], 2) ?></td>
                 <td><?= formatDate($f['due_date']) ?></td>
-                <td class="text-center"><span class="badge bg-<?= $bg ?>"><?= ucfirst($f['status']) ?></span></td>
+                <td class="text-center">
+                    <span class="badge bg-<?= $bg ?>"><?= ucfirst($f['status']) ?></span>
+                    <?php if ($isOverdue): ?><span class="badge bg-danger ms-1" title="Past due date"><i class="fas fa-exclamation-circle"></i></span><?php endif; ?>
+                </td>
                 <td class="text-center">
                   <div class="btn-group btn-group-sm">
                     <button class="btn btn-outline-success" onclick="openPayment(<?= $f['id'] ?>, '<?= e($f['first_name'] . ' ' . $f['last_name']) ?>', <?= $f['balance'] ?>, '<?=e($f['currency'])?>')" title="Pay Now" <?= $f['balance'] <= 0 ? 'disabled' : '' ?>><i class="fas fa-hand-holding-usd"></i></button>
+                    <?php
+                      try { $rStmt = $pdo->prepare("SELECT id FROM sch_fee_payments WHERE fee_id=? AND org_id=? ORDER BY payment_date DESC LIMIT 1"); $rStmt->execute([$f['id'], $orgId]); $rId = $rStmt->fetchColumn(); } catch(Exception $ex) { $rId = null; }
+                    ?>
+                    <?php if ($rId): ?><a href="fee-receipt-pdf.php?payment_id=<?= $rId ?>" target="_blank" class="btn btn-outline-primary" title="Print Receipt"><i class="fas fa-print"></i></a><?php endif; ?>
                     <button class="btn btn-outline-danger" onclick="delInvoice(<?= $f['id'] ?>)" title="Delete"><i class="fas fa-trash"></i></button>
                   </div>
                 </td>
@@ -479,6 +568,18 @@ require_once __DIR__ . '/../../includes/header-module.php';
       <div class="col-12">
         <label class="form-label fw-semibold">Payment Due Date <span class="text-danger">*</span></label>
         <input type="date" name="due_date" class="form-control" required value="<?= date('Y-m-d', strtotime('+30 days')) ?>">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label fw-semibold">Discount / Waiver Amount</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="fas fa-tags"></i></span>
+          <input type="number" name="discount" class="form-control" min="0" step="0.01" placeholder="0.00" value="0">
+        </div>
+        <small class="text-muted">Leave 0 if no discount applies.</small>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label fw-semibold">Discount Reason</label>
+        <input type="text" name="discount_reason" class="form-control" placeholder="e.g. Scholarship, Bursary, Staff child">
       </div>
       <div class="col-12">
         <label class="form-label fw-semibold">Description / Billing Notes</label>

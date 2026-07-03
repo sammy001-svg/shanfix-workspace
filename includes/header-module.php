@@ -14,6 +14,13 @@ if (!empty($_SESSION['health_portal_mode']) && ($moduleSlug ?? '') === 'health')
     return; // Skip the rest of this file — portal header is now active
 }
 
+// ── School portal white-label intercept ───────────────────────────
+if (!empty($_SESSION['school_portal_mode']) && ($moduleSlug ?? '') === 'school') {
+    sendSecurityHeaders();
+    require_once __DIR__ . '/header-school-portal.php';
+    return; // Skip the rest of this file — portal header is now active
+}
+
 sendSecurityHeaders();
 requireModuleAccess($moduleSlug ?? '');
 $user    = currentUser();

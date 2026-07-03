@@ -43,6 +43,25 @@ try {
     $upcomingExams = (int)$stmt->fetchColumn();
 } catch (Exception $e) {}
 
+// Gender breakdown
+$maleCount = 0; $femaleCount = 0;
+try {
+    $stmt = $pdo->prepare("SELECT gender, COUNT(*) AS cnt FROM sch_students WHERE org_id=? AND status='active' GROUP BY gender");
+    $stmt->execute([$orgId]);
+    foreach ($stmt->fetchAll() as $gr) {
+        if ($gr['gender'] === 'male')   $maleCount   = (int)$gr['cnt'];
+        if ($gr['gender'] === 'female') $femaleCount = (int)$gr['cnt'];
+    }
+} catch (Exception $e) {}
+
+// Overdue fee invoices count
+$overdueCount = 0;
+try {
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM sch_fees WHERE org_id=? AND status != 'paid' AND due_date < CURDATE()");
+    $stmt->execute([$orgId]);
+    $overdueCount = (int)$stmt->fetchColumn();
+} catch (Exception $e) {}
+
 // Monthly fee collection trend (last 6 months)
 $monthLabels = []; $monthAmounts = [];
 try {
@@ -149,12 +168,28 @@ $feeOverdue = countRows('sch_fees', "org_id = ? AND status = 'unpaid'", [$orgId]
     </div>
   </div>
   <div class="col-6 col-xl-3">
-    <a href="students.php" class="stat-card text-decoration-none d-flex" style="align-items:center">
-      <div class="stat-icon" style="background:#f0f4ff"><i class="fas fa-users" style="color:#5c6bc0"></i></div>
-      <div class="stat-body"><div class="stat-value text-dark"><?= $totalStudents ?></div><div class="stat-label">Manage Students</div></div>
-    </a>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#fce4ec"><i class="fas fa-venus-mars" style="color:#e91e63"></i></div>
+      <div class="stat-body">
+        <div class="stat-value" style="font-size:1rem">
+          <span class="text-primary"><?= $maleCount ?>M</span> / <span style="color:#e91e63"><?= $femaleCount ?>F</span>
+        </div>
+        <div class="stat-label">Gender Ratio</div>
+      </div>
+    </div>
   </div>
 </div>
+
+<?php if ($overdueCount > 0): ?>
+<!-- Overdue alert banner -->
+<div class="alert alert-danger border-0 d-flex align-items-center gap-3 mb-3 shadow-sm" role="alert">
+  <i class="fas fa-exclamation-circle fa-lg"></i>
+  <div class="flex-grow-1">
+    <strong><?= $overdueCount ?> fee invoice<?= $overdueCount > 1 ? 's' : '' ?></strong> <?= $overdueCount > 1 ? 'are' : 'is' ?> past the due date and remain unpaid.
+  </div>
+  <a href="fees.php?filter_status=unpaid" class="btn btn-sm btn-danger"><i class="fas fa-arrow-right me-1"></i>View Overdue</a>
+</div>
+<?php endif; ?>
 
 <!-- Charts row -->
 <div class="row g-3 mb-4">
@@ -184,17 +219,37 @@ $feeOverdue = countRows('sch_fees', "org_id = ? AND status = 'unpaid'", [$orgId]
   </div>
 </div>
 
-<!-- Quick actions -->
-<div class="row g-3 mb-4">
+<!-- Quick actions row 1 -->
+<div class="row g-3 mb-2">
   <?php foreach ([
-    ['students.php',  'fa-user-graduate', 'Students',     $moduleColor,   'Enroll & manage'],
-    ['teachers.php',  'fa-chalkboard-teacher','Teachers', '#3498db',      'Staff records'],
-    ['fees.php',      'fa-money-bill-alt','Fees',          '#27ae60',      'Invoices & payments'],
-    ['results.php',   'fa-graduation-cap','Results',       '#9b59b6',      'Exam grades'],
-    ['attendance.php','fa-clipboard-check','Attendance',   '#f39c12',      'Daily records'],
-    ['timetable.php', 'fa-calendar-alt',  'Timetable',    '#e74c3c',      'Class schedules'],
+    ['students.php',  'fa-user-graduate',      'Students',     $moduleColor,   'Enroll & manage'],
+    ['teachers.php',  'fa-chalkboard-teacher', 'Teachers',     '#3498db',      'Staff records'],
+    ['fees.php',      'fa-money-bill-alt',     'Fees',         '#27ae60',      'Invoices & payments'],
+    ['results.php',   'fa-graduation-cap',     'Results',      '#9b59b6',      'Exam grades'],
+    ['attendance.php','fa-clipboard-check',    'Attendance',   '#f39c12',      'Daily records'],
+    ['timetable.php', 'fa-calendar-alt',       'Timetable',    '#e74c3c',      'Class schedules'],
   ] as [$url, $icon, $label, $color, $sub]): ?>
   <div class="col-6 col-md-4 col-xl-2">
+    <a href="<?= $url ?>" class="card border-0 shadow-sm text-decoration-none h-100 text-center p-3" style="transition:.15s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+      <div class="d-flex align-items-center justify-content-center rounded-circle mx-auto mb-2"
+           style="width:46px;height:46px;background:<?= $color ?>18;color:<?= $color ?>;font-size:1.1rem">
+        <i class="fas <?= $icon ?>"></i>
+      </div>
+      <div class="fw-semibold small" style="color:#0B2D4E"><?= $label ?></div>
+      <div class="text-muted" style="font-size:.7rem"><?= $sub ?></div>
+    </a>
+  </div>
+  <?php endforeach; ?>
+</div>
+<!-- Quick actions row 2 -->
+<div class="row g-3 mb-4">
+  <?php foreach ([
+    ['online-classes.php', 'fa-video',         'Online Classes','#00bcd4',     'Live sessions'],
+    ['library.php',        'fa-book-open',      'Library',       '#8bc34a',     'Book catalog'],
+    ['hr.php',             'fa-id-badge',       'HR & Staff',    '#607d8b',     'Payroll & HR'],
+    ['discipline.php',     'fa-shield-alt',     'Discipline',    '#ff5722',     'Incident log'],
+  ] as [$url, $icon, $label, $color, $sub]): ?>
+  <div class="col-6 col-md-4 col-xl-3">
     <a href="<?= $url ?>" class="card border-0 shadow-sm text-decoration-none h-100 text-center p-3" style="transition:.15s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
       <div class="d-flex align-items-center justify-content-center rounded-circle mx-auto mb-2"
            style="width:46px;height:46px;background:<?= $color ?>18;color:<?= $color ?>;font-size:1.1rem">
