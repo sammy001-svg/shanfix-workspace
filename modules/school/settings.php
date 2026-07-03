@@ -17,6 +17,7 @@ try { $pdo->exec("ALTER TABLE organizations ADD UNIQUE KEY IF NOT EXISTS uq_scho
 
 // ── POST: save settings ───────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    error_log('[school-settings-debug] POST hit. action=' . ($_POST['action'] ?? '(none)') . ' post_keys=' . implode(',', array_keys($_POST)) . ' content_length=' . ($_SERVER['CONTENT_LENGTH'] ?? '?') . ' post_max_size=' . ini_get('post_max_size'));
     verifyCsrf();
     $action = $_POST['action'] ?? 'save_profile';
 
@@ -46,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     redirect('settings.php');
                 }
             } catch (Throwable $e) {
-                setFlash('danger', 'Could not validate portal domain. Please try again.');
+                setFlash('danger', 'Could not validate portal domain: ' . $e->getMessage());
                 redirect('settings.php');
             }
         }
@@ -78,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             )->execute($params);
             setFlash('success', 'School settings saved successfully.');
         } catch (Throwable $e) {
-            setFlash('danger', 'Could not save settings. Please try again.');
+            setFlash('danger', 'Could not save settings: ' . $e->getMessage());
         }
         redirect('settings.php');
     }
