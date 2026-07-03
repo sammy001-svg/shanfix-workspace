@@ -38,10 +38,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             setFlash('danger', 'Invalid portal domain format. Use format: portal.yourschool.com'); redirect('settings.php');
         }
         if ($portalDomain) {
-            $dup = $pdo->prepare("SELECT id FROM organizations WHERE school_portal_domain=? AND id!=?");
-            $dup->execute([$portalDomain, $orgId]);
-            if ($dup->fetch()) {
-                setFlash('danger', "Domain '{$portalDomain}' is already in use by another school portal.");
+            try {
+                $dup = $pdo->prepare("SELECT id FROM organizations WHERE school_portal_domain=? AND id!=?");
+                $dup->execute([$portalDomain, $orgId]);
+                if ($dup->fetch()) {
+                    setFlash('danger', "Domain '{$portalDomain}' is already in use by another school portal.");
+                    redirect('settings.php');
+                }
+            } catch (Throwable $e) {
+                setFlash('danger', 'Could not validate portal domain. Please try again.');
                 redirect('settings.php');
             }
         }
