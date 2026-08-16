@@ -71,7 +71,7 @@ a { text-decoration: none; }
 /* ── Scroll Progress Bar ──────────────────────────────────── */
 #od-scroll-progress {
   position: fixed; top: 0; left: 0; height: 3px;
-  background: linear-gradient(90deg, var(--od-green), #22d3a5);
+  background: var(--od-green);
   z-index: 99999; width: 0%; transition: width .1s linear;
   pointer-events: none;
 }
@@ -94,11 +94,11 @@ a { text-decoration: none; }
 }
 .od-nav .logo-mark {
   width: 36px; height: 36px;
-  background: linear-gradient(135deg, var(--od-green), #22c27a);
+  background: var(--od-green);
   border-radius: 9px;
   display: flex; align-items: center; justify-content: center;
   font-weight: 900; color: white; font-size: .8rem; letter-spacing: -.5px;
-  box-shadow: 0 4px 12px rgba(26,138,78,.4); flex-shrink: 0;
+  flex-shrink: 0;
 }
 .od-nav .logo-name { font-size: 1.1rem; font-weight: 800; color: white; letter-spacing: -.3px; }
 .od-nav .logo-name span { color: #4ade80; }
