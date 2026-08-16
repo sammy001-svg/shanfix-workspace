@@ -344,11 +344,37 @@ require_once __DIR__ . '/includes/header-public.php';
                 <button class="dash-tab"        role="tab" aria-selected="false" data-dash="pos">POS</button>
               </div>
 
-              <div class="dash-kpis" id="dashKpis"></div>
+              <!-- Server-rendered default ("overview"); JS swaps it per tab -->
+              <div class="dash-kpis" id="dashKpis">
+                <div class="dash-kpi">
+                  <div class="kv green">KES 2.4M</div>
+                  <div class="kl">Revenue</div>
+                  <div class="kt up"><i class="fas fa-arrow-up" style="font-size:.55rem"></i> 24%</div>
+                </div>
+                <div class="dash-kpi">
+                  <div class="kv" style="color:#38bdf8">1,284</div>
+                  <div class="kl">Customers</div>
+                  <div class="kt up"><i class="fas fa-arrow-up" style="font-size:.55rem"></i> 12%</div>
+                </div>
+                <div class="dash-kpi">
+                  <div class="kv amber">48</div>
+                  <div class="kl">Pending</div>
+                  <div class="kt down"><i class="fas fa-arrow-down" style="font-size:.55rem"></i> 3%</div>
+                </div>
+                <div class="dash-kpi">
+                  <div class="kv" style="color:#a78bfa">99.9%</div>
+                  <div class="kl">Uptime</div>
+                  <div class="kt up">Stable</div>
+                </div>
+              </div>
 
               <div class="dash-chart-section">
                 <div class="dash-chart-label" id="dashChartLabel">Monthly Revenue Trend</div>
-                <div class="dash-bars" id="dashBars"></div>
+                <div class="dash-bars" id="dashBars">
+                  <?php $heights=[30,45,28,58,40,52,65,72,50,68,80,100]; foreach($heights as $i=>$h): ?>
+                  <div class="dash-bar<?= $i>=9?' hi':'' ?>" data-h="<?=$h?>" style="height:<?=$h?>%"></div>
+                  <?php endforeach; ?>
+                </div>
               </div>
 
               <div class="dash-modules">
@@ -1142,8 +1168,8 @@ ob_start();
   }
 
   if (dashKpis) {
-    renderDash('overview', false);
-    // Animate the bars the first time the mockup scrolls into view
+    // The "overview" state is already server-rendered, so we don't paint it
+    // again on load — we only re-render (with animation) on scroll-in / tab click.
     var dashObs = new IntersectionObserver(function (entries) {
       entries.forEach(function (e) {
         if (!e.isIntersecting) return;
