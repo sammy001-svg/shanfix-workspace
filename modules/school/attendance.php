@@ -56,6 +56,22 @@ require_once __DIR__.'/../../includes/header-module.php';
 $user=currentUser();$orgId=(int)$user['org_id'];
 $fClass=(int)($_GET['class_id']??0);$fDate=$_GET['att_date']??date('Y-m-d');
 $fFrom=$_GET['date_from']??date('Y-m-01');$fTo=$_GET['date_to']??date('Y-m-d');$mode=$_GET['mode']??'mark';
+
+// CSV Export for attendance register (runs BEFORE HTML headers are sent)
+if(isset($_GET['export_att_csv']) && $fClass){
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="attendance_'.date('Ymd').'.csv"');
+    $out = fopen('php://output','w');
+    fputcsv($out, ['Student','Admission No','Date','Status','Remarks']);
+    try{
+        $es=$pdo->prepare("SELECT s.first_name,s.last_name,s.admission_no,a.att_date,a.status,a.remarks FROM sch_attendance a JOIN sch_students s ON a.student_id=s.id WHERE a.org_id=? AND a.class_id=? AND a.att_date BETWEEN ? AND ? ORDER BY a.att_date ASC, s.first_name ASC");
+        $es->execute([$orgId,$fClass,$fFrom,$fTo]);
+        foreach($es->fetchAll() as $row){
+            fputcsv($out,[$row['first_name'].' '.$row['last_name'],$row['admission_no'],$row['att_date'],ucfirst($row['status']),$row['remarks']]);
+        }
+    }catch(Exception $e){}
+    fclose($out); exit;
+}
 $classes=[];try{$s=$pdo->prepare("SELECT id,name FROM sch_classes WHERE org_id=? ORDER BY name");$s->execute([$orgId]);$classes=$s->fetchAll();}catch(Exception $e){}
 $students=[];$existing=[];
 if($fClass){
@@ -163,7 +179,14 @@ $statusColors=['present'=>'success','absent'=>'danger','late'=>'warning','excuse
 <?php else: // VIEW mode ?>
 <div class="row g-3">
   <div class="col-lg-8">
-    <div class="card"><div class="card-header"><h6 class="mb-0"><i class="fas fa-chart-bar me-2" style="color:<?=$moduleColor?>"></i>Attendance Summary â€” <?=formatDate($fFrom)?> to <?=formatDate($fTo)?></h6></div>
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <h6 class="mb-0"><i class="fas fa-chart-bar me-2" style="color:<?=$moduleColor?>"></i>Attendance Summary â€” <?=formatDate($fFrom)?> to <?=formatDate($fTo)?></h6>
+        <?php if($fClass): ?>
+        <a href="attendance.php?class_id=<?=$fClass?>&date_from=<?=e($fFrom)?>&date_to=<?=e($fTo)?>&mode=view&export_att_csv=1"
+           class="btn btn-sm btn-outline-secondary"><i class="fas fa-file-csv me-1"></i>Export CSV</a>
+        <?php endif; ?>
+      </div>
     <div class="card-body p-0"><table class="table table-hover data-table mb-0">
       <thead class="table-light"><tr><th>Student</th><th class="text-center">Days</th><th class="text-center text-success">Present</th><th class="text-center text-danger">Absent</th><th class="text-center text-warning">Late</th><th class="text-center text-info">Excused</th><th class="text-center">Rate</th></tr></thead>
       <tbody>

@@ -665,7 +665,9 @@ body.sidebar-collapsed .main-wrapper { margin-left: 68px; }
 .auth-body { min-height: 100vh; display: flex; background: var(--gray-100); }
 .auth-left {
   width: 45%;
-  background: linear-gradient(135deg, var(--navy-dark), var(--navy), #0f3d1f);
+  background:
+    url('../../images%20(1).jfif')
+    center center / cover no-repeat;
   display: flex; align-items: center; justify-content: center;
   padding: 3rem;
   position: relative;
@@ -674,9 +676,13 @@ body.sidebar-collapsed .main-wrapper { margin-left: 68px; }
 .auth-left::before {
   content: '';
   position: absolute;
-  top: -100px; right: -100px;
-  width: 400px; height: 400px;
-  background: radial-gradient(circle, rgba(26,138,78,.3), transparent 60%);
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(7, 25, 44, 0.82) 0%,
+    rgba(11, 45, 78, 0.75) 50%,
+    rgba(15, 61, 31, 0.80) 100%
+  );
 }
 .auth-right {
   flex: 1;

@@ -18,7 +18,7 @@ if (isset($_GET['pdf']) && $studentId) {
     $stmt = $pdo->prepare("SELECT s.*, c.name AS class_name FROM sch_students s LEFT JOIN sch_classes c ON s.class_id=c.id WHERE s.id=? AND s.org_id=?");
     $stmt->execute([$studentId, $orgId]);
     $stu = $stmt->fetch();
-    if (!$stu) redirect(APP_URL . '/modules/school/fee-statement.php');
+    if (!$stu) redirect('fee-statement.php');
 
     $rows = [];
     $balance = 0;

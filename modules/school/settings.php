@@ -12,9 +12,12 @@ $orgId = (int)$user['org_id'];
 try { $pdo->exec("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS website VARCHAR(255) DEFAULT NULL AFTER country"); } catch (Throwable $e) {}
 try { $pdo->exec("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS primary_color VARCHAR(10) DEFAULT NULL AFTER website"); } catch (Throwable $e) {}
 try { $pdo->exec("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS brand_tagline VARCHAR(255) DEFAULT NULL AFTER primary_color"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS school_portal_domain VARCHAR(255) DEFAULT NULL AFTER brand_tagline"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE organizations ADD UNIQUE KEY IF NOT EXISTS uq_school_portal_domain (school_portal_domain)"); } catch (Throwable $e) {}
 
 // ── POST: save settings ───────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    error_log('[school-settings-debug] POST hit. action=' . ($_POST['action'] ?? '(none)') . ' post_keys=' . implode(',', array_keys($_POST)) . ' content_length=' . ($_SERVER['CONTENT_LENGTH'] ?? '?') . ' post_max_size=' . ini_get('post_max_size'));
     verifyCsrf();
     $action = $_POST['action'] ?? 'save_profile';
 
@@ -28,8 +31,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $website  = sanitize($_POST['website'] ?? '');
         $tagline  = sanitize($_POST['brand_tagline'] ?? '');
         $color    = preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['primary_color'] ?? '') ? $_POST['primary_color'] : null;
+        $portalDomain = strtolower(trim(sanitize($_POST['school_portal_domain'] ?? '')));
 
         if (!$name) { setFlash('danger', 'School name is required.'); redirect('settings.php'); }
+
+        if ($portalDomain && !preg_match('/^[a-z0-9][a-z0-9\.\-]{1,250}[a-z0-9]$/', $portalDomain)) {
+            setFlash('danger', 'Invalid portal domain format. Use format: portal.yourschool.com'); redirect('settings.php');
+        }
+        if ($portalDomain) {
+            try {
+                $dup = $pdo->prepare("SELECT id FROM organizations WHERE school_portal_domain=? AND id!=?");
+                $dup->execute([$portalDomain, $orgId]);
+                if ($dup->fetch()) {
+                    setFlash('danger', "Domain '{$portalDomain}' is already in use by another school portal.");
+                    redirect('settings.php');
+                }
+            } catch (Throwable $e) {
+                setFlash('danger', 'Could not validate portal domain: ' . $e->getMessage());
+                redirect('settings.php');
+            }
+        }
 
         // Handle logo upload
         $logoPath = null;
@@ -50,15 +71,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $logoSet = $logoPath ? ', logo=?' : '';
-        $params  = [$name, $email, $phone, $address, $city, $country, $website, $tagline, $color, $orgId];
-        if ($logoPath) array_splice($params, 9, 0, [$logoPath]);
+        $params  = [$name, $email, $phone, $address, $city, $country, $website, $tagline, $color, $portalDomain ?: null, $orgId];
+        if ($logoPath) array_splice($params, 10, 0, [$logoPath]);
         try {
             $pdo->prepare(
-                "UPDATE organizations SET name=?,email=?,phone=?,address=?,city=?,country=?,website=?,brand_tagline=?,primary_color=?{$logoSet} WHERE id=?"
+                "UPDATE organizations SET name=?,email=?,phone=?,address=?,city=?,country=?,website=?,brand_tagline=?,primary_color=?,school_portal_domain=?{$logoSet} WHERE id=?"
             )->execute($params);
             setFlash('success', 'School settings saved successfully.');
         } catch (Throwable $e) {
-            setFlash('danger', 'Could not save settings. Please try again.');
+            setFlash('danger', 'Could not save settings: ' . $e->getMessage());
         }
         redirect('settings.php');
     }
@@ -218,6 +239,30 @@ require_once __DIR__ . '/../../includes/header-module.php';
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Staff Portal Domain -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <h6 class="mb-0 fw-bold"><i class="fas fa-globe me-2" style="color:<?= $moduleColor ?>"></i>Staff Portal Domain</h6>
+        </div>
+        <div class="card-body">
+          <p class="text-muted small">Point your own domain (e.g. <code>portal.yourschool.ac.ke</code>) at this school's branded
+             staff login. Staff sign in there with no OrbitDesk branding visible.</p>
+          <label class="form-label fw-semibold small">Custom Domain</label>
+          <input type="text" name="school_portal_domain" class="form-control"
+                 value="<?= e($org['school_portal_domain'] ?? '') ?>"
+                 placeholder="portal.yourschool.ac.ke" maxlength="255">
+          <div class="form-text">Leave empty to disable. Do not include https:// or a trailing slash.
+            DNS CNAME must point to <strong><?= e(parse_url(APP_URL, PHP_URL_HOST)) ?></strong>. Must not already be
+            in use by another portal on this platform.</div>
+          <?php if (!empty($org['school_portal_domain'])): ?>
+          <div class="mt-2">
+            <span class="badge bg-success"><i class="fas fa-check me-1"></i>Active</span>
+            <a href="<?= APP_URL ?>/modules/school/portal-login.php?org=<?= rawurlencode($orgSlug) ?>" target="_blank" class="small ms-2">Open portal (via fallback link)</a>
+          </div>
+          <?php endif; ?>
         </div>
       </div>
 

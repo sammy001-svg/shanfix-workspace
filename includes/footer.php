@@ -1,7 +1,11 @@
-<?php if (!empty($_SESSION['health_portal_mode'])): ?>
+<?php if (!empty($_SESSION['health_portal_mode']) || !empty($_SESSION['school_portal_mode'])):
+    $__isSchoolPortal = !empty($_SESSION['school_portal_mode']);
+    $__portalTitle    = $__isSchoolPortal ? ($_SESSION['school_portal_title'] ?? '') : ($_SESSION['health_portal_title'] ?? '');
+    $__portalSuffix   = $__isSchoolPortal ? 'School Management System' : 'Health Management System';
+?>
   </div><!-- /#hpContent -->
   <footer style="padding:12px 20px;text-align:center;font-size:.75rem;color:#adb5bd;border-top:1px solid #e9ecef;background:#fff;margin-top:auto">
-    &copy; <?= date('Y') ?> <?= htmlspecialchars($_SESSION['health_portal_title'] ?? '') ?> &mdash; Health Management System
+    &copy; <?= date('Y') ?> <?= htmlspecialchars($__portalTitle) ?> &mdash; <?= $__portalSuffix ?>
   </footer>
 </div><!-- /#hpMain -->
 <?php else: ?>

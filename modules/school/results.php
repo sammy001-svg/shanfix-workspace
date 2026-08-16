@@ -41,6 +41,12 @@ function calculateCurriculumGrade(float $score, float $max, string $curriculum):
     }
 }
 
+function ordinal(int $n): string {
+    $s = ['th','st','nd','rd']; $v = $n % 100;
+    return $n . (isset($s[$v-10]) || isset($s[$v-11]) ? 'th' : ($s[$v%10] ?? 'th'));
+}
+
+
 // ── POST Handlers ─────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();denyIfReadOnly($moduleSlug);
@@ -160,6 +166,36 @@ if ($fExam && $fClass && $fSubject) {
     } catch (Exception $e) {}
 }
 
+$classSummary = [];
+if ($fExam && $fClass && $reportMode === 'card') {
+    // Build per-student totals for ranking
+    try {
+        $rs = $pdo->prepare("SELECT r.student_id, SUM(r.marks) AS total, SUM(r.max_marks) AS max_total,
+                COUNT(DISTINCT r.subject_id) AS subj_count
+                FROM sch_results r WHERE r.org_id=? AND r.exam_id=? AND r.class_id=?
+                GROUP BY r.student_id ORDER BY total DESC");
+        $rs->execute([$orgId, $fExam, $fClass]);
+        $rankRows = $rs->fetchAll();
+        $rankMap = [];
+        foreach ($rankRows as $i => $rr) {
+            $rankMap[(int)$rr['student_id']] = $i + 1;
+        }
+    } catch (Exception $e) { $rankMap = []; }
+    // Subject-level class averages
+    try {
+        $cs = $pdo->prepare("SELECT sub.name AS subject_name, AVG(r.marks) AS avg_marks, MAX(r.marks) AS max_marks,
+                MIN(r.marks) AS min_marks, r.max_marks AS full_marks,
+                SUM(CASE WHEN r.marks >= (r.max_marks * 0.4) THEN 1 ELSE 0 END) AS pass_count, COUNT(*) AS total_count
+                FROM sch_results r JOIN sch_subjects sub ON r.subject_id=sub.id
+                WHERE r.org_id=? AND r.exam_id=? AND r.class_id=?
+                GROUP BY r.subject_id, sub.name, r.max_marks ORDER BY sub.name");
+        $cs->execute([$orgId, $fExam, $fClass]);
+        $classSummary = $cs->fetchAll();
+    } catch (Exception $e) { $classSummary = []; }
+} else {
+    $rankMap = [];
+}
+
 // Report card view data
 $reportCard = [];
 $reportStudents = [];
@@ -211,6 +247,17 @@ require_once __DIR__ . '/../../includes/header-module.php';
   </div>
   <?php endif; ?>
 </div>
+
+<style>
+@media print {
+  .sidebar, .top-header, .page-header, .card.mb-3, .btn, nav, .no-print { display: none !important; }
+  .main-wrapper { margin-left: 0 !important; }
+  .main-content { padding: 0 !important; }
+  .report-card-print { break-inside: avoid; page-break-inside: avoid; margin-bottom: 1.5rem; box-shadow: none !important; }
+  body { background: #fff !important; }
+  @page { size: A4; margin: 1.5cm; }
+}
+</style>
 
 <!-- Filters -->
 <div class="card mb-3"><div class="card-body py-2">
@@ -280,9 +327,18 @@ require_once __DIR__ . '/../../includes/header-module.php';
       <span class="badge bg-light text-dark border me-2 fw-semibold">Curriculum: <?=e($curr)?></span>
       <small class="text-muted">Adm No: <strong><?= e($st['admission_no'] ?? '') ?></strong> &bull; Class: <strong><?= e($className) ?></strong> &bull; Exam: <strong><?= e($examName) ?></strong></small>
     </div>
-    <div class="text-end">
-      <span class="badge bg-<?= $pctC ?> fs-5 py-2 px-3"><?= $pct ?>% Avg</span>
-      <div class="small fw-semibold text-muted mt-1"><?= $total ?> / <?= $maxTotal ?> Total Score</div>
+    <div class="text-end d-flex gap-3 align-items-center">
+      <?php $stRank = $rankMap[$st['id']] ?? null; if ($stRank): ?>
+      <div class="text-center">
+        <div class="fw-bold" style="font-size:1.3rem;color:#0B2D4E"><?= ordinal($stRank) ?></div>
+        <div style="font-size:.7rem;color:#94a3b8">CLASS POSITION</div>
+      </div>
+      <?php endif; ?>
+      <div class="text-center">
+        <span class="badge bg-<?= $pctC ?> fs-5 py-2 px-3"><?= $pct ?>% Avg</span>
+        <div class="small fw-semibold text-muted mt-1"><?= $total ?> / <?= $maxTotal ?> Total Score</div>
+      </div>
+      <a href="report-card-pdf.php?student_id=<?= $st['id'] ?>&exam_id=<?= $fExam ?>" target="_blank" class="btn btn-sm btn-outline-success no-print" title="Download PDF"><i class="fas fa-download me-1"></i>PDF</a>
     </div>
   </div>
   <div class="card-body p-0">
@@ -302,14 +358,26 @@ require_once __DIR__ . '/../../includes/header-module.php';
         <?php if (empty($rows)): ?>
           <tr><td colspan="7" class="text-center text-muted py-3">No academic exam results recorded.</td></tr>
         <?php else: foreach ($rows as $r):
-          $p = $r['max_marks'] > 0 ? round(100 * $r['marks'] / $r['max_marks']) : 0;
-          $pc = $p >= 90 ? 'success' : ($p >= 75 ? 'primary' : ($p >= 60 ? 'warning text-dark' : 'danger'));
+          if ($r['marks'] === null) {
+            $p = 0; $pc = 'secondary';
+          } else {
+            $p = $r['max_marks'] > 0 ? round(100 * $r['marks'] / $r['max_marks']) : 0;
+            $pc = $p >= 90 ? 'success' : ($p >= 75 ? 'primary' : ($p >= 60 ? 'warning text-dark' : 'danger'));
+          }
         ?>
           <tr>
             <td class="fw-semibold text-dark"><?= e($r['subject_name']) ?></td>
             <td class="text-center"><?= number_format($r['max_marks'], 0) ?></td>
-            <td class="text-center fw-bold text-dark"><?= $r['marks'] !== null ? number_format($r['marks'], 1) : '—' ?></td>
-            <td class="text-center"><span class="badge bg-<?= $pc ?>"><?= $p ?>%</span></td>
+            <td class="text-center fw-bold text-dark">
+              <?php if ($r['marks'] === null): ?>
+              <span class="badge bg-secondary">NOT SUBMITTED</span>
+              <?php else: ?>
+              <?= number_format($r['marks'], 1) ?>
+              <?php endif; ?>
+            </td>
+            <td class="text-center">
+              <?= $r['marks'] !== null ? '<span class="badge bg-'.$pc.'">'.$p.'%</span>' : '&mdash;' ?>
+            </td>
             <td class="text-center fw-bold text-success fs-6"><?= e($r['grade'] ?: '—') ?></td>
             <td class="text-center fw-bold text-primary fs-6"><?= e($r['predicted_grade'] ?: '—') ?></td>
             <td class="small text-muted"><?= e($r['teacher_comment'] ?: $r['remarks'] ?: '—') ?></td>
@@ -320,6 +388,54 @@ require_once __DIR__ . '/../../includes/header-module.php';
   </div>
 </div>
 <?php endforeach; endif; ?>
+
+<?php if (!empty($classSummary)): ?>
+<!-- Class Performance Aggregate -->
+<div class="card mt-4 no-print">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <h6 class="mb-0"><i class="fas fa-chart-bar me-2 text-success"></i>Class Performance Summary &mdash; <?= e($className) ?></h6>
+    <span class="badge bg-secondary"><?= count($classSummary) ?> subjects</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 small">
+        <thead class="table-light">
+          <tr>
+            <th>Subject</th>
+            <th class="text-center">Full Marks</th>
+            <th class="text-center">Class Average</th>
+            <th class="text-center">Highest</th>
+            <th class="text-center">Lowest</th>
+            <th class="text-center">Pass Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($classSummary as $cs):
+            $avg = round($cs['avg_marks'], 1);
+            $avgPct = $cs['full_marks'] > 0 ? round($avg / $cs['full_marks'] * 100) : 0;
+            $passRate = $cs['total_count'] > 0 ? round($cs['pass_count'] / $cs['total_count'] * 100) : 0;
+            $avgC = $avgPct >= 70 ? 'success' : ($avgPct >= 50 ? 'warning' : 'danger');
+          ?>
+          <tr>
+            <td class="fw-semibold"><?= e($cs['subject_name']) ?></td>
+            <td class="text-center"><?= number_format($cs['full_marks'], 0) ?></td>
+            <td class="text-center"><span class="badge bg-<?= $avgC ?>"><?= $avg ?> (<?= $avgPct ?>%)</span></td>
+            <td class="text-center text-success fw-bold"><?= number_format($cs['max_marks'], 1) ?></td>
+            <td class="text-center text-danger fw-bold"><?= number_format($cs['min_marks'], 1) ?></td>
+            <td class="text-center">
+              <div class="progress" style="height:12px">
+                <div class="progress-bar <?= $passRate >= 70 ? 'bg-success' : ($passRate >= 50 ? 'bg-warning' : 'bg-danger') ?>" style="width:<?= $passRate ?>%" title="<?= $passRate ?>% passed"></div>
+              </div>
+              <small class="text-muted"><?= $passRate ?>%</small>
+            </td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
 
 <?php elseif (!$fSubject): ?>
 <div class="text-center py-5 text-muted bg-white rounded border"><i class="fas fa-book fa-3x mb-3 d-block text-secondary opacity-50"></i>Select a subject from the academic schedule to begin entering results.</div>

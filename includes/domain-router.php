@@ -6,10 +6,12 @@
  *  1. Exact match on organizations.custom_domain
  *  2. Subdomain prefix match on *.orbitdesk.co → slug lookup
  *  3. Health portal custom domain (health_settings key=custom_domain)
+ *  4. School portal custom domain (organizations.school_portal_domain)
  *
  * Include ONCE near the top of config/database.php (after $pdo is set).
  * Sets globals: $detectedOrgId (int), $detectedOrgSlug (string)
  *              $detectedHealthPortalOrgId (int), $detectedHealthPortalOrgSlug (string)
+ *              $detectedSchoolPortalOrgId (int), $detectedSchoolPortalOrgSlug (string)
  *
  * Usage in pages: if (!empty($detectedOrgId)) { ... }
  */
@@ -73,6 +75,20 @@ function detectOrgFromDomain(PDO $pdo): ?array {
             $GLOBALS['detectedHealthPortalOrgId']   = (int)$hRow['org_id'];
             $GLOBALS['detectedHealthPortalOrgSlug'] = $hRow['slug'] ?? '';
         }
+
+        // 4. School portal custom domain (stored directly on organizations.school_portal_domain)
+        $stmt = $pdo->prepare("
+            SELECT id AS org_id, slug
+            FROM organizations
+            WHERE school_portal_domain IS NOT NULL AND LOWER(school_portal_domain) = ? AND status = 'active'
+            LIMIT 1
+        ");
+        $stmt->execute([$host]);
+        $sRow = $stmt->fetch();
+        if ($sRow) {
+            $GLOBALS['detectedSchoolPortalOrgId']   = (int)$sRow['org_id'];
+            $GLOBALS['detectedSchoolPortalOrgSlug'] = $sRow['slug'] ?? '';
+        }
     } catch (Exception $e) {
         error_log('[domain-router] ' . $e->getMessage());
     }
@@ -130,6 +146,31 @@ if (isset($pdo) && $pdo instanceof PDO) {
             $slug  = $GLOBALS['detectedHealthPortalOrgSlug'] ?? '';
             $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
             $url   = $proto . '://' . $_SERVER['HTTP_HOST'] . '/modules/health/portal-login.php'
+                   . ($slug ? '?org=' . rawurlencode($slug) : '');
+            header('Location: ' . $url, true, 302);
+            exit;
+        }
+    }
+
+    // School portal redirect: when on a school portal custom domain, enforce portal login
+    if (!empty($GLOBALS['detectedSchoolPortalOrgId'])) {
+        $reqPath = strtolower(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/');
+
+        // Pages that must always be reachable (the auth flow itself)
+        $isPortalAuth = in_array($reqPath, [
+            '/modules/school/portal-login.php',
+            '/modules/school/portal-logout.php',
+        ]);
+
+        // Allow any /modules/school/* path only when already logged into THIS portal org
+        $isSchoolModule     = str_starts_with($reqPath, '/modules/school/');
+        $isLoggedInToPortal = !empty($_SESSION['school_portal_mode'])
+                              && (int)($_SESSION['school_portal_org_id'] ?? 0) === (int)$GLOBALS['detectedSchoolPortalOrgId'];
+
+        if (!$isPortalAuth && !($isSchoolModule && $isLoggedInToPortal)) {
+            $slug  = $GLOBALS['detectedSchoolPortalOrgSlug'] ?? '';
+            $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $url   = $proto . '://' . $_SERVER['HTTP_HOST'] . '/modules/school/portal-login.php'
                    . ($slug ? '?org=' . rawurlencode($slug) : '');
             header('Location: ' . $url, true, 302);
             exit;
