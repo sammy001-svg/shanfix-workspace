@@ -118,6 +118,7 @@ ob_start();
     .site-nav {
       position: sticky; top: 0; z-index: 1000;
       background: rgba(255,255,255,.96);
+      -webkit-backdrop-filter: blur(14px);
       backdrop-filter: blur(14px);
       border-bottom: 1px solid rgba(0,0,0,.07);
       padding: .75rem 0;

@@ -84,8 +84,8 @@ a { text-decoration: none; }
 }
 .od-nav.scrolled {
   background: rgba(7,25,44,.97);
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
   padding: .65rem 0;
   box-shadow: 0 1px 0 rgba(255,255,255,.06);
 }
