@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Shopping Mall: Floors ─────────────────────────────────────
 $moduleSlug  = 'shopping-mall';
 $moduleName  = 'Shopping Mall';

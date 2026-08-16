@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── CARYARD: Hire Purchase & Finance Plans ─────────────────────
 $moduleSlug  = 'caryard';
 $moduleName  = 'Car Yard Management';

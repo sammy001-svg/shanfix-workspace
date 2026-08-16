@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── EVENTS: Task & To-Do Management ────────────────────────────
 $moduleSlug  = 'events';
 $moduleName  = 'Events Management';

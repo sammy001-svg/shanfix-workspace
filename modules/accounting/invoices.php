@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Accounting: Client Invoices ────────────────────────────────
 $moduleSlug  = 'accounting';
 $moduleName  = 'Accounting & Bookkeeping';

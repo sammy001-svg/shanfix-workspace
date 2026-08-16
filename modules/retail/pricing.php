@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Retail: Pricing Rules ──────────────────────────────────────
 $moduleSlug  = 'retail';
 $moduleName  = 'Retail & Wholesale';

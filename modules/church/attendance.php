@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── CHURCH: Service Attendance ─────────────────────────────────
 $moduleSlug  = 'church';
 $moduleName  = 'Church Management';

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Salon: Promotions & Discount Campaigns ──────────────────────
 $moduleSlug = 'salon';
 $moduleName = 'Salon & Spa';

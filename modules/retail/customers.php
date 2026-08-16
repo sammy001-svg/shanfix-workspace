@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Retail: Customer Registry ──────────────────────────────────
 $moduleSlug  = 'retail';
 $moduleName  = 'Retail & Wholesale';

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── MEETINGS: Action Items ─────────────────────────────────────
 $moduleSlug  = 'meetings';
 $moduleName  = 'Meeting Management';

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Accounting: Journal Entries / Transactions ─────────────────
 $moduleSlug  = 'accounting';
 $moduleName  = 'Accounting & Bookkeeping';

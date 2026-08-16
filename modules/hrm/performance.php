@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── HRM: Performance Reviews ──────────────────────────────────
 $moduleSlug  = 'hrm';
 $moduleName  = 'Human Resource Management';

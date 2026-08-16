@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Finance: Journal Entries ────────────────────────────────────
 $moduleSlug  = 'finance';
 $moduleName  = 'Finance & Budgeting';

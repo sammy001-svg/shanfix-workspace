@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── CARYARD: Reconditioning / Pre-sale Preparation Costs ───────
 $moduleSlug  = 'caryard';
 $moduleName  = 'Car Yard Management';

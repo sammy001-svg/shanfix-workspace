@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── TOUR: Holiday Packages Registry & CRUD ─────────────────────
 $moduleSlug  = 'tour';
 $moduleName  = 'Tour & Travel';

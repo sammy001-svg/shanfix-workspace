@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Manufacturing: Inventory / Stock Levels ─────────────────────
 $moduleSlug  = 'manufacturing';
 $moduleName  = 'Manufacturing';

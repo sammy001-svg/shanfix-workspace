@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Salon: Payment Records ──────────────────────────────────────
 $moduleSlug = 'salon';
 $moduleName = 'Salon & Spa';

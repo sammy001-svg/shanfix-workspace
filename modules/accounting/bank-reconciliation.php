@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Accounting: Bank Reconciliation ───────────────────────────
 $moduleSlug  = 'accounting';
 $moduleName  = 'Accounting & Bookkeeping';

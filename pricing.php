@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * OrbitDesk — Standalone Pricing Page
  * Pulls live plans and modules from the database.

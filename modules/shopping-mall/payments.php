@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Shopping Mall: Rent Payments ──────────────────────────────
 $moduleSlug  = 'shopping-mall';
 $moduleName  = 'Shopping Mall';

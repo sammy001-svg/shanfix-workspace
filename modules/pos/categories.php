@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── POS: Categories ───────────────────────────────────────────
 $moduleSlug  = 'pos';
 $moduleName  = 'Point of Sale';

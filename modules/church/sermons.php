@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── CHURCH: Sermon Library ──────────────────────────────────────
 $moduleSlug  = 'church';
 $moduleName  = 'Church Management';

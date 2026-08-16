@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once __DIR__ . '/_nav.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

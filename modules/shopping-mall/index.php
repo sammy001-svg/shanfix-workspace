@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $moduleSlug  = 'shopping-mall';
 $moduleName  = 'Shopping Mall';
 $moduleIcon  = 'fas fa-building';

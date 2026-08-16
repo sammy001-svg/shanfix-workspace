@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $moduleSlug  = 'crm';
 $moduleName  = 'CRM — Customer Relations';
 $moduleIcon  = 'fas fa-handshake';

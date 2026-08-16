@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── CARYARD: Vehicle Valuations & Trade-in Appraisals ──────────
 $moduleSlug  = 'caryard';
 $moduleName  = 'Car Yard Management';

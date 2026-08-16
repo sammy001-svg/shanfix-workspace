@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Salon: Business Expenses ────────────────────────────────────
 $moduleSlug = 'salon';
 $moduleName = 'Salon & Spa';

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── CHURCH: Expenses & Disbursements ───────────────────────────
 $moduleSlug  = 'church';
 $moduleName  = 'Church Management';

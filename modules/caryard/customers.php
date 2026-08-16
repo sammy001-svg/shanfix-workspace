@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── CARYARD: Customer Registry ─────────────────────────────────
 $moduleSlug  = 'caryard';
 $moduleName  = 'Car Yard Management';

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── HRM: Employee Management ───────────────────────────────────
 $moduleSlug  = 'hrm';
 $moduleName  = 'HRM System';

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Salon: Product Inventory ───────────────────────────────────
 $moduleSlug = 'salon';
 $moduleName = 'Salon & Spa';

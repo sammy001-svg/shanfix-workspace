@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Finance: Bank Reconciliation ───────────────────────────────
 $moduleSlug  = 'finance';
 $moduleName  = 'Finance & Budgeting';

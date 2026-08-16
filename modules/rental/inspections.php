@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Rental: Property Inspections ────────────────────────────────
 $moduleSlug  = 'rental';
 $moduleName  = 'Rental & Property';

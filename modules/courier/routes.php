@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Courier: Routes ───────────────────────────────────────────
 $moduleSlug  = 'courier';
 $moduleName  = 'Courier Management';

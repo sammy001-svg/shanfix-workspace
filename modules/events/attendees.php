@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── EVENTS: Attendees Management & Ticketing Check-in ──────────
 $moduleSlug  = 'events';
 $moduleName  = 'Events Management';

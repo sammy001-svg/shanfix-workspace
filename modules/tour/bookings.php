@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── TOUR: Bookings Registry & Live Price Estimator ─────────────
 $moduleSlug  = 'tour';
 $moduleName  = 'Tour & Travel';

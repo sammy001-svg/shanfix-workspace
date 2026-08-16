@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $moduleSlug  = 'hotel';
 $moduleName  = 'Hotel Management';
 $moduleIcon  = 'fas fa-hotel';

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Manufacturing: Machine Registry ────────────────────────────
 $moduleSlug  = 'manufacturing';
 $moduleName  = 'Manufacturing';

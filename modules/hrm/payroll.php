@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── HRM: Payroll Processing ────────────────────────────────────
 $moduleSlug  = 'hrm';
 $moduleName  = 'HRM System';

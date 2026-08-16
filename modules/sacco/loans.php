@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── SACCO: Loan Portfolio & Applications ────────────────────────
 $moduleSlug  = 'sacco';
 $moduleName  = 'SACCO Management';

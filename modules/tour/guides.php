@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── TOUR: Guide Management ─────────────────────────────────────
 $moduleSlug  = 'tour';
 $moduleName  = 'Tour Management';

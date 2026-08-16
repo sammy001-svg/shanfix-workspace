@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── SACCO: Loan Repayments Ledger ──────────────────────────────
 $moduleSlug  = 'sacco';
 $moduleName  = 'SACCO Management';

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Courier: Manifests ────────────────────────────────────────
 $moduleSlug  = 'courier';
 $moduleName  = 'Courier Management';

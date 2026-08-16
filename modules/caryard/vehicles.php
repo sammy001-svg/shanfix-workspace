@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── CARYARD: Vehicle Inventory & CRUD ──────────────────────────
 $moduleSlug  = 'caryard';
 $moduleName  = 'Car Yard Management';

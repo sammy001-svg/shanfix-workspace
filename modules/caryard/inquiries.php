@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── CARYARD: Customer Inquiries / Leads ────────────────────────
 $moduleSlug  = 'caryard';
 $moduleName  = 'Car Yard Management';

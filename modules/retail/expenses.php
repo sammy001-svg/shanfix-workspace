@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Retail: Business Expenses ──────────────────────────────────
 $moduleSlug  = 'retail';
 $moduleName  = 'Retail & Wholesale';

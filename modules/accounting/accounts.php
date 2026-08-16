@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Accounting: Chart of Accounts ─────────────────────────────
 $moduleSlug  = 'accounting';
 $moduleName  = 'Accounting & Bookkeeping';

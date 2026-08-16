@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $moduleSlug  = 'sacco';
 $moduleName  = 'SACCO Management';
 $moduleIcon  = 'fas fa-piggy-bank';

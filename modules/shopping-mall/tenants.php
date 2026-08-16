@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Shopping Mall: Tenants ────────────────────────────────────
 $moduleSlug  = 'shopping-mall';
 $moduleName  = 'Shopping Mall';

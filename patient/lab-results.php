@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $pageTitle = 'Lab Results';
 require_once __DIR__ . '/../includes/header-patient.php';
 

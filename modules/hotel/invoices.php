@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Hotel: Guest Invoices ─────────────────────────────────────
 $moduleSlug  = 'hotel';
 $moduleName  = 'Hotel Management';

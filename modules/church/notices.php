@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $moduleSlug  = 'church';
 $moduleName  = 'Church Management';
 $moduleIcon  = 'fas fa-church';

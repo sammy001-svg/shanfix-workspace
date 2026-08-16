@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Accounting: Payments Received (Accounts Receivable) ────────
 $moduleSlug  = 'accounting';
 $moduleName  = 'Accounting & Bookkeeping';

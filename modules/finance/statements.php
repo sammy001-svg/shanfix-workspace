@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Finance: Financial Statements (P&L + Balance Sheet) ────────
 $moduleSlug  = 'finance';
 $moduleName  = 'Finance & Budgeting';

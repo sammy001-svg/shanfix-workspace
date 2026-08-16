@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── MEETINGS: Participants / External Contacts ─────────────────
 $moduleSlug  = 'meetings';
 $moduleName  = 'Meeting Management';

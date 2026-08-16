@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Accounting: Tax Rate Management ───────────────────────────
 $moduleSlug  = 'accounting';
 $moduleName  = 'Accounting & Bookkeeping';

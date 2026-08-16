@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Accounting: Vendor Bills (Accounts Payable) ────────────────
 $moduleSlug  = 'accounting';
 $moduleName  = 'Accounting & Bookkeeping';

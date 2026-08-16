@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Manufacturing: Supplier Directory ──────────────────────────
 $moduleSlug  = 'manufacturing';
 $moduleName  = 'Manufacturing';

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Retail: Stock Transfers (Branch / Location) ─────────────────
 $moduleSlug  = 'retail';
 $moduleName  = 'Retail & Wholesale';

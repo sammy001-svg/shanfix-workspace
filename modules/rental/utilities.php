@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Rental: Utility Bills & Readings ───────────────────────────
 $moduleSlug  = 'rental';
 $moduleName  = 'Rental & Property';

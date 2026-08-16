@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── CARYARD: Test Drives & Customer Experience ─────────────────
 $moduleSlug  = 'caryard';
 $moduleName  = 'Car Yard Management';

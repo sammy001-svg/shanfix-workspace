@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $moduleSlug = 'salon';
 $moduleName = 'Salon & Spa';
 $moduleIcon = 'fas fa-cut';

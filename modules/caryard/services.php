@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── CARYARD: Vehicle Service & Maintenance ─────────────────────
 $moduleSlug  = 'caryard';
 $moduleName  = 'Car Yard Management';

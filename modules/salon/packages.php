@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Salon: Service Packages ────────────────────────────────────
 $moduleSlug = 'salon';
 $moduleName = 'Salon & Spa';

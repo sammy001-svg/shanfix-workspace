@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── SACCO: Members Management ──────────────────────────────────
 $moduleSlug  = 'sacco';
 $moduleName  = 'SACCO Management';

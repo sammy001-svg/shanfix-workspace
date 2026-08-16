@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $moduleSlug  = 'courier';
 $moduleName  = 'Courier Management';
 $moduleIcon  = 'fas fa-shipping-fast';

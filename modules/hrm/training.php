@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── HRM: Training & Development ───────────────────────────────
 $moduleSlug  = 'hrm';
 $moduleName  = 'Human Resource Management';

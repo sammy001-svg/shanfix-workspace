@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Hotel: Housekeeping ───────────────────────────────────────
 $moduleSlug  = 'hotel';
 $moduleName  = 'Hotel Management';

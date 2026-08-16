@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── CHURCH: Prayer Requests ─────────────────────────────────────
 $moduleSlug  = 'church';
 $moduleName  = 'Church Management';

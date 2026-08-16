@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $moduleSlug  = 'finance';
 $moduleName  = 'Finance & Budgeting';
 $moduleIcon  = 'fas fa-wallet';

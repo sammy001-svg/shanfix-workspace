@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── TOUR: Transport Vehicles ────────────────────────────────────
 $moduleSlug  = 'tour';
 $moduleName  = 'Tour & Travel';

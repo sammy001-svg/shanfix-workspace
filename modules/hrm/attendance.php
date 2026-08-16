@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── HRM: Attendance Tracking ───────────────────────────────────
 $moduleSlug  = 'hrm';
 $moduleName  = 'HRM System';

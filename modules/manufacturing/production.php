@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $moduleSlug  = 'manufacturing';
 $moduleName  = 'Manufacturing';
 $moduleIcon  = 'fas fa-industry';

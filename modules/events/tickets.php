@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── EVENTS: Ticket Tiering & Inventory Control ─────────────────
 $moduleSlug  = 'events';
 $moduleName  = 'Events Management';

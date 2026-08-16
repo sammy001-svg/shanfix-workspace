@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $moduleSlug  = 'rental';
 $moduleName  = 'Rental & Property';
 $moduleIcon  = 'fas fa-building';

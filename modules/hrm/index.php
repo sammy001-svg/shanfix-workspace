@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $moduleSlug  = 'hrm';
 $moduleName  = 'Human Resource Management';
 $moduleIcon  = 'fas fa-users-cog';

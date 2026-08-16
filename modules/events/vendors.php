@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── EVENTS: Vendor Management ───────────────────────────────────
 $moduleSlug  = 'events';
 $moduleName  = 'Events Management';

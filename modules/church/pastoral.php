@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── CHURCH: Pastoral Visits & Counseling ───────────────────────
 $moduleSlug  = 'church';
 $moduleName  = 'Church Management';

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Manufacturing: Work Orders ──────────────────────────────────
 $moduleSlug  = 'manufacturing';
 $moduleName  = 'Manufacturing';

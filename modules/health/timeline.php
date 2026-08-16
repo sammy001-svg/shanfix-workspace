@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $moduleSlug  = 'health';
 $moduleName  = 'Health & Clinic';
 $moduleIcon  = 'fas fa-heartbeat';

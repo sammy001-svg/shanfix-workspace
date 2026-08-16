@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $moduleSlug  = 'caryard';
 $moduleName  = 'Car Yard Management';
 $moduleIcon  = 'fas fa-car';

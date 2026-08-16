@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Manufacturing: Quality Control ─────────────────────────────
 $moduleSlug  = 'manufacturing';
 $moduleName  = 'Manufacturing';

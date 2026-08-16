@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Salon: Loyalty Program ─────────────────────────────────────
 $moduleSlug = 'salon';
 $moduleName = 'Salon & Spa';

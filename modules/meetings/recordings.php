@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $moduleSlug  = 'meetings';
 $moduleName  = 'Meetings & Minutes';
 $moduleIcon  = 'fas fa-video';

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── EVENTS: Event Registry & CRUD ──────────────────────────────
 $moduleSlug  = 'events';
 $moduleName  = 'Events Management';

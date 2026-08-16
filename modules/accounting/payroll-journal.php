@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $moduleSlug  = 'accounting';
 $moduleName  = 'Accounting & Bookkeeping';
 $moduleIcon  = 'fas fa-calculator';

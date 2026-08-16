@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── CARYARD: Sales Logs & Status Automations ───────────────────
 $moduleSlug  = 'caryard';
 $moduleName  = 'Car Yard Management';

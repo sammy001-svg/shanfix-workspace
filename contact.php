@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * OrbitDesk — Public Contact Page
  * Standalone, no authentication required.

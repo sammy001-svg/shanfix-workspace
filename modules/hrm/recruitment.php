@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── HRM: Recruitment ──────────────────────────────────────────
 $moduleSlug  = 'hrm';
 $moduleName  = 'Human Resource Management';

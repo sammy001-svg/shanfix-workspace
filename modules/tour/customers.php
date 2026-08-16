@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── TOUR: Customer Profiles ────────────────────────────────────
 $moduleSlug  = 'tour';
 $moduleName  = 'Tour Management';

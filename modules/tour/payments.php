@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── TOUR: Booking Payments & Revenue Tracking ───────────────────
 $moduleSlug  = 'tour';
 $moduleName  = 'Tour & Travel';

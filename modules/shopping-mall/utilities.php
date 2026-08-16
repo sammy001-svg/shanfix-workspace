@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Shopping Mall: Utilities ──────────────────────────────────
 $moduleSlug  = 'shopping-mall';
 $moduleName  = 'Shopping Mall';

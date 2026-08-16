@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Manufacturing: Purchase Orders / Procurement ────────────────
 $moduleSlug  = 'manufacturing';
 $moduleName  = 'Manufacturing';

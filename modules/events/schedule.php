@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── EVENTS: Session / Agenda Schedule ─────────────────────────
 $moduleSlug  = 'events';
 $moduleName  = 'Event Management';

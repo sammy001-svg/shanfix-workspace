@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Retail: Categories ────────────────────────────────────────
 $moduleSlug  = 'retail';
 $moduleName  = 'Retail & Wholesale';

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Accounting: Expense Management ────────────────────────────
 $moduleSlug  = 'accounting';
 $moduleName  = 'Accounting & Bookkeeping';

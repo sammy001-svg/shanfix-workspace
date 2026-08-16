@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Retail: Stock Adjustments ──────────────────────────────────
 $moduleSlug  = 'retail';
 $moduleName  = 'Retail & Wholesale';

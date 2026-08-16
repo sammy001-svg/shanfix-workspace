@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── POS: Sales History ─────────────────────────────────────────
 $moduleSlug  = 'pos';
 $moduleName  = 'Point of Sale';

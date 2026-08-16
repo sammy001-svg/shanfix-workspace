@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Rental: Property Agreements / Side Agreements ──────────────
 $moduleSlug  = 'rental';
 $moduleName  = 'Rental & Property';

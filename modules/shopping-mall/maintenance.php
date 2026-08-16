@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Shopping Mall: Maintenance ────────────────────────────────
 $moduleSlug  = 'shopping-mall';
 $moduleName  = 'Shopping Mall';

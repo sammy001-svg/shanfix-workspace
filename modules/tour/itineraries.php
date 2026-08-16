@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── TOUR: Trip Itineraries ──────────────────────────────────────
 $moduleSlug  = 'tour';
 $moduleName  = 'Tour & Travel';

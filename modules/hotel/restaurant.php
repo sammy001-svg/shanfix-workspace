@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── Hotel: Restaurant / In-room Dining ───────────────────────
 $moduleSlug  = 'hotel';
 $moduleName  = 'Hotel Management';

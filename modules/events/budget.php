@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ── EVENTS: Budget & Expenses ──────────────────────────────────
 $moduleSlug  = 'events';
 $moduleName  = 'Event Management';
