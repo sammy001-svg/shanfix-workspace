@@ -143,7 +143,14 @@ $overlay  = (int)($cfg['hero_overlay_opacity'] ?? 86);
 .preview-hero img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .8s ease; }
 .preview-hero img.on { opacity:1; }
 .preview-hero .wash { position:absolute; inset:0; background:#050f1f; }
-.preview-hero .cap { position:absolute; left:1rem; bottom:1rem; color:#fff; font-weight:800; z-index:2; text-shadow:0 2px 8px rgba(0,0,0,.6); }
+.preview-hero .cap { position:absolute; left:1rem; right:1rem; bottom:.9rem; color:#fff; z-index:2; text-shadow:0 2px 8px rgba(0,0,0,.7); }
+.pv-eyebrow { font-size:.62rem; font-weight:700; color:#4ade93; text-transform:uppercase; letter-spacing:.5px; min-height:.8rem; }
+.pv-headline { font-size:.95rem; font-weight:800; line-height:1.25; margin:.15rem 0 .3rem; }
+.pv-ctas { display:flex; gap:.3rem; flex-wrap:wrap; }
+.pv-ctas span { font-size:.6rem; font-weight:700; padding:.15rem .5rem; border-radius:4px; }
+.pv-ctas span.p { background:#1A8A4E; color:#fff; }
+.pv-ctas span.s { background:rgba(255,255,255,.18); color:#fff; border:1px solid rgba(255,255,255,.3); }
+.slide-copy { min-height:74px; }
 </style>
 
 <div class="row g-4">
@@ -192,14 +199,32 @@ $overlay  = (int)($cfg['hero_overlay_opacity'] ?? 86);
                      alt="<?= htmlspecialchars($sl['alt_text'], ENT_QUOTES) ?>"
                      class="slide-thumb" loading="lazy">
                 <div class="slide-body">
-                  <input type="text" class="form-control form-control-sm mb-2"
-                         value="<?= htmlspecialchars($sl['alt_text'], ENT_QUOTES) ?>"
-                         placeholder="Alt text (accessibility)"
-                         onchange="updateSlide(<?= (int)$sl['id'] ?>,'alt_text',this.value,this)">
-                  <input type="text" class="form-control form-control-sm mb-2"
-                         value="<?= htmlspecialchars($sl['caption'], ENT_QUOTES) ?>"
-                         placeholder="Caption (optional)"
-                         onchange="updateSlide(<?= (int)$sl['id'] ?>,'caption',this.value,this)">
+                  <div class="slide-copy mb-2">
+                    <?php if (!empty($sl['eyebrow'])): ?>
+                      <span class="badge bg-light text-success border border-success-subtle mb-1"><?= htmlspecialchars($sl['eyebrow'], ENT_QUOTES) ?></span>
+                    <?php endif; ?>
+                    <div class="fw-bold text-truncate" title="<?= htmlspecialchars($sl['headline'] ?? '', ENT_QUOTES) ?>">
+                      <?= $sl['headline'] !== '' ? htmlspecialchars($sl['headline'], ENT_QUOTES) : '<span class="text-muted fst-italic fw-normal">No headline set</span>' ?>
+                    </div>
+                    <div class="small text-muted text-truncate">
+                      <?= htmlspecialchars(mb_substr($sl['subheadline'] ?? '', 0, 70), ENT_QUOTES) ?>
+                    </div>
+                    <div class="small mt-1">
+                      <?php foreach ([[$sl['cta1_label'] ?? '', $sl['cta1_url'] ?? ''], [$sl['cta2_label'] ?? '', $sl['cta2_url'] ?? '']] as $cta): ?>
+                        <?php if ($cta[0] !== ''): ?>
+                          <span class="badge bg-secondary-subtle text-dark fw-normal me-1">
+                            <i class="fas fa-link fa-xs me-1"></i><?= htmlspecialchars($cta[0], ENT_QUOTES) ?>
+                          </span>
+                        <?php endif; ?>
+                      <?php endforeach; ?>
+                    </div>
+                  </div>
+
+                  <button class="btn btn-sm btn-outline-primary w-100 mb-2"
+                          onclick='openSlideEditor(<?= json_encode($sl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>
+                    <i class="fas fa-pen me-1"></i>Edit Message &amp; Buttons
+                  </button>
+
                   <div class="d-flex gap-1">
                     <button class="btn btn-sm btn-outline-secondary" title="Move up"
                             onclick="moveSlide(<?= (int)$sl['id'] ?>,'up')" <?= $i === 0 ? 'disabled' : '' ?>>
@@ -231,13 +256,22 @@ $overlay  = (int)($cfg['hero_overlay_opacity'] ?? 86);
     <div class="card mb-4">
       <div class="card-header"><i class="fas fa-eye text-green me-2"></i>Live Preview</div>
       <div class="card-body">
+        <?php $activeSlides = array_values(array_filter($slides, fn($s) => $s['status'] === 'active')); ?>
         <div class="preview-hero" id="previewHero">
           <div class="wash" id="previewWash"></div>
-          <?php foreach (array_values(array_filter($slides, fn($s) => $s['status'] === 'active')) as $j => $sl): ?>
+          <?php foreach ($activeSlides as $j => $sl): ?>
             <img src="<?= APP_URL . '/' . htmlspecialchars($sl['image_path'], ENT_QUOTES) ?>"
-                 alt="" class="preview-slide <?= $j === 0 ? 'on' : '' ?>">
+                 alt="" class="preview-slide <?= $j === 0 ? 'on' : '' ?>"
+                 data-eyebrow="<?= htmlspecialchars($sl['eyebrow'] ?? '', ENT_QUOTES) ?>"
+                 data-headline="<?= htmlspecialchars($sl['headline'] ?? '', ENT_QUOTES) ?>"
+                 data-cta1="<?= htmlspecialchars($sl['cta1_label'] ?? '', ENT_QUOTES) ?>"
+                 data-cta2="<?= htmlspecialchars($sl['cta2_label'] ?? '', ENT_QUOTES) ?>">
           <?php endforeach; ?>
-          <div class="cap">Your headline sits here</div>
+          <div class="cap">
+            <div class="pv-eyebrow" id="pvEyebrow"><?= htmlspecialchars($activeSlides[0]['eyebrow'] ?? '', ENT_QUOTES) ?></div>
+            <div class="pv-headline" id="pvHeadline"><?= htmlspecialchars($activeSlides[0]['headline'] ?? 'Your headline sits here', ENT_QUOTES) ?></div>
+            <div class="pv-ctas" id="pvCtas"></div>
+          </div>
         </div>
         <p class="text-muted small mb-0 mt-2">
           Preview reflects the overlay darkness and interval below.
@@ -275,6 +309,87 @@ $overlay  = (int)($cfg['hero_overlay_opacity'] ?? 86);
 
         <button class="btn btn-primary w-100 mt-3" onclick="saveCarousel(this)">
           <i class="fas fa-save me-2"></i>Save Settings
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Slide copy editor ══════════════════════════════════════════ -->
+<div class="modal fade" id="slideEditor" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-pen text-green me-2"></i>Slide Message &amp; Buttons</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="ed_id">
+        <div class="row g-3">
+          <div class="col-12">
+            <img id="ed_thumb" src="" alt="" class="w-100 rounded" style="max-height:150px;object-fit:cover">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Eyebrow <span class="text-muted small">(small pill above headline)</span></label>
+            <input type="text" class="form-control" id="ed_eyebrow" maxlength="80" placeholder="e.g. CRM &amp; Sales">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Alt text <span class="text-muted small">(accessibility)</span></label>
+            <input type="text" class="form-control" id="ed_alt_text" maxlength="200" placeholder="Describe the photo">
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Headline <span class="text-danger">*</span></label>
+            <input type="text" class="form-control fw-bold" id="ed_headline" maxlength="160"
+                   placeholder="e.g. Turn Every Lead Into Revenue.">
+            <div class="form-text">Shown as the big hero heading while this slide is visible.</div>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Sub-headline</label>
+            <textarea class="form-control" id="ed_subheadline" rows="2" maxlength="320"
+                      placeholder="One or two lines explaining the benefit."></textarea>
+          </div>
+
+          <div class="col-12"><hr class="my-1"><strong class="small text-muted">CALL-TO-ACTION BUTTONS</strong></div>
+
+          <div class="col-md-6">
+            <label class="form-label">Primary button label</label>
+            <input type="text" class="form-control" id="ed_cta1_label" maxlength="60" placeholder="Start Free Trial">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Primary button link</label>
+            <input type="text" class="form-control" id="ed_cta1_url" maxlength="255" placeholder="/auth/register.php">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Secondary button label</label>
+            <input type="text" class="form-control" id="ed_cta2_label" maxlength="60" placeholder="Browse Modules">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Secondary button link</label>
+            <input type="text" class="form-control" id="ed_cta2_url" maxlength="255" placeholder="#modules">
+          </div>
+
+          <div class="col-12">
+            <div class="alert alert-light border small mb-0">
+              <i class="fas fa-info-circle me-1 text-green"></i>
+              Links must be a page anchor (<code>#pricing</code>), a site path
+              (<code>/auth/register.php</code>), or a full <code>https://</code> URL.
+              Anything else is rejected for security. Leave a label blank to hide that button.
+            </div>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Photo caption <span class="text-muted small">(small text, bottom-left of hero)</span></label>
+            <input type="text" class="form-control" id="ed_caption" maxlength="160" placeholder="Optional">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="edSaveBtn" onclick="saveSlideEditor(this)">
+          <i class="fas fa-save me-2"></i>Save Slide
         </button>
       </div>
     </div>
@@ -321,12 +436,44 @@ if (input) {
   dz.addEventListener('drop', e => { input.files = e.dataTransfer.files; showFiles(); });
 }
 
-/* ── Slide CRUD ──────────────────────────────────────────── */
-function updateSlide(id, field, value, el) {
-  post({ action: 'hero_slide_update', id, field, value }).then(res => {
-    if (res.success) { el.classList.add('is-valid'); setTimeout(() => el.classList.remove('is-valid'), 1200); }
-    else toast('danger', res.error || 'Update failed.');
-  }).catch(() => toast('danger', 'Network error.'));
+/* ── Slide copy editor ───────────────────────────────────── */
+const ED_FIELDS = ['eyebrow','headline','subheadline','cta1_label','cta1_url',
+                   'cta2_label','cta2_url','alt_text','caption'];
+
+function openSlideEditor(slide) {
+  document.getElementById('ed_id').value = slide.id;
+  document.getElementById('ed_thumb').src = '<?= APP_URL ?>/' + slide.image_path;
+  document.getElementById('ed_thumb').alt = slide.alt_text || '';
+  ED_FIELDS.forEach(f => { document.getElementById('ed_' + f).value = slide[f] || ''; });
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('slideEditor')).show();
+}
+
+function saveSlideEditor(btn) {
+  const id = +document.getElementById('ed_id').value;
+  if (!id) return;
+  const headline = document.getElementById('ed_headline').value.trim();
+  if (!headline) {
+    toast('danger', 'A headline is required.');
+    document.getElementById('ed_headline').focus();
+    return;
+  }
+  const fields = {};
+  ED_FIELDS.forEach(f => { fields[f] = document.getElementById('ed_' + f).value; });
+
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving…';
+
+  post({ action: 'hero_slide_save', id, fields }).then(res => {
+    btn.disabled = false; btn.innerHTML = orig;
+    if (!res.success) { toast('danger', res.error || 'Save failed.'); return; }
+    if (res.warning) { toast('danger', res.warning); return; }   // keep modal open
+    bootstrap.Modal.getInstance(document.getElementById('slideEditor')).hide();
+    location.reload();
+  }).catch(() => {
+    btn.disabled = false; btn.innerHTML = orig;
+    toast('danger', 'Network error.');
+  });
 }
 
 function toggleSlide(id) {
@@ -384,17 +531,35 @@ function saveCarousel(btn) {
   }).catch(() => { btn.disabled = false; btn.innerHTML = orig; toast('danger', 'Network error.'); });
 }
 
-/* ── Preview rotation ────────────────────────────────────── */
+/* ── Preview rotation (image + copy) ─────────────────────── */
 let previewTimer = null;
+
+function paintPreviewCopy(img) {
+  if (!img) return;
+  document.getElementById('pvEyebrow').textContent  = img.dataset.eyebrow  || '';
+  document.getElementById('pvHeadline').textContent = img.dataset.headline || 'Your headline sits here';
+  const ctas = [];
+  if (img.dataset.cta1) ctas.push('<span class="p"></span>');
+  if (img.dataset.cta2) ctas.push('<span class="s"></span>');
+  const box = document.getElementById('pvCtas');
+  box.innerHTML = ctas.join('');
+  // set label text safely (never inject admin-entered strings as HTML)
+  if (img.dataset.cta1 && box.children[0]) box.children[0].textContent = img.dataset.cta1;
+  if (img.dataset.cta2 && box.children[ctas.length - 1]) box.children[ctas.length - 1].textContent = img.dataset.cta2;
+}
+
 function restartPreview() {
   const imgs = document.querySelectorAll('.preview-slide');
   clearInterval(previewTimer);
+  if (!imgs.length) return;
+  paintPreviewCopy(imgs[0]);
   if (imgs.length < 2) return;
   let i = 0;
   previewTimer = setInterval(() => {
     imgs[i].classList.remove('on');
     i = (i + 1) % imgs.length;
     imgs[i].classList.add('on');
+    paintPreviewCopy(imgs[i]);
   }, Math.max(2000, +rInterval.value));
 }
 applyWash();

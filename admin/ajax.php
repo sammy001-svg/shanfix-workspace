@@ -474,20 +474,70 @@ switch ($action) {
         }
         break;
 
-    // ── Landing hero carousel: edit a slide's text ───────────────
-    case 'hero_slide_update':
-        $id    = (int)($input['id'] ?? 0);
-        $field = $input['field'] ?? '';
-        $value = (string)($input['value'] ?? '');
-        if (!$id || !in_array($field, ['alt_text', 'caption'], true)) {
+    // ── Landing hero carousel: save a slide's copy + CTAs ────────
+    case 'hero_slide_save':
+        $id     = (int)($input['id'] ?? 0);
+        $fields = $input['fields'] ?? [];
+        if (!$id || !is_array($fields)) {
             http_response_code(400);
             echo json_encode(['error' => 'Invalid parameters']);
             break;
         }
-        $max   = $field === 'alt_text' ? 200 : 160;
-        $value = mb_substr(trim(strip_tags($value)), 0, $max);
-        $pdo->prepare("UPDATE landing_hero_slides SET `$field`=? WHERE id=?")->execute([$value, $id]);
-        echo json_encode(['success' => true]);
+
+        // field => max length
+        $textFields = [
+            'alt_text'    => 200, 'caption'    => 160,
+            'eyebrow'     => 80,  'headline'   => 160,
+            'subheadline' => 320,
+            'cta1_label'  => 60,  'cta2_label' => 60,
+        ];
+        $urlFields = ['cta1_url' => 255, 'cta2_url' => 255];
+
+        /**
+         * Only allow links we can vouch for: same-page anchors, site-relative
+         * paths, or explicit http(s) URLs. Anything else (javascript:, data:,
+         * vbscript:, protocol-relative //evil.com) is rejected outright.
+         */
+        $safeUrl = static function (string $u): string {
+            $u = trim($u);
+            if ($u === '') return '';
+            if (preg_match('/[\x00-\x1F\x7F]/', $u)) return '';       // control chars
+            if ($u[0] === '#') return $u;                              // anchor
+            if (str_starts_with($u, '//')) return '';                  // protocol-relative
+            if ($u[0] === '/') return $u;                              // site-relative
+            $scheme = strtolower((string)parse_url($u, PHP_URL_SCHEME));
+            return in_array($scheme, ['http', 'https'], true) ? $u : '';
+        };
+
+        $set = [];
+        $val = [];
+        $rejected = [];
+
+        foreach ($fields as $k => $v) {
+            if (isset($textFields[$k])) {
+                $set[] = "`$k`=?";
+                $val[] = mb_substr(trim(strip_tags((string)$v)), 0, $textFields[$k]);
+            } elseif (isset($urlFields[$k])) {
+                $clean = $safeUrl((string)$v);
+                if ($clean === '' && trim((string)$v) !== '') $rejected[] = $k;
+                $set[] = "`$k`=?";
+                $val[] = mb_substr($clean, 0, $urlFields[$k]);
+            }
+        }
+
+        if (!$set) {
+            http_response_code(400);
+            echo json_encode(['error' => 'No valid fields supplied']);
+            break;
+        }
+
+        $val[] = $id;
+        $pdo->prepare("UPDATE landing_hero_slides SET " . implode(',', $set) . " WHERE id=?")->execute($val);
+
+        echo json_encode($rejected
+            ? ['success' => true, 'warning' => 'Rejected unsafe link in: ' . implode(', ', $rejected)
+                                             . '. Use #anchor, /path, or a full http(s) URL.']
+            : ['success' => true]);
         break;
 
     // ── Landing hero carousel: show / hide a slide ───────────────
