@@ -471,12 +471,12 @@ class OrbitDeskPDF
 // ── Global PDF helper ────────────────────────────────────────────
 function generateInvoicePDF(array $invoice, array $org, array $items = []): void
 {
-    new OrbitDeskPDF()->invoice($invoice, $org, $items);
+    (new OrbitDeskPDF())->invoice($invoice, $org, $items);
 }
 
 function generatePayslipPDF(array $payroll, array $employee, array $org): void
 {
-    new OrbitDeskPDF()->payslip($payroll, $employee, $org);
+    (new OrbitDeskPDF())->payslip($payroll, $employee, $org);
 }
 
 /**
@@ -499,5 +499,5 @@ function generateModuleReportPDF(
     string $filename  = 'report.pdf',
     array  $color     = [11, 45, 78]
 ): void {
-    new OrbitDeskPDF()->report($title, $subtitle, $summary, $cols, $rows, $filename, $color);
+    (new OrbitDeskPDF())->report($title, $subtitle, $summary, $cols, $rows, $filename, $color);
 }
