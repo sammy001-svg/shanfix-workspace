@@ -5,12 +5,13 @@
  * Uploads/reorders/toggles the background slides shown behind the hero on
  * the public landing page, plus the carousel behaviour settings.
  */
-$pageTitle = 'Landing Page';
-require_once __DIR__ . '/../includes/header-admin.php';
+// Bootstrap before any output so uploads can POST-redirect-GET.
+if (session_status() === PHP_SESSION_NONE) session_start();
+require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/functions.php';
+requireSuperAdmin();
 
 $projectRoot = dirname(__DIR__);
-$flashMsg    = null;
-$flashType   = 'success';
 
 // ── Ensure the table exists so the page is usable before the migration ──
 try {
@@ -61,9 +62,21 @@ if ($tableReady && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['slide
         }
     }
 
-    if ($added)  { $flashMsg = "$added image" . ($added > 1 ? 's' : '') . ' uploaded.'; }
-    if ($errors) { $flashMsg = ($flashMsg ? $flashMsg . ' ' : '') . implode(' | ', $errors); $flashType = $added ? 'warning' : 'danger'; }
+    $msg  = $added ? "$added image" . ($added > 1 ? 's' : '') . ' uploaded.' : '';
+    $type = 'success';
+    if ($errors) {
+        $msg  = trim($msg . ' ' . implode(' | ', $errors));
+        $type = $added ? 'warning' : 'danger';
+    }
+    setFlash($type, $msg ?: 'Nothing was uploaded.');
+
+    // POST-redirect-GET so a browser refresh can't re-submit the upload
+    header('Location: ' . APP_URL . '/admin/landing.php');
+    exit;
 }
+
+$pageTitle = 'Landing Page';
+require_once __DIR__ . '/../includes/header-admin.php';
 
 // ── Load current state ─────────────────────────────────────────────────
 $slides = [];
@@ -114,13 +127,7 @@ $overlay  = (int)($cfg['hero_overlay_opacity'] ?? 86);
   <code>database/landing_hero_migration.sql</code> to enable the hero carousel manager.
 </div>
 <?php endif; ?>
-
-<?php if ($flashMsg): ?>
-<div class="alert alert-<?= $flashType ?> alert-dismissible fade show">
-  <?= $flashMsg ?>
-  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
-<?php endif; ?>
+<?php /* Upload result is shown by flashAlert() in header-admin.php */ ?>
 
 <style>
 .slide-card { border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; background:#fff; transition:box-shadow .2s, border-color .2s; }
