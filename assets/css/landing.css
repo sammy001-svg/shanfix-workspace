@@ -98,19 +98,89 @@ body.landing-body {
 
 /* ─── Hero ────────────────────────────────────────────────── */
 .od-hero {
+  --hero-overlay: .86;               /* overridden inline from admin settings */
   position: relative; min-height: 100vh;
   background-color: var(--od-ink);
-  background-image: url('group-afro-americans-working-together-scaled.jpg');
-  background-size: cover;
-  background-position: center 22%;
   display: flex; align-items: center;
   padding: 120px 0 80px;
   overflow: hidden;
 }
-/* Flat colour wash over the photo — single solid rgba, no gradient */
-.od-hero::before {
-  content: ''; position: absolute; inset: 0; z-index: 0;
-  background: rgba(5,15,31,.86);
+
+/* ── Background carousel ──────────────────────────────────────
+   Slides are absolutely stacked; only the active one is opaque.
+   Managed in /admin/landing.php. */
+.hero-carousel { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
+.hero-slide {
+  position: absolute; inset: 0;
+  background-size: cover;
+  background-position: center 30%;
+  background-repeat: no-repeat;
+  will-change: opacity, transform;
+}
+
+/* Fade transition (default) */
+.hero-fx-fade .hero-slide {
+  opacity: 0;
+  transition: opacity 1.2s var(--ease-soft);
+}
+.hero-fx-fade .hero-slide.is-active { opacity: 1; }
+
+/* Slide-across transition */
+.hero-fx-slide .hero-slide {
+  opacity: 0; transform: translateX(6%);
+  transition: opacity .9s var(--ease-out), transform 1.1s var(--ease-out);
+}
+.hero-fx-slide .hero-slide.is-active { opacity: 1; transform: translateX(0); }
+.hero-fx-slide .hero-slide.is-leaving { opacity: 0; transform: translateX(-6%); }
+
+/* Slow zoom on the active slide adds life without any gradient */
+.od-hero.has-carousel .hero-slide.is-active { animation: hero-zoom 12s ease-out forwards; }
+@keyframes hero-zoom { from { transform: scale(1); } to { transform: scale(1.06); } }
+.hero-fx-slide .hero-slide.is-active { animation: none; }
+
+/* Flat navy wash — single solid colour, opacity set by the admin */
+.hero-wash {
+  position: absolute; inset: 0; z-index: 1;
+  background: var(--od-ink);
+  opacity: var(--hero-overlay);
+  pointer-events: none;
+}
+
+/* ── Carousel controls ────────────────────────────────────── */
+.hero-dots {
+  position: absolute; bottom: 1.75rem; left: 50%; transform: translateX(-50%);
+  z-index: 6; display: flex; align-items: center; gap: .5rem;
+  background: rgba(5,15,31,.45);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 999px; padding: .4rem .7rem;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.hero-dot {
+  width: 28px; height: 4px; border-radius: 2px; border: none; padding: 0;
+  background: rgba(255,255,255,.3); cursor: pointer;
+  transition: background .25s, width .25s var(--ease-out);
+}
+.hero-dot:hover { background: rgba(255,255,255,.55); }
+.hero-dot.is-active { background: var(--od-mint); width: 40px; }
+.hero-dot:focus-visible,
+.hero-dot-pause:focus-visible { outline: 2px solid var(--od-mint); outline-offset: 3px; }
+.hero-dot-pause {
+  background: transparent; border: none; cursor: pointer;
+  color: rgba(255,255,255,.6); font-size: .65rem;
+  padding: 0 .1rem 0 .35rem; line-height: 1;
+  border-left: 1px solid rgba(255,255,255,.15);
+  transition: color .2s;
+}
+.hero-dot-pause:hover { color: #fff; }
+
+.hero-caption {
+  position: absolute; bottom: 1.9rem; left: 2rem; z-index: 6;
+  color: rgba(255,255,255,.7); font-size: .78rem; font-weight: 500;
+  max-width: 40ch;
+}
+@media (max-width: 767.98px) {
+  .hero-caption { display: none; }
+  .hero-dots { bottom: 1rem; }
 }
 .od-hero .hero-mesh {
   position: absolute; inset: 0; z-index: 1; pointer-events: none;
@@ -760,7 +830,7 @@ body.landing-body {
 /* ─── Responsive ──────────────────────────────────────────── */
 @media (max-width: 991.98px) {
   .process-connector { display: none; }
-  .od-hero { min-height: auto; padding: 110px 0 70px; }
+  .od-hero { min-height: 0; padding: 110px 0 70px; }
 }
 @media (max-width: 575.98px) {
   .dash-kpis { grid-template-columns: repeat(2,1fr); }
@@ -781,4 +851,8 @@ body.landing-body {
   .marquee-track { animation: none !important; }
   .od-dashboard { animation: none !important; }
   .float-badge { animation: none !important; }
+  /* Carousel holds on the first slide — no auto-advance, no Ken Burns zoom */
+  .od-hero .hero-slide { animation: none !important; transform: none !important; }
+  .hero-fx-fade .hero-slide,
+  .hero-fx-slide .hero-slide { transition: none !important; }
 }

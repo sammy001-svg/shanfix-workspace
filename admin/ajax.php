@@ -136,6 +136,7 @@ switch ($action) {
             'kopokopo' => ['kopokopo_client_id','kopokopo_client_secret','kopokopo_till_number','kopokopo_api_secret','kopokopo_env'],
             'sms'      => ['sms_enabled','at_username','at_api_key','at_shortcode','at_env'],
             'security' => ['session_timeout','max_login_attempts'],
+            'landing_hero' => ['hero_carousel_enabled','hero_carousel_interval','hero_carousel_effect','hero_overlay_opacity'],
         ];
         if (!isset($allowed[$section])) {
             http_response_code(400);
@@ -163,8 +164,15 @@ switch ($action) {
                 $rate = (float)$value;
                 if ($rate <= 0) $rate = 130;
                 $value = number_format(min($rate, 99999), 4, '.', '');
-            } elseif ($key === 'sms_enabled') {
+            } elseif ($key === 'sms_enabled' || $key === 'hero_carousel_enabled') {
                 $value = $value === '1' ? '1' : '0';
+            } elseif ($key === 'hero_carousel_interval') {
+                // Clamp to the range the admin slider offers
+                $value = (string)min(15000, max(2000, (int)$value));
+            } elseif ($key === 'hero_overlay_opacity') {
+                $value = (string)min(98, max(40, (int)$value));
+            } elseif ($key === 'hero_carousel_effect') {
+                $value = in_array($value, ['fade','slide'], true) ? $value : 'fade';
             }
 
             saveSetting($key, (string)$value);
@@ -464,6 +472,86 @@ switch ($action) {
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'message' => 'Exception: ' . $e->getMessage()]);
         }
+        break;
+
+    // ── Landing hero carousel: edit a slide's text ───────────────
+    case 'hero_slide_update':
+        $id    = (int)($input['id'] ?? 0);
+        $field = $input['field'] ?? '';
+        $value = (string)($input['value'] ?? '');
+        if (!$id || !in_array($field, ['alt_text', 'caption'], true)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid parameters']);
+            break;
+        }
+        $max   = $field === 'alt_text' ? 200 : 160;
+        $value = mb_substr(trim(strip_tags($value)), 0, $max);
+        $pdo->prepare("UPDATE landing_hero_slides SET `$field`=? WHERE id=?")->execute([$value, $id]);
+        echo json_encode(['success' => true]);
+        break;
+
+    // ── Landing hero carousel: show / hide a slide ───────────────
+    case 'hero_slide_toggle':
+        $id = (int)($input['id'] ?? 0);
+        if (!$id) { http_response_code(400); echo json_encode(['error' => 'Invalid slide']); break; }
+        $pdo->prepare(
+            "UPDATE landing_hero_slides
+                SET status = IF(status='active','inactive','active')
+              WHERE id = ?"
+        )->execute([$id]);
+        echo json_encode(['success' => true]);
+        break;
+
+    // ── Landing hero carousel: reorder ───────────────────────────
+    case 'hero_slide_move':
+        $id  = (int)($input['id'] ?? 0);
+        $dir = $input['dir'] ?? '';
+        if (!$id || !in_array($dir, ['up', 'down'], true)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid parameters']);
+            break;
+        }
+        // Normalise ordering first so swaps are always well-defined
+        $rows = $pdo->query("SELECT id FROM landing_hero_slides ORDER BY sort_order ASC, id ASC")->fetchAll();
+        $ids  = array_column($rows, 'id');
+        $pos  = array_search($id, $ids, false);
+        if ($pos === false) { http_response_code(404); echo json_encode(['error' => 'Slide not found']); break; }
+
+        $swapWith = $dir === 'up' ? $pos - 1 : $pos + 1;
+        if ($swapWith < 0 || $swapWith >= count($ids)) {
+            echo json_encode(['success' => true]);   // already at the edge — no-op
+            break;
+        }
+        [$ids[$pos], $ids[$swapWith]] = [$ids[$swapWith], $ids[$pos]];
+
+        $upd = $pdo->prepare("UPDATE landing_hero_slides SET sort_order=? WHERE id=?");
+        foreach ($ids as $order => $slideId) {
+            $upd->execute([$order + 1, $slideId]);
+        }
+        echo json_encode(['success' => true]);
+        break;
+
+    // ── Landing hero carousel: delete slide + its file ───────────
+    case 'hero_slide_delete':
+        $id = (int)($input['id'] ?? 0);
+        if (!$id) { http_response_code(400); echo json_encode(['error' => 'Invalid slide']); break; }
+
+        $stmt = $pdo->prepare("SELECT image_path FROM landing_hero_slides WHERE id=?");
+        $stmt->execute([$id]);
+        $path = (string)$stmt->fetchColumn();
+
+        $pdo->prepare("DELETE FROM landing_hero_slides WHERE id=?")->execute([$id]);
+
+        // Only unlink inside assets/uploads — never follow a path outside it
+        if ($path !== '') {
+            $root = realpath(dirname(__DIR__));
+            $full = realpath($root . '/' . $path);
+            $safe = realpath($root . '/assets/uploads');
+            if ($full && $safe && str_starts_with($full, $safe) && is_file($full)) {
+                @unlink($full);
+            }
+        }
+        echo json_encode(['success' => true]);
         break;
 
     default:

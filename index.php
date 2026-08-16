@@ -28,6 +28,32 @@ $siteHours   = getSetting('company_hours',   'Mon – Sat, 8AM – 8PM EAT');
 $siteWebsite = getSetting('company_website', APP_URL);
 $appTagline  = getSetting('app_tagline',     defined('APP_TAGLINE') ? APP_TAGLINE : 'Powering African Businesses');
 
+// ── Hero background carousel (managed in /admin/landing.php) ──────────────
+$heroSlides = [];
+try {
+    $heroSlides = $pdo->query(
+        "SELECT image_path, alt_text, caption
+           FROM landing_hero_slides
+          WHERE status = 'active'
+          ORDER BY sort_order ASC, id ASC"
+    )->fetchAll();
+} catch (Throwable $e) {
+    // Table not migrated yet — fall back to the bundled photo below.
+    $heroSlides = [];
+}
+if (!$heroSlides) {
+    $heroSlides = [[
+        'image_path' => 'group-afro-americans-working-together-scaled.jpg',
+        'alt_text'   => 'Team working together',
+        'caption'    => '',
+    ]];
+}
+$heroCarouselOn  = getSetting('hero_carousel_enabled', '1') === '1' && count($heroSlides) > 1;
+$heroInterval    = min(15000, max(2000, (int)getSetting('hero_carousel_interval', '6000')));
+$heroEffect      = in_array(getSetting('hero_carousel_effect', 'fade'), ['fade','slide'], true)
+                   ? getSetting('hero_carousel_effect', 'fade') : 'fade';
+$heroOverlay     = min(98, max(40, (int)getSetting('hero_overlay_opacity', '86'))) / 100;
+
 // ── Module feature lists (shown in popup) ─────────────────────
 $moduleFeatures = [
     'accounting'    => ['General ledger & chart of accounts','Invoice & receipt generation','Expense tracking & categorisation','VAT & tax computation reports','Bank reconciliation','Profit & loss and balance sheet'],
@@ -261,10 +287,54 @@ require_once __DIR__ . '/includes/header-public.php';
 <!-- ══════════════════════════════════════════════════════════
      HERO
 ══════════════════════════════════════════════════════════ -->
-<section class="od-hero" id="hero">
+<section class="od-hero<?= $heroCarouselOn ? ' has-carousel' : '' ?>" id="hero"
+         data-hero-interval="<?= (int)$heroInterval ?>"
+         data-hero-effect="<?= e($heroEffect) ?>"
+         style="--hero-overlay:<?= number_format($heroOverlay, 2, '.', '') ?>">
+
+  <!-- ── Background carousel (slides managed in /admin/landing.php) ── -->
+  <div class="hero-carousel hero-fx-<?= e($heroEffect) ?>" aria-hidden="true">
+    <?php foreach ($heroSlides as $hi => $hs): ?>
+    <div class="hero-slide<?= $hi === 0 ? ' is-active' : '' ?>"
+         data-index="<?= $hi ?>"
+         data-caption="<?= e($hs['caption'] ?? '') ?>"
+         style="background-image:url('<?= e(APP_URL . '/' . ltrim($hs['image_path'], '/')) ?>')"
+         role="img"
+         aria-label="<?= e($hs['alt_text'] ?? '') ?>"></div>
+    <?php endforeach; ?>
+  </div>
+
+  <!-- Flat navy wash — opacity is admin-controlled via --hero-overlay -->
+  <div class="hero-wash"></div>
+
   <!-- Overlay layers -->
   <div class="hero-mesh"></div>
   <div class="hero-bottom-shimmer"></div>
+
+  <?php if ($heroCarouselOn): ?>
+  <!-- Carousel controls -->
+  <div class="hero-dots" role="tablist" aria-label="Background slides">
+    <?php foreach ($heroSlides as $hi => $hs): ?>
+    <button class="hero-dot<?= $hi === 0 ? ' is-active' : '' ?>" role="tab"
+            data-go="<?= $hi ?>"
+            aria-selected="<?= $hi === 0 ? 'true' : 'false' ?>"
+            aria-label="Show background <?= $hi + 1 ?><?= !empty($hs['alt_text']) ? ': ' . e($hs['alt_text']) : '' ?>"></button>
+    <?php endforeach; ?>
+    <button class="hero-dot-pause" id="heroPause" aria-label="Pause background slideshow" aria-pressed="false">
+      <i class="fas fa-pause"></i>
+    </button>
+  </div>
+  <?php endif; ?>
+
+  <?php
+  // Render the caption slot if ANY slide carries one, so later slides can fill it
+  $heroHasCaption = false;
+  foreach ($heroSlides as $hs) { if (!empty($hs['caption'])) { $heroHasCaption = true; break; } }
+  ?>
+  <?php if ($heroHasCaption): ?>
+  <div class="hero-caption" id="heroCaption"><?= e($heroSlides[0]['caption'] ?? '') ?></div>
+  <?php endif; ?>
+
   <!-- Flat outlined shapes (replaces the old glow orbs — no gradients) -->
   <div class="shape shape-ring" aria-hidden="true"></div>
   <div class="shape shape-ring-2" aria-hidden="true"></div>
@@ -1047,6 +1117,94 @@ ob_start();
     }, { threshold: .12, rootMargin: '0px 0px -40px 0px' });
     revealEls.forEach(function (el) { revealObs.observe(el); });
   }
+
+  /* ── Hero background carousel ─────────────────────────────────
+     Slides/interval/effect all come from /admin/landing.php.
+     Pauses when the tab is hidden or the hero is scrolled out of view,
+     and honours prefers-reduced-motion by holding on slide 1. */
+  (function heroCarousel() {
+    var hero = document.getElementById('hero');
+    if (!hero || !hero.classList.contains('has-carousel')) return;
+
+    var slides = hero.querySelectorAll('.hero-slide');
+    var dots   = hero.querySelectorAll('.hero-dot');
+    var pause  = document.getElementById('heroPause');
+    var cap    = document.getElementById('heroCaption');
+    if (slides.length < 2 || REDUCED) return;
+
+    var interval = parseInt(hero.dataset.heroInterval, 10) || 6000;
+    var isSlide  = hero.dataset.heroEffect === 'slide';
+    var current  = 0;
+    var timer    = null;
+    var paused   = false;
+    var visible  = true;
+
+    function go(next) {
+      if (next === current) return;
+      var from = slides[current];
+      var to   = slides[next];
+
+      if (isSlide) {
+        from.classList.add('is-leaving');
+        setTimeout(function () { from.classList.remove('is-leaving'); }, 1100);
+      }
+      from.classList.remove('is-active');
+      to.classList.add('is-active');
+
+      // Restart the Ken Burns zoom on the incoming slide
+      if (!isSlide) {
+        to.style.animation = 'none';
+        void to.offsetWidth;               // force reflow so the anim replays
+        to.style.animation = '';
+      }
+
+      dots.forEach(function (d, i) {
+        d.classList.toggle('is-active', i === next);
+        d.setAttribute('aria-selected', i === next ? 'true' : 'false');
+      });
+
+      if (cap) cap.textContent = to.dataset.caption || '';
+      current = next;
+    }
+
+    function start() {
+      stop();
+      if (paused || !visible) return;
+      timer = setInterval(function () { go((current + 1) % slides.length); }, interval);
+    }
+    function stop() { if (timer) { clearInterval(timer); timer = null; } }
+
+    dots.forEach(function (dot) {
+      dot.addEventListener('click', function () {
+        go(parseInt(dot.dataset.go, 10) || 0);
+        start();                            // reset the clock after manual nav
+      });
+    });
+
+    if (pause) {
+      pause.addEventListener('click', function () {
+        paused = !paused;
+        pause.setAttribute('aria-pressed', String(paused));
+        pause.setAttribute('aria-label', paused ? 'Resume background slideshow' : 'Pause background slideshow');
+        pause.innerHTML = paused ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>';
+        paused ? stop() : start();
+      });
+    }
+
+    // Don't burn cycles animating a hidden tab or an off-screen hero
+    document.addEventListener('visibilitychange', function () {
+      visible = !document.hidden;
+      visible ? start() : stop();
+    });
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(function (entries) {
+        visible = entries[0].isIntersecting && !document.hidden;
+        visible ? start() : stop();
+      }, { threshold: .05 }).observe(hero);
+    }
+
+    start();
+  })();
 
   /* ── Animated counters ────────────────────────────────────── */
   function animateCounter(el) {
