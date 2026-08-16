@@ -32,21 +32,52 @@ $appTagline  = getSetting('app_tagline',     defined('APP_TAGLINE') ? APP_TAGLIN
 $heroSlides = [];
 try {
     $heroSlides = $pdo->query(
-        "SELECT image_path, alt_text, caption
+        "SELECT image_path, alt_text, caption, eyebrow, headline, subheadline,
+                cta1_label, cta1_url, cta2_label, cta2_url
            FROM landing_hero_slides
           WHERE status = 'active'
           ORDER BY sort_order ASC, id ASC"
     )->fetchAll();
 } catch (Throwable $e) {
-    // Table not migrated yet — fall back to the bundled photo below.
+    // Table (or the copy columns) not migrated yet — fall back below.
     $heroSlides = [];
 }
+
+// Default copy, used for the fallback slide and to fill any blank field
+$heroDefault = [
+    'image_path'  => 'group-afro-americans-working-together-scaled.jpg',
+    'alt_text'    => 'Team working together',
+    'caption'     => '',
+    'eyebrow'     => "Kenya's #1 Business Management Suite",
+    'headline'    => 'One Platform. 20+ Business Solutions.',
+    'subheadline' => 'OrbitDesk Workspace centralises every aspect of your business — accounting, HR, POS, hotel, school, SACCO, and more — in a single, powerful, cloud-based platform.',
+    'cta1_label'  => 'Start Free Trial',
+    'cta1_url'    => APP_URL . '/auth/register.php',
+    'cta2_label'  => 'Browse Modules',
+    'cta2_url'    => '#modules',
+];
 if (!$heroSlides) {
-    $heroSlides = [[
-        'image_path' => 'group-afro-americans-working-together-scaled.jpg',
-        'alt_text'   => 'Team working together',
-        'caption'    => '',
-    ]];
+    $heroSlides = [$heroDefault];
+}
+
+/** Only allow anchors, site-relative paths, or explicit http(s) links. */
+$heroSafeUrl = static function (?string $u): string {
+    $u = trim((string)$u);
+    if ($u === '' || preg_match('/[\x00-\x1F\x7F]/', $u)) return '';
+    if ($u[0] === '#') return $u;
+    if (str_starts_with($u, '//')) return '';
+    if ($u[0] === '/') return APP_URL . $u;
+    $scheme = strtolower((string)parse_url($u, PHP_URL_SCHEME));
+    return in_array($scheme, ['http', 'https'], true) ? $u : '';
+};
+
+// Fill blanks on the first slide only, so the H1 is never empty
+foreach (['eyebrow', 'headline', 'subheadline', 'cta1_label', 'cta1_url'] as $k) {
+    if (empty($heroSlides[0][$k])) $heroSlides[0][$k] = $heroDefault[$k];
+}
+foreach ($heroSlides as $hk => $hv) {
+    $heroSlides[$hk]['cta1_url'] = $heroSafeUrl($hv['cta1_url'] ?? '');
+    $heroSlides[$hk]['cta2_url'] = $heroSafeUrl($hv['cta2_url'] ?? '');
 }
 $heroCarouselOn  = getSetting('hero_carousel_enabled', '1') === '1' && count($heroSlides) > 1;
 $heroInterval    = min(15000, max(2000, (int)getSetting('hero_carousel_interval', '6000')));
@@ -341,30 +372,60 @@ require_once __DIR__ . '/includes/header-public.php';
   <div class="shape shape-square" aria-hidden="true"></div>
   <div class="container position-relative" style="z-index:4">
     <div class="row align-items-center g-5">
-      <!-- Left: Copy -->
+      <!-- Left: Copy — slide 1 is server-rendered; JS swaps it per slide -->
       <div class="col-lg-6">
-        <div class="hero-eyebrow">
-          <span class="dot"></span>
-          Kenya's #1 Business Management Suite
+        <div class="hero-copy" id="heroCopy">
+          <?php $hs0 = $heroSlides[0]; ?>
+          <div class="hero-eyebrow" id="heroEyebrow">
+            <span class="dot"></span>
+            <span id="heroEyebrowText"><?= e($hs0['eyebrow']) ?></span>
+          </div>
+
+          <h1 class="hero-headline" id="heroHeadline">
+            <?php
+            // Split into words so each can animate in; the last two words get the accent.
+            $hWords = preg_split('/\s+/', trim($hs0['headline']));
+            $hTotal = count($hWords);
+            foreach ($hWords as $wi => $word):
+                $accent = $wi >= $hTotal - 2 ? ' grad-text' : '';
+            ?>
+            <span class="hero-word<?= $accent ?>" style="--w:<?= $wi ?>"><?= e($word) ?></span>
+            <?php endforeach; ?>
+          </h1>
+
+          <p class="hero-sub" id="heroSub"><?= e($hs0['subheadline']) ?></p>
+
+          <?php
+          // Both anchors are always emitted (hidden when unused) so a later
+          // slide's button always has an element to populate.
+          $hCta1On = !empty($hs0['cta1_label']) && !empty($hs0['cta1_url']);
+          $hCta2On = !empty($hs0['cta2_label']) && !empty($hs0['cta2_url']);
+          ?>
+          <div class="hero-actions" id="heroActions">
+            <a href="<?= e($hCta1On ? $hs0['cta1_url'] : '#') ?>" class="btn-od-primary" id="heroCta1"
+               <?= $hCta1On ? '' : 'style="display:none"' ?>>
+              <span id="heroCta1Text"><?= e($hs0['cta1_label'] ?? '') ?></span> <i class="fas fa-arrow-right"></i>
+            </a>
+            <a href="<?= e($hCta2On ? $hs0['cta2_url'] : '#') ?>" class="btn-od-ghost" id="heroCta2"
+               <?= $hCta2On ? '' : 'style="display:none"' ?>>
+              <i class="fas fa-th-large"></i> <span id="heroCta2Text"><?= e($hs0['cta2_label'] ?? '') ?></span>
+            </a>
+          </div>
         </div>
-        <h1 class="hero-headline">
-          <span class="hero-word" style="--w:0">One</span>
-          <span class="hero-word" style="--w:1">Platform.</span><br>
-          <span class="hero-word grad-text" style="--w:2">20+</span>
-          <span class="hero-word grad-text" style="--w:3">Business</span><br>
-          <span class="hero-word" style="--w:4">Solutions.</span>
-        </h1>
-        <p class="hero-sub">
-          OrbitDesk Workspace centralises every aspect of your business — accounting, HR, POS, hotel, school, SACCO, and more — in a single, powerful, cloud-based platform.
-        </p>
-        <div class="hero-actions">
-          <a href="<?= APP_URL ?>/auth/register.php" class="btn-od-primary">
-            Start Free Trial <i class="fas fa-arrow-right"></i>
-          </a>
-          <a href="#modules" class="btn-od-ghost">
-            <i class="fas fa-th-large"></i> Browse Modules
-          </a>
-        </div>
+
+        <?php
+        // Copy for every slide, for the JS swap. Escaped as JSON, not HTML.
+        $heroCopyJson = array_map(static fn($s) => [
+            'eyebrow'     => (string)($s['eyebrow']     ?? ''),
+            'headline'    => (string)($s['headline']    ?? ''),
+            'subheadline' => (string)($s['subheadline'] ?? ''),
+            'cta1_label'  => (string)($s['cta1_label']  ?? ''),
+            'cta1_url'    => (string)($s['cta1_url']    ?? ''),
+            'cta2_label'  => (string)($s['cta2_label']  ?? ''),
+            'cta2_url'    => (string)($s['cta2_url']    ?? ''),
+        ], $heroSlides);
+        ?>
+        <script type="application/json" id="heroCopyData"><?= json_encode($heroCopyJson, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?></script>
         <div class="hero-trust">
           <div class="trust-item"><i class="fas fa-check-circle"></i> No credit card</div>
           <div class="trust-item"><i class="fas fa-check-circle"></i> 14-day free trial</div>
@@ -1138,6 +1199,55 @@ ob_start();
     var timer    = null;
     var paused   = false;
     var visible  = true;
+    var hovered  = false;
+
+    /* Per-slide marketing copy, emitted as JSON by PHP */
+    var COPY = [];
+    try {
+      var raw = document.getElementById('heroCopyData');
+      if (raw) COPY = JSON.parse(raw.textContent) || [];
+    } catch (e) { COPY = []; }
+
+    var copyBox = document.getElementById('heroCopy');
+    var elHead  = document.getElementById('heroHeadline');
+    var elSub   = document.getElementById('heroSub');
+    var elEyeTx = document.getElementById('heroEyebrowText');
+    var elCta1  = document.getElementById('heroCta1');
+    var elCta2  = document.getElementById('heroCta2');
+
+    /* Rebuild the headline as animated word spans.
+       textContent everywhere — admin copy is never injected as HTML. */
+    function paintHeadline(text) {
+      if (!elHead) return;
+      elHead.innerHTML = '';
+      var words = String(text || '').trim().split(/\s+/);
+      words.forEach(function (w, i) {
+        var span = document.createElement('span');
+        span.className = 'hero-word' + (i >= words.length - 2 ? ' grad-text' : '');
+        span.style.setProperty('--w', i);
+        span.textContent = w;
+        elHead.appendChild(span);
+      });
+    }
+
+    function paintCta(el, label, url) {
+      if (!el) return;
+      if (!label || !url) { el.style.display = 'none'; return; }
+      el.style.display = '';
+      el.setAttribute('href', url);
+      var txt = el.querySelector('span');
+      if (txt) txt.textContent = label;
+    }
+
+    function paintCopy(i) {
+      var c = COPY[i];
+      if (!c) return;
+      if (elEyeTx) elEyeTx.textContent = c.eyebrow || '';
+      if (elSub)   elSub.textContent   = c.subheadline || '';
+      paintHeadline(c.headline);
+      paintCta(elCta1, c.cta1_label, c.cta1_url);
+      paintCta(elCta2, c.cta2_label, c.cta2_url);
+    }
 
     function go(next) {
       if (next === current) return;
@@ -1163,16 +1273,38 @@ ob_start();
         d.setAttribute('aria-selected', i === next ? 'true' : 'false');
       });
 
+      // Fade the copy out, swap it, fade back in
+      if (copyBox && COPY.length) {
+        copyBox.classList.add('is-swapping');
+        setTimeout(function () {
+          paintCopy(next);
+          copyBox.classList.remove('is-swapping');
+        }, 350);
+      }
+
       if (cap) cap.textContent = to.dataset.caption || '';
       current = next;
     }
 
     function start() {
       stop();
-      if (paused || !visible) return;
+      if (paused || !visible || hovered) return;
       timer = setInterval(function () { go((current + 1) % slides.length); }, interval);
     }
     function stop() { if (timer) { clearInterval(timer); timer = null; } }
+
+    /* Hold still while the user is reading or reaching for a CTA — the
+       buttons change per slide, so moving them mid-click is hostile. */
+    ['mouseenter', 'focusin'].forEach(function (ev) {
+      hero.addEventListener(ev, function () { hovered = true;  stop();  });
+    });
+    ['mouseleave', 'focusout'].forEach(function (ev) {
+      hero.addEventListener(ev, function () {
+        // Ignore focusout that just moves between elements inside the hero
+        if (ev === 'focusout' && hero.contains(document.activeElement)) return;
+        hovered = false; start();
+      });
+    });
 
     dots.forEach(function (dot) {
       dot.addEventListener('click', function () {

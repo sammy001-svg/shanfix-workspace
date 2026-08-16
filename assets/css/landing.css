@@ -246,8 +246,20 @@ body.landing-body {
   opacity: 0; transform: translateY(24px);
   animation: word-in .7s var(--ease-out) forwards;
   animation-delay: calc(var(--w, 0) * 70ms);
+  margin-right: .28em;
 }
 @keyframes word-in { to { opacity: 1; transform: translateY(0); } }
+
+/* Per-slide marketing copy: fades out, swaps, fades back in */
+.hero-copy {
+  transition: opacity .35s var(--ease-soft), transform .35s var(--ease-soft);
+}
+.hero-copy.is-swapping { opacity: 0; transform: translateY(10px); }
+
+/* Keep the block from jumping as copy length changes between slides */
+.hero-headline { min-height: 2.2em; }
+.od-hero .hero-sub { min-height: 3.4em; }
+.hero-actions { min-height: 3rem; }
 
 .od-hero .hero-sub {
   font-size: 1.1rem; color: rgba(255,255,255,.62); line-height: 1.8;
