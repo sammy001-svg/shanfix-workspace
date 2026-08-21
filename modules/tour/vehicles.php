@@ -20,11 +20,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $notes      = sanitize($_POST['notes'] ?? '');
         if (!$name) { setFlash('error', 'Vehicle name is required.'); redirect('vehicles.php'); }
         if ($id > 0) {
-            $pdo->prepare("UPDATE tour_vehicles SET name=?,vehicle_type=?,plate_number=?,capacity=?,driver_name=?,driver_phone=?,status=?,notes=? WHERE id=? AND org_id=?")
+            $pdo->prepare("UPDATE tour_vehicles SET name=?,vehicle_type=?,reg_no=?,capacity=?,driver_name=?,driver_phone=?,status=?,notes=? WHERE id=? AND org_id=?")
                 ->execute([$name,$type,$plate,$capacity,$driver,$driverPhone,$status,$notes,$id,$orgId]);
             setFlash('success', 'Vehicle updated.');
         } else {
-            $pdo->prepare("INSERT INTO tour_vehicles(org_id,name,vehicle_type,plate_number,capacity,driver_name,driver_phone,status,notes)VALUES(?,?,?,?,?,?,?,?,?)")
+            $pdo->prepare("INSERT INTO tour_vehicles(org_id,name,vehicle_type,reg_no,capacity,driver_name,driver_phone,status,notes)VALUES(?,?,?,?,?,?,?,?,?)")
                 ->execute([$orgId,$name,$type,$plate,$capacity,$driver,$driverPhone,$status,$notes]);
             setFlash('success', "Vehicle $name added.");
         }
@@ -119,7 +119,7 @@ $vehicleTypes = ['minivan'=>'Minivan','bus'=>'Bus','4x4'=>'4×4 SUV','sedan'=>'S
         </div>
         <hr class="my-2">
         <div class="row g-1 small">
-          <?php if ($v['plate_number']): ?><div class="col-6 text-muted">Plate:</div><div class="col-6 fw-semibold"><?=e($v['plate_number'])?></div><?php endif; ?>
+          <?php if ($v['reg_no']): ?><div class="col-6 text-muted">Plate:</div><div class="col-6 fw-semibold"><?=e($v['reg_no'])?></div><?php endif; ?>
           <div class="col-6 text-muted">Capacity:</div><div class="col-6 fw-semibold"><?=$v['capacity']?$v['capacity'].' pax':'—'?></div>
           <?php if ($v['driver_name']): ?><div class="col-6 text-muted">Driver:</div><div class="col-6"><?=e($v['driver_name'])?><?=$v['driver_phone']?'<br><span class="text-muted">'.e($v['driver_phone']).'</span>':''?></div><?php endif; ?>
         </div>
@@ -188,7 +188,7 @@ function openEdit(v){
   document.getElementById('vId').value=v.id;
   document.getElementById('vName').value=v.name||'';
   document.getElementById('vType').value=v.vehicle_type||'minivan';
-  document.getElementById('vPlate').value=v.plate_number||'';
+  document.getElementById('vPlate').value=v.reg_no||'';
   document.getElementById('vCapacity').value=v.capacity||7;
   document.getElementById('vStatus').value=v.status||'available';
   document.getElementById('vDriver').value=v.driver_name||'';

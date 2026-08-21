@@ -10,6 +10,10 @@ require_once __DIR__ . '/_lib.php';
 
 sendSecurityHeaders();
 requireModuleAccess('tour');
+if (!canAccessModulePage('tour', 'quotation-pdf')) {
+    setFlash('danger', 'Your assigned role does not allow access to this document.');
+    redirect('quotations.php');
+}
 $user  = currentUser();
 $orgId = (int)$user['org_id'];
 

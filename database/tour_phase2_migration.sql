@@ -204,3 +204,16 @@ ALTER TABLE tour_bookings
 ALTER TABLE tour_customers
     ADD COLUMN IF NOT EXISTS portal_enabled TINYINT(1) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS updated_at     DATETIME DEFAULT NULL;
+
+-- ── 10. Itineraries: day-plan detail the builder already captures ──
+ALTER TABLE tour_itineraries
+    ADD COLUMN IF NOT EXISTS trip_date     DATE        DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS activity_type VARCHAR(80) DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS start_time    TIME        DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS end_time      TIME        DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS notes         TEXT        DEFAULT NULL;
+
+-- ── 11. Vehicles: widen enums to match the fleet page vocabulary ──
+ALTER TABLE tour_vehicles
+    MODIFY vehicle_type ENUM('sedan','suv','minivan','minibus','bus','coaster','van','4x4','boat','aircraft','other') DEFAULT 'suv',
+    MODIFY status       ENUM('available','assigned','booked','maintenance','retired') DEFAULT 'available';

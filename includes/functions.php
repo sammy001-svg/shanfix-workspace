@@ -1231,8 +1231,10 @@ function getModuleRoleDefinitions(): array {
         ],
         'tour' => [
             'admin'      => ['name'=>'Tour Manager', 'desc'=>'Full tour operations access',                      'color'=>'#16a085', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
-            'guide'      => ['name'=>'Tour Guide',   'desc'=>'Active tours and booking details',                 'color'=>'#3498db', 'icon'=>'fa-map-marked-alt',      'pages'=>['bookings','packages','customers']],
-            'accounts'   => ['name'=>'Accounts',     'desc'=>'Payments and financial reports',                   'color'=>'#27ae60', 'icon'=>'fa-money-bill-wave',     'pages'=>['payments','invoices','reports']],
+            'consultant' => ['name'=>'Travel Consultant', 'desc'=>'Sells trips: quotes, bookings and clients',   'color'=>'#8e44ad', 'icon'=>'fa-headset',             'pages'=>['quotations','quotation-pdf','bookings','customers','packages','destinations','departures','itineraries','reports']],
+            'guide'      => ['name'=>'Tour Guide',   'desc'=>'Active tours and booking details',                 'color'=>'#3498db', 'icon'=>'fa-map-marked-alt',      'pages'=>['bookings','packages','customers','departures','itineraries','vehicles']],
+            'operations' => ['name'=>'Operations',   'desc'=>'Departures, suppliers, guides and fleet',          'color'=>'#e67e22', 'icon'=>'fa-clipboard-list',      'pages'=>['departures','bookings','itineraries','guides','vehicles','suppliers','expenses','packages','destinations','reports']],
+            'accounts'   => ['name'=>'Accounts',     'desc'=>'Payments, invoices and financial reports',         'color'=>'#27ae60', 'icon'=>'fa-money-bill-wave',     'pages'=>['payments','invoices','invoice-pdf','quotations','quotation-pdf','expenses','suppliers','reports','report-pdf']],
         ],
         'events' => [
             'admin'        => ['name'=>'Events Manager','desc'=>'Full events access',                            'color'=>'#9b59b6', 'icon'=>'fa-shield-alt',          'pages'=>'*'],
@@ -1546,9 +1548,12 @@ function getModuleQuickActions(string $slug, bool $readonly = false): array {
             ['label'=>'Reports',          'url'=>'reports.php',             'icon'=>'fa-chart-bar',           'write'=>false],
         ],
         'tour' => [
-            ['label'=>'New Booking',      'url'=>'index.php',               'icon'=>'fa-plane-departure',     'write'=>true],
-            ['label'=>'Packages',         'url'=>'index.php',               'icon'=>'fa-suitcase',            'write'=>false],
-            ['label'=>'Clients',          'url'=>'index.php',               'icon'=>'fa-users',               'write'=>false],
+            ['label'=>'New Booking',      'url'=>'bookings.php',            'icon'=>'fa-plane-departure',     'write'=>true],
+            ['label'=>'New Quotation',    'url'=>'quotations.php',          'icon'=>'fa-file-signature',      'write'=>true],
+            ['label'=>'Departures',       'url'=>'departures.php',          'icon'=>'fa-calendar-day',        'write'=>false],
+            ['label'=>'Invoices',         'url'=>'invoices.php',            'icon'=>'fa-file-invoice',        'write'=>false],
+            ['label'=>'Packages',         'url'=>'packages.php',            'icon'=>'fa-suitcase',            'write'=>false],
+            ['label'=>'Clients',          'url'=>'customers.php',           'icon'=>'fa-users',               'write'=>false],
             ['label'=>'Reports',          'url'=>'reports.php',             'icon'=>'fa-chart-bar',           'write'=>false],
         ],
         'events' => [

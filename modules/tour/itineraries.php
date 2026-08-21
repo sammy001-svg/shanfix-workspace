@@ -21,14 +21,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $startTime   = $_POST['start_time'] ?? null;
         $endTime     = $_POST['end_time'] ?? null;
         $notes       = sanitize($_POST['notes'] ?? '');
-        if (!$title) { setFlash('error', 'Itinerary title is required.'); redirect('itineraries.php'); }
+        // Traveller-portal fields
+        $activities    = sanitize($_POST['activities']    ?? '');
+        $accommodation = sanitize($_POST['accommodation'] ?? '');
+        $transport     = sanitize($_POST['transport']     ?? '');
+        $meals         = array_intersect((array)($_POST['meals'] ?? []), ['breakfast','lunch','dinner']);
+        $mealsSet      = $meals ? implode(',', $meals) : null;
+
+        if (!$title) { setFlash('danger', 'Itinerary title is required.'); redirect('itineraries.php'); }
         if ($id > 0) {
-            $pdo->prepare("UPDATE tour_itineraries SET package_id=?,booking_id=?,title=?,day_number=?,trip_date=?,description=?,location=?,activity_type=?,start_time=?,end_time=?,notes=? WHERE id=? AND org_id=?")
-                ->execute([$packageId,$bookingId,$title,$dayNumber,$tripDate?:null,$description,$location,$activity,$startTime,$endTime,$notes,$id,$orgId]);
+            $pdo->prepare("UPDATE tour_itineraries SET package_id=?,booking_id=?,title=?,day_number=?,trip_date=?,description=?,location=?,activity_type=?,start_time=?,end_time=?,notes=?,activities=?,accommodation=?,transport=?,meals_included=?,sort_order=? WHERE id=? AND org_id=?")
+                ->execute([$packageId,$bookingId,$title,$dayNumber,$tripDate?:null,$description,$location,$activity,$startTime?:null,$endTime?:null,$notes,$activities,$accommodation,$transport,$mealsSet,$dayNumber,$id,$orgId]);
             setFlash('success', 'Itinerary updated.');
         } else {
-            $pdo->prepare("INSERT INTO tour_itineraries(org_id,package_id,booking_id,title,day_number,trip_date,description,location,activity_type,start_time,end_time,notes)VALUES(?,?,?,?,?,?,?,?,?,?,?,?)")
-                ->execute([$orgId,$packageId,$bookingId,$title,$dayNumber,$tripDate?:null,$description,$location,$activity,$startTime,$endTime,$notes]);
+            $pdo->prepare("INSERT INTO tour_itineraries(org_id,package_id,booking_id,title,day_number,trip_date,description,location,activity_type,start_time,end_time,notes,activities,accommodation,transport,meals_included,sort_order)VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                ->execute([$orgId,$packageId,$bookingId,$title,$dayNumber,$tripDate?:null,$description,$location,$activity,$startTime?:null,$endTime?:null,$notes,$activities,$accommodation,$transport,$mealsSet,$dayNumber]);
             setFlash('success', "Day $dayNumber: '$title' added.");
         }
         logActivity($id > 0 ? 'update' : 'create', 'tour', "Itinerary: $title");
@@ -55,12 +62,11 @@ $items = [];
 try {
     $s = $pdo->prepare("
         SELECT i.*,p.name AS package_name,
-               CONCAT(c.first_name,' ',c.last_name) AS customer_name
+               b.customer_name, b.booking_no
         FROM tour_itineraries i
         LEFT JOIN tour_packages p ON i.package_id=p.id
         LEFT JOIN tour_bookings b ON i.booking_id=b.id
-        LEFT JOIN tour_customers c ON b.customer_id=c.id
-        WHERE $where ORDER BY i.package_id, i.day_number ASC, i.start_time ASC
+        WHERE $where ORDER BY i.package_id, i.day_number ASC, i.sort_order ASC, i.start_time ASC
     ");
     $s->execute($params); $items = $s->fetchAll();
 } catch (Exception $e) {}
@@ -68,7 +74,7 @@ try {
 $packages = [];
 try { $s = $pdo->prepare("SELECT id,name FROM tour_packages WHERE org_id=? AND status='active' ORDER BY name"); $s->execute([$orgId]); $packages = $s->fetchAll(); } catch (Exception $e) {}
 $bookings = [];
-try { $s = $pdo->prepare("SELECT b.id,CONCAT(c.first_name,' ',c.last_name,' — ',b.booking_reference) AS label FROM tour_bookings b LEFT JOIN tour_customers c ON b.customer_id=c.id WHERE b.org_id=? ORDER BY b.id DESC LIMIT 50"); $s->execute([$orgId]); $bookings = $s->fetchAll(); } catch (Exception $e) {}
+try { $s = $pdo->prepare("SELECT b.id,CONCAT(b.booking_no,' — ',b.customer_name) AS label FROM tour_bookings b WHERE b.org_id=? ORDER BY b.travel_date DESC LIMIT 100"); $s->execute([$orgId]); $bookings = $s->fetchAll(); } catch (Exception $e) {}
 
 $activityTypes = ['Sightseeing','Safari','Hiking','Beach','Cultural Visit','Museum','Adventure Sports','Dinner/Lunch','Transfer','Free Time','Other'];
 ?>
@@ -178,7 +184,19 @@ foreach ($items as $it) {
       <input type="time" name="end_time" id="itEnd" class="form-control"></div>
     <div class="col-12"><label class="form-label fw-semibold">Description</label>
       <textarea name="description" id="itDesc" class="form-control" rows="3"></textarea></div>
-    <div class="col-12"><label class="form-label fw-semibold">Notes</label>
+    <div class="col-12"><label class="form-label fw-semibold">Activities <span class="text-muted small fw-normal">(shown to travellers)</span></label>
+      <textarea name="activities" id="itActivities" class="form-control" rows="2" placeholder="e.g. Morning game drive, sundowner at the escarpment"></textarea></div>
+    <div class="col-md-5"><label class="form-label fw-semibold">Accommodation</label>
+      <input type="text" name="accommodation" id="itAccom" class="form-control" maxlength="200" placeholder="e.g. Mara Serena Lodge"></div>
+    <div class="col-md-4"><label class="form-label fw-semibold">Transport</label>
+      <input type="text" name="transport" id="itTransport" class="form-control" maxlength="150" placeholder="e.g. 4x4 Land Cruiser"></div>
+    <div class="col-md-3"><label class="form-label fw-semibold">Meals Included</label>
+      <div class="d-flex gap-3 pt-1">
+        <div class="form-check"><input class="form-check-input meal-box" type="checkbox" name="meals[]" value="breakfast" id="mealB"><label class="form-check-label small" for="mealB">B</label></div>
+        <div class="form-check"><input class="form-check-input meal-box" type="checkbox" name="meals[]" value="lunch" id="mealL"><label class="form-check-label small" for="mealL">L</label></div>
+        <div class="form-check"><input class="form-check-input meal-box" type="checkbox" name="meals[]" value="dinner" id="mealD"><label class="form-check-label small" for="mealD">D</label></div>
+      </div></div>
+    <div class="col-12"><label class="form-label fw-semibold">Internal Notes <span class="text-muted small fw-normal">(staff only)</span></label>
       <textarea name="notes" id="itNotes" class="form-control" rows="2"></textarea></div>
   </div></div>
   <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -206,6 +224,10 @@ function openAdd(){
   document.getElementById('itEnd').value='';
   document.getElementById('itDesc').value='';
   document.getElementById('itNotes').value='';
+  document.getElementById('itActivities').value='';
+  document.getElementById('itAccom').value='';
+  document.getElementById('itTransport').value='';
+  document.querySelectorAll('.meal-box').forEach(function(b){b.checked=false;});
 }
 function openEdit(i){
   document.getElementById('itTitle').innerHTML='<i class="fas fa-edit me-2"></i>Edit Itinerary Item';
@@ -221,6 +243,11 @@ function openEdit(i){
   document.getElementById('itEnd').value=i.end_time?i.end_time.substring(0,5):'';
   document.getElementById('itDesc').value=i.description||'';
   document.getElementById('itNotes').value=i.notes||'';
+  document.getElementById('itActivities').value=i.activities||'';
+  document.getElementById('itAccom').value=i.accommodation||'';
+  document.getElementById('itTransport').value=i.transport||'';
+  var meals=(i.meals_included||'').split(',');
+  document.querySelectorAll('.meal-box').forEach(function(b){b.checked=meals.indexOf(b.value)>-1;});
   new bootstrap.Modal(document.getElementById('itModal')).show();
 }
 function delIt(id,title){
