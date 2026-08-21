@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * OrbitDesk — Public Contact Page
  * Standalone, no authentication required.
@@ -152,6 +152,7 @@ ob_start();
     .site-nav {
       position: sticky; top: 0; z-index: 1000;
       background: rgba(255,255,255,.97);
+      -webkit-backdrop-filter: blur(14px);
       backdrop-filter: blur(14px);
       border-bottom: 1px solid rgba(0,0,0,.07);
       padding: .75rem 0;
@@ -171,7 +172,7 @@ ob_start();
 
     /* ── Hero ────────────────────────────────────────────────── */
     .contact-hero {
-      background: linear-gradient(135deg, var(--navy-dk) 0%, var(--navy) 55%, #0d3d1e 100%);
+      background: var(--navy-dk);
       padding: 5rem 0 4.5rem;
       position: relative;
       overflow: hidden;
@@ -181,7 +182,7 @@ ob_start();
     .contact-hero::before {
       content: '';
       position: absolute; inset: 0;
-      background-image: radial-gradient(rgba(26,138,78,.12) 1px, transparent 1px);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36'%3E%3Ccircle cx='1' cy='1' r='1' fill='%231A8A4E' fill-opacity='.12'/%3E%3C/svg%3E");
       background-size: 36px 36px;
     }
     .hero-glow {
@@ -235,7 +236,7 @@ ob_start();
 
     /* ── Hours Card ──────────────────────────────────────────── */
     .hours-card {
-      background: linear-gradient(135deg, var(--green-lt), #f0fdf4);
+      background: var(--green-lt);
       border-radius: 16px;
       padding: 1.4rem 1.5rem;
       border: 1.5px solid rgba(26,138,78,.2);
@@ -304,7 +305,7 @@ ob_start();
     .char-counter.over { color: #dc2626; font-weight: 700; }
 
     .btn-send {
-      background: linear-gradient(135deg, var(--green), #22c27a);
+      background: var(--green);
       color: #fff; border: none; border-radius: 10px;
       padding: .88rem 2rem; font-weight: 700; font-size: .95rem;
       width: 100%; cursor: pointer;
@@ -312,7 +313,7 @@ ob_start();
       display: flex; align-items: center; justify-content: center; gap: .6rem;
     }
     .btn-send:hover:not(:disabled) {
-      background: linear-gradient(135deg, var(--green-dk), #1ea96a);
+      background: var(--green-dk);
       transform: translateY(-1px);
       box-shadow: 0 6px 22px rgba(26,138,78,.38);
     }
@@ -322,7 +323,7 @@ ob_start();
 
     /* ── Success Panel ───────────────────────────────────────── */
     .success-panel {
-      background: linear-gradient(135deg, var(--green-lt), #f0fdf4);
+      background: var(--green-lt);
       border: 1.5px solid rgba(26,138,78,.25);
       border-radius: 16px;
       padding: 2.5rem;
@@ -330,7 +331,7 @@ ob_start();
     }
     .success-icon {
       width: 72px; height: 72px; border-radius: 50%;
-      background: linear-gradient(135deg, var(--green), #22c27a);
+      background: var(--green);
       display: flex; align-items: center; justify-content: center;
       margin: 0 auto 1.2rem;
       box-shadow: 0 4px 20px rgba(26,138,78,.3);
@@ -350,13 +351,13 @@ ob_start();
 
     /* ── CTA Banner ──────────────────────────────────────────── */
     .cta-banner {
-      background: linear-gradient(135deg, var(--navy) 0%, #0d3d1e 100%);
+      background: var(--navy);
       padding: 3rem 1rem;
       position: relative; overflow: hidden;
     }
     .cta-banner::before {
       content: ''; position: absolute; inset: 0;
-      background-image: radial-gradient(rgba(26,138,78,.1) 1px, transparent 1px);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='1' cy='1' r='1' fill='%231A8A4E' fill-opacity='.1'/%3E%3C/svg%3E");
       background-size: 32px 32px;
     }
     .cta-banner .content { position: relative; z-index: 1; }
@@ -440,7 +441,7 @@ require_once __DIR__ . '/includes/header-public.php';
         <div class="d-flex flex-column gap-3 mb-4">
 
           <a href="mailto:<?= htmlspecialchars($siteEmail, ENT_QUOTES) ?>" class="info-card">
-            <div class="info-icon" style="background:linear-gradient(135deg,var(--green),#22c27a)">
+            <div class="info-icon" style="background:var(--green)">
               <i class="fas fa-envelope"></i>
             </div>
             <div>
@@ -451,7 +452,7 @@ require_once __DIR__ . '/includes/header-public.php';
           </a>
 
           <a href="tel:<?= preg_replace('/\s/', '', $sitePhone) ?>" class="info-card">
-            <div class="info-icon" style="background:linear-gradient(135deg,#0891b2,#0e7490)">
+            <div class="info-icon" style="background:#0891b2">
               <i class="fas fa-phone-alt"></i>
             </div>
             <div>
@@ -462,7 +463,7 @@ require_once __DIR__ . '/includes/header-public.php';
           </a>
 
           <div class="info-card" style="cursor:default">
-            <div class="info-icon" style="background:linear-gradient(135deg,var(--navy),#1e4d7b)">
+            <div class="info-icon" style="background:var(--navy)">
               <i class="fas fa-map-marker-alt"></i>
             </div>
             <div>
@@ -473,7 +474,7 @@ require_once __DIR__ . '/includes/header-public.php';
           </div>
 
           <a href="<?= htmlspecialchars($appUrl . '/index.php', ENT_QUOTES) ?>" class="info-card">
-            <div class="info-icon" style="background:linear-gradient(135deg,#7c3aed,#6d28d9)">
+            <div class="info-icon" style="background:#7c3aed">
               <i class="fas fa-headset"></i>
             </div>
             <div>
@@ -501,7 +502,7 @@ require_once __DIR__ . '/includes/header-public.php';
             <a href="#" class="social-link" style="background:#1da1f2" title="Twitter / X"><i class="fab fa-twitter"></i></a>
             <a href="#" class="social-link" style="background:#0a66c2" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
             <a href="#" class="social-link" style="background:#25d366" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
-            <a href="#" class="social-link" style="background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)" title="Instagram"><i class="fab fa-instagram"></i></a>
+            <a href="#" class="social-link" style="background:#dc2743" title="Instagram"><i class="fab fa-instagram"></i></a>
           </div>
         </div>
 

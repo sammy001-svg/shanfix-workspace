@@ -28,6 +28,63 @@ $siteHours   = getSetting('company_hours',   'Mon – Sat, 8AM – 8PM EAT');
 $siteWebsite = getSetting('company_website', APP_URL);
 $appTagline  = getSetting('app_tagline',     defined('APP_TAGLINE') ? APP_TAGLINE : 'Powering African Businesses');
 
+// ── Hero background carousel (managed in /admin/landing.php) ──────────────
+$heroSlides = [];
+try {
+    $heroSlides = $pdo->query(
+        "SELECT image_path, alt_text, caption, eyebrow, headline, subheadline,
+                cta1_label, cta1_url, cta2_label, cta2_url
+           FROM landing_hero_slides
+          WHERE status = 'active'
+          ORDER BY sort_order ASC, id ASC"
+    )->fetchAll();
+} catch (Throwable $e) {
+    // Table (or the copy columns) not migrated yet — fall back below.
+    $heroSlides = [];
+}
+
+// Default copy, used for the fallback slide and to fill any blank field
+$heroDefault = [
+    'image_path'  => 'group-afro-americans-working-together-scaled.jpg',
+    'alt_text'    => 'Team working together',
+    'caption'     => '',
+    'eyebrow'     => "Kenya's #1 Business Management Suite",
+    'headline'    => 'One Platform. 20+ Business Solutions.',
+    'subheadline' => 'OrbitDesk Workspace centralises every aspect of your business — accounting, HR, POS, hotel, school, SACCO, and more — in a single, powerful, cloud-based platform.',
+    'cta1_label'  => 'Start Free Trial',
+    'cta1_url'    => APP_URL . '/auth/register.php',
+    'cta2_label'  => 'Browse Modules',
+    'cta2_url'    => '#modules',
+];
+if (!$heroSlides) {
+    $heroSlides = [$heroDefault];
+}
+
+/** Only allow anchors, site-relative paths, or explicit http(s) links. */
+$heroSafeUrl = static function (?string $u): string {
+    $u = trim((string)$u);
+    if ($u === '' || preg_match('/[\x00-\x1F\x7F]/', $u)) return '';
+    if ($u[0] === '#') return $u;
+    if (str_starts_with($u, '//')) return '';
+    if ($u[0] === '/') return APP_URL . $u;
+    $scheme = strtolower((string)parse_url($u, PHP_URL_SCHEME));
+    return in_array($scheme, ['http', 'https'], true) ? $u : '';
+};
+
+// Fill blanks on the first slide only, so the H1 is never empty
+foreach (['eyebrow', 'headline', 'subheadline', 'cta1_label', 'cta1_url'] as $k) {
+    if (empty($heroSlides[0][$k])) $heroSlides[0][$k] = $heroDefault[$k];
+}
+foreach ($heroSlides as $hk => $hv) {
+    $heroSlides[$hk]['cta1_url'] = $heroSafeUrl($hv['cta1_url'] ?? '');
+    $heroSlides[$hk]['cta2_url'] = $heroSafeUrl($hv['cta2_url'] ?? '');
+}
+$heroCarouselOn  = getSetting('hero_carousel_enabled', '1') === '1' && count($heroSlides) > 1;
+$heroInterval    = min(15000, max(2000, (int)getSetting('hero_carousel_interval', '6000')));
+$heroEffect      = in_array(getSetting('hero_carousel_effect', 'fade'), ['fade','slide'], true)
+                   ? getSetting('hero_carousel_effect', 'fade') : 'fade';
+$heroOverlay     = min(98, max(40, (int)getSetting('hero_overlay_opacity', '86'))) / 100;
+
 // ── Module feature lists (shown in popup) ─────────────────────
 $moduleFeatures = [
     'accounting'    => ['General ledger & chart of accounts','Invoice & receipt generation','Expense tracking & categorisation','VAT & tax computation reports','Bank reconciliation','Profit & loss and balance sheet'],
@@ -252,601 +309,7 @@ echo '<script type="application/ld+json">' . json_encode($_jsonLd, JSON_UNESCAPE
 unset($_planOffers, $_modItems, $_faqs, $_jsonLd, $_ogTitle, $_ogDesc, $_ogImg, $_ogUrl);
 ?>
 <link href="<?= APP_URL ?>/assets/css/style.css" rel="stylesheet">
-<style>
-/* ═══════════════════════════════════════════════════════════
-   ORBITDESK LANDING PAGE — V2 PROFESSIONAL REDESIGN
-   ═══════════════════════════════════════════════════════════ */
-:root {
-  --od-navy:   #0B2D4E;
-  --od-green:  #1A8A4E;
-  --od-glow:   rgba(26,138,78,.25);
-  --od-mesh:   rgba(255,255,255,.04);
-}
-html { scroll-behavior: smooth; }
-body.landing-body { font-family: 'Inter', system-ui, sans-serif; background: #fff; overflow-x: hidden; }
-
-/* ─── Scroll Progress Bar ────────────────────────────────── */
-#scroll-progress {
-  position: fixed; top: 0; left: 0; height: 3px;
-  background: linear-gradient(90deg, var(--od-green), #22d3a5);
-  z-index: 99999; width: 0%; transition: width .1s linear;
-}
-
-/* ─── Navbar ─────────────────────────────────────────────── */
-.od-nav {
-  position: fixed; top: 0; left: 0; right: 0;
-  padding: .9rem 0;
-  z-index: 9000;
-  transition: all .3s ease;
-}
-.od-nav.scrolled {
-  background: rgba(7,25,44,.97);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  padding: .65rem 0;
-  box-shadow: 0 1px 0 rgba(255,255,255,.06);
-}
-.od-nav .nav-logo {
-  display: flex; align-items: center; gap: .6rem;
-  text-decoration: none;
-}
-.od-nav .logo-mark {
-  width: 38px; height: 38px;
-  background: linear-gradient(135deg, var(--od-green), #22c27a);
-  border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 900; color: white; font-size: .85rem; letter-spacing: -.5px;
-  box-shadow: 0 4px 12px rgba(26,138,78,.4);
-}
-.od-nav .logo-name { font-size: 1.1rem; font-weight: 800; color: white; }
-.od-nav .logo-name span { color: var(--od-green); }
-.od-nav-links { display: flex; align-items: center; gap: .25rem; }
-.od-nav-links a {
-  color: rgba(255,255,255,.75); font-size: .875rem; font-weight: 500;
-  padding: .45rem .9rem; border-radius: 8px; transition: all .2s;
-  text-decoration: none;
-}
-.od-nav-links a:hover { color: white; background: rgba(255,255,255,.08); }
-.od-nav .nav-cta-login {
-  color: rgba(255,255,255,.8); font-size: .875rem; font-weight: 500;
-  padding: .45rem 1.1rem; border: 1px solid rgba(255,255,255,.2);
-  border-radius: 8px; text-decoration: none; transition: all .2s;
-}
-.od-nav .nav-cta-login:hover { background: rgba(255,255,255,.1); color: white; }
-.od-nav .nav-cta-start {
-  background: var(--od-green); color: white; font-size: .875rem; font-weight: 600;
-  padding: .5rem 1.25rem; border-radius: 8px; text-decoration: none;
-  transition: all .2s; white-space: nowrap;
-}
-.od-nav .nav-cta-start:hover { background: #157a42; color: white; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(26,138,78,.4); }
-
-/* ─── Hero ───────────────────────────────────────────────── */
-.od-hero {
-  position: relative;
-  min-height: 100vh;
-  /* Team photo background */
-  background-image: url('group-afro-americans-working-together-scaled.jpg');
-  background-size: cover;
-  background-position: center 22%;
-  background-attachment: fixed; /* subtle parallax on scroll */
-  display: flex; align-items: center;
-  padding: 120px 0 80px;
-  overflow: hidden;
-}
-
-/* Layer 1 – deep navy colour wash over the photo (left denser for text, right lighter to show faces) */
-.od-hero::before {
-  content: '';
-  position: absolute; inset: 0; z-index: 0;
-  background: linear-gradient(
-    115deg,
-    rgba(5,15,31,.90)  0%,
-    rgba(7,25,52,.80)  45%,
-    rgba(5,15,31,.52)  100%
-  );
-}
-
-/* Layer 2 – green accent gradient on right side */
-.od-hero::after {
-  content: '';
-  position: absolute; inset: 0; z-index: 0;
-  background:
-    radial-gradient(ellipse 55% 70% at 90% 50%, rgba(26,138,78,.22) 0%, transparent 70%),
-    radial-gradient(ellipse 40% 60% at 10% 10%, rgba(11,45,78,.5) 0%, transparent 70%);
-  pointer-events: none;
-}
-
-/* Mesh grid overlay (sits above colour layers) */
-.od-hero .hero-mesh {
-  position: absolute; inset: 0; z-index: 1; pointer-events: none;
-  background-image:
-    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
-  background-size: 60px 60px;
-  mask-image: radial-gradient(ellipse 80% 80% at 50% 0%, black 40%, transparent 100%);
-  -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 0%, black 40%, transparent 100%);
-}
-
-/* Frosted shimmer line at the very bottom */
-.od-hero .hero-bottom-shimmer {
-  position: absolute; bottom: 0; left: 0; right: 0; height: 1px; z-index: 3;
-  background: linear-gradient(90deg, transparent, rgba(74,222,147,.35), rgba(56,189,248,.2), transparent);
-}
-
-/* Glow orbs */
-.od-hero .orb-1 {
-  position: absolute; top: -80px; right: -80px; z-index: 2;
-  width: 600px; height: 600px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(26,138,78,.18) 0%, transparent 70%);
-  pointer-events: none;
-}
-.od-hero .orb-2 {
-  position: absolute; bottom: -120px; left: -60px; z-index: 2;
-  width: 500px; height: 500px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(11,45,78,.35) 0%, transparent 70%);
-  pointer-events: none;
-}
-.od-hero .orb-3 {
-  position: absolute; top: 40%; left: 40%; z-index: 2;
-  width: 300px; height: 300px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(26,138,78,.09) 0%, transparent 70%);
-  animation: orb-float 8s ease-in-out infinite;
-  pointer-events: none;
-}
-@keyframes orb-float {
-  0%,100% { transform: translate(0,0); }
-  33%      { transform: translate(30px,-20px); }
-  66%      { transform: translate(-20px,30px); }
-}
-
-.hero-eyebrow {
-  display: inline-flex; align-items: center; gap: .5rem;
-  background: rgba(26,138,78,.15); border: 1px solid rgba(26,138,78,.35);
-  color: #4ade93; border-radius: 50px; padding: .35rem 1rem .35rem .65rem;
-  font-size: .8rem; font-weight: 600; letter-spacing: .3px; margin-bottom: 1.5rem;
-}
-.hero-eyebrow .dot {
-  width: 6px; height: 6px; background: #4ade93; border-radius: 50%;
-  animation: blink 2s ease-in-out infinite;
-}
-@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.3;} }
-
-.od-hero h1 {
-  font-size: clamp(2.4rem, 5.5vw, 4rem);
-  font-weight: 900; line-height: 1.08; color: white;
-  letter-spacing: -1.5px; margin-bottom: 1.5rem;
-}
-.od-hero h1 .grad-text {
-  background: linear-gradient(135deg, #4ade93 0%, #22d3a5 50%, #38bdf8 100%);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-.od-hero .hero-sub {
-  font-size: 1.1rem; color: rgba(255,255,255,.6); line-height: 1.8;
-  max-width: 520px; margin-bottom: 2.25rem; font-weight: 400;
-}
-.od-hero .hero-actions { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: 3rem; }
-.btn-od-primary {
-  background: var(--od-green); color: white; border: none;
-  padding: .85rem 1.75rem; border-radius: 10px; font-weight: 700;
-  font-size: .95rem; transition: all .25s; text-decoration: none;
-  display: inline-flex; align-items: center; gap: .5rem;
-}
-.btn-od-primary:hover { background: #157a42; color: white; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(26,138,78,.4); }
-.btn-od-ghost {
-  background: rgba(255,255,255,.07); color: rgba(255,255,255,.85);
-  border: 1px solid rgba(255,255,255,.15); padding: .85rem 1.75rem;
-  border-radius: 10px; font-weight: 600; font-size: .95rem;
-  transition: all .25s; text-decoration: none;
-  display: inline-flex; align-items: center; gap: .5rem;
-}
-.btn-od-ghost:hover { background: rgba(255,255,255,.12); color: white; border-color: rgba(255,255,255,.3); }
-
-/* Trust badges under CTA */
-.hero-trust {
-  display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;
-}
-.hero-trust .trust-item {
-  display: flex; align-items: center; gap: .4rem;
-  color: rgba(255,255,255,.5); font-size: .8rem;
-}
-.hero-trust .trust-item i { color: var(--od-green); font-size: .75rem; }
-
-/* ─── Dashboard Mockup ──────────────────────────────────── */
-.od-dashboard-wrap {
-  position: relative; z-index: 2;
-}
-.od-dashboard {
-  background: #0f1f33;
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: 18px;
-  overflow: hidden;
-  box-shadow:
-    0 0 0 1px rgba(255,255,255,.05),
-    0 40px 80px rgba(0,0,0,.6),
-    0 0 80px rgba(26,138,78,.1);
-  animation: float-dash 6s ease-in-out infinite;
-}
-@keyframes float-dash {
-  0%,100% { transform: translateY(0); }
-  50%      { transform: translateY(-10px); }
-}
-.dash-chrome {
-  background: #0a1625;
-  padding: .7rem 1rem;
-  display: flex; align-items: center; gap: .5rem;
-  border-bottom: 1px solid rgba(255,255,255,.07);
-}
-.dash-chrome .dot { width: 10px; height: 10px; border-radius: 50%; }
-.dash-url-bar {
-  flex: 1; background: rgba(255,255,255,.06); border-radius: 6px;
-  padding: .25rem .75rem; font-size: .72rem; color: rgba(255,255,255,.4);
-  margin: 0 .75rem;
-}
-.dash-body { padding: 1.25rem; }
-.dash-header-row {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 1rem;
-}
-.dash-title { color: white; font-weight: 700; font-size: .9rem; }
-.dash-period {
-  background: rgba(26,138,78,.2); color: #4ade93;
-  border-radius: 6px; padding: .2rem .65rem; font-size: .7rem; font-weight: 600;
-}
-.dash-kpis { display: grid; grid-template-columns: repeat(4,1fr); gap: .6rem; margin-bottom: 1rem; }
-.dash-kpi {
-  background: rgba(255,255,255,.05); border-radius: 10px; padding: .75rem;
-  border: 1px solid rgba(255,255,255,.07);
-}
-.dash-kpi .kv { font-size: 1rem; font-weight: 800; color: white; }
-.dash-kpi .kv.green { color: #4ade93; }
-.dash-kpi .kv.amber { color: #fbbf24; }
-.dash-kpi .kv.red   { color: #f87171; }
-.dash-kpi .kl { font-size: .62rem; color: rgba(255,255,255,.4); margin-top: .15rem; }
-.dash-kpi .kt { font-size: .62rem; margin-top: .25rem; }
-.dash-kpi .kt.up   { color: #4ade93; }
-.dash-kpi .kt.down { color: #f87171; }
-
-.dash-chart-section { background: rgba(255,255,255,.04); border-radius: 10px; padding: .9rem; margin-bottom: 1rem; border: 1px solid rgba(255,255,255,.06); }
-.dash-chart-label { font-size: .7rem; color: rgba(255,255,255,.4); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; margin-bottom: .75rem; }
-.dash-bars { display: flex; align-items: flex-end; gap: 4px; height: 70px; }
-.dash-bar { flex: 1; border-radius: 4px 4px 0 0; background: rgba(26,138,78,.25); transition: height .5s ease; }
-.dash-bar.hi { background: linear-gradient(180deg, #4ade93 0%, var(--od-green) 100%); }
-
-.dash-modules { display: grid; grid-template-columns: repeat(3,1fr); gap: .5rem; }
-.dash-mod {
-  background: rgba(255,255,255,.05); border-radius: 8px; padding: .6rem .75rem;
-  display: flex; align-items: center; gap: .5rem;
-  border: 1px solid rgba(255,255,255,.06);
-}
-.dash-mod-icon { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: .6rem; flex-shrink: 0; }
-.dash-mod-name { font-size: .65rem; font-weight: 600; color: rgba(255,255,255,.75); }
-
-/* Floating badges */
-.float-badge {
-  position: absolute; background: white;
-  border-radius: 12px; padding: .6rem .9rem;
-  box-shadow: 0 8px 32px rgba(0,0,0,.3);
-  display: flex; align-items: center; gap: .5rem;
-  font-size: .75rem; font-weight: 700; white-space: nowrap;
-  animation: badge-float 5s ease-in-out infinite;
-}
-.float-badge-1 { top: -20px; right: -30px; animation-delay: 0s; }
-.float-badge-2 { bottom: 40px; left: -40px; animation-delay: 2.5s; }
-@keyframes badge-float {
-  0%,100% { transform: translateY(0); }
-  50%      { transform: translateY(-8px); }
-}
-.float-badge .fb-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: .8rem; }
-
-/* ─── Trusted By Strip ───────────────────────────────────── */
-.trusted-strip {
-  background: #fff; border-top: 1px solid #f0f4f8; border-bottom: 1px solid #f0f4f8;
-  padding: 1.75rem 0;
-}
-.trusted-label { font-size: .72rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
-.industry-pill {
-  display: inline-flex; align-items: center; gap: .4rem;
-  background: #f8fafc; border: 1px solid #e2e8f0;
-  border-radius: 50px; padding: .4rem 1rem;
-  font-size: .8rem; font-weight: 600; color: #475569;
-  transition: all .2s;
-}
-.industry-pill i { font-size: .75rem; }
-.industry-pill:hover { background: #e6f5ee; border-color: #1A8A4E; color: #1A8A4E; }
-
-/* ─── Impact Stats ───────────────────────────────────────── */
-.impact-section {
-  background: linear-gradient(135deg, #050f1f 0%, #0B2D4E 60%, #0d3b1e 100%);
-  padding: 5rem 0; position: relative; overflow: hidden;
-}
-.impact-section::before {
-  content: '';
-  position: absolute; inset: 0;
-  background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
-  background-size: 40px 40px;
-}
-.impact-stat { text-align: center; position: relative; z-index: 1; }
-.impact-stat .i-num {
-  font-size: clamp(2.5rem, 5vw, 3.8rem); font-weight: 900; color: white;
-  line-height: 1; letter-spacing: -2px;
-}
-.impact-stat .i-num span { color: #4ade93; }
-.impact-stat .i-label { font-size: .85rem; color: rgba(255,255,255,.5); margin-top: .4rem; font-weight: 500; }
-.impact-divider { width: 1px; background: rgba(255,255,255,.1); }
-
-/* ─── Features ───────────────────────────────────────────── */
-.od-section-eyebrow {
-  display: inline-block; background: #e6f5ee; color: #157a42;
-  font-size: .72rem; font-weight: 800; padding: .3rem .9rem;
-  border-radius: 50px; text-transform: uppercase; letter-spacing: .8px; margin-bottom: 1rem;
-}
-.od-section-title {
-  font-size: clamp(1.8rem, 3.5vw, 2.6rem); font-weight: 900;
-  color: #0B2D4E; letter-spacing: -1px; line-height: 1.15;
-}
-.od-section-sub { color: #64748b; font-size: 1rem; line-height: 1.7; max-width: 540px; margin: .75rem auto 0; }
-
-.feature-card {
-  background: white; border-radius: 16px; padding: 2rem 1.75rem;
-  border: 1px solid #f0f4f8; height: 100%;
-  transition: all .3s cubic-bezier(.4,0,.2,1);
-  position: relative; overflow: hidden;
-}
-.feature-card::before {
-  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px;
-  background: linear-gradient(90deg, var(--od-green), #22d3a5);
-  transform: scaleX(0); transition: transform .3s ease;
-  transform-origin: left;
-}
-.feature-card:hover { transform: translateY(-6px); box-shadow: 0 20px 50px rgba(11,45,78,.1); border-color: #e6f5ee; }
-.feature-card:hover::before { transform: scaleX(1); }
-.feat-icon-wrap {
-  width: 52px; height: 52px; border-radius: 14px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.3rem; margin-bottom: 1.25rem;
-}
-.feature-card h6 { font-size: .95rem; font-weight: 800; color: #0B2D4E; margin-bottom: .6rem; }
-.feature-card p  { font-size: .85rem; color: #64748b; line-height: 1.65; margin: 0; }
-
-/* ─── Modules ─────────────────────────────────────────────── */
-.od-modules-bg { background: #f8fafc; }
-.mod-filter-tabs { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: center; margin-bottom: 2.5rem; }
-.mod-filter-tab {
-  padding: .45rem 1.1rem; border-radius: 8px; font-size: .82rem; font-weight: 600;
-  border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;
-  transition: all .2s;
-}
-.mod-filter-tab.active, .mod-filter-tab:hover { background: #0B2D4E; color: white; border-color: #0B2D4E; }
-
-.mod-tile {
-  background: white; border-radius: 14px; padding: 1.5rem 1.25rem;
-  text-align: center; border: 2px solid transparent;
-  box-shadow: 0 2px 8px rgba(0,0,0,.05);
-  transition: all .25s; height: 100%;
-  text-decoration: none; display: block;
-}
-.mod-tile:hover { transform: translateY(-4px); box-shadow: 0 16px 40px rgba(11,45,78,.1); border-color: var(--od-green); }
-.mod-tile-icon { width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; margin: 0 auto .85rem; }
-.mod-tile h6   { font-size: .875rem; font-weight: 800; color: #0B2D4E; margin-bottom: .3rem; }
-.mod-tile p    { font-size: .75rem; color: #94a3b8; margin: 0; line-height: 1.5; }
-.mod-tile .price-pill {
-  display: inline-block; margin-top: .65rem; background: #e6f5ee; color: #157a42;
-  font-size: .72rem; font-weight: 700; padding: .2rem .65rem; border-radius: 50px;
-}
-
-/* ─── How It Works ────────────────────────────────────────── */
-.od-how-bg { background: white; }
-.process-row { position: relative; }
-.process-connector {
-  position: absolute; top: 32px; left: calc(16.666% + 30px);
-  right: calc(16.666% + 30px); height: 2px;
-  background: linear-gradient(90deg, var(--od-green), #38bdf8);
-  opacity: .2;
-}
-.process-step { text-align: center; position: relative; z-index: 1; }
-.process-num {
-  width: 64px; height: 64px; border-radius: 50%;
-  background: linear-gradient(135deg, var(--od-green), #0B2D4E);
-  color: white; font-size: 1.5rem; font-weight: 900;
-  display: flex; align-items: center; justify-content: center;
-  margin: 0 auto 1.25rem;
-  box-shadow: 0 6px 20px rgba(26,138,78,.35);
-  position: relative;
-}
-.process-num::after {
-  content: ''; position: absolute; inset: -4px; border-radius: 50%;
-  border: 2px dashed rgba(26,138,78,.3); animation: spin 12s linear infinite;
-}
-@keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
-.process-step h5 { font-size: 1rem; font-weight: 800; color: #0B2D4E; margin-bottom: .5rem; }
-.process-step p  { font-size: .875rem; color: #64748b; line-height: 1.65; max-width: 240px; margin: 0 auto; }
-
-/* ─── Testimonials ────────────────────────────────────────── */
-.od-testimonials-bg { background: #f8fafc; }
-.testi-card {
-  background: white; border-radius: 16px; padding: 2rem;
-  box-shadow: 0 2px 16px rgba(11,45,78,.07);
-  border: 1px solid #f0f4f8; height: 100%;
-  transition: all .25s;
-}
-.testi-card:hover { transform: translateY(-4px); box-shadow: 0 16px 40px rgba(11,45,78,.1); }
-.testi-stars { display: flex; gap: 3px; margin-bottom: 1rem; }
-.testi-stars i { color: #fbbf24; font-size: .8rem; }
-.testi-quote {
-  font-size: .9rem; color: #475569; line-height: 1.75; margin-bottom: 1.5rem;
-  font-style: italic; position: relative;
-}
-.testi-quote::before { content: '\201C'; font-size: 3rem; color: #e2e8f0; line-height: 0; vertical-align: -1rem; margin-right: .2rem; font-style: normal; }
-.testi-author { display: flex; align-items: center; gap: .75rem; }
-.testi-avatar {
-  width: 44px; height: 44px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 800; font-size: .8rem; color: white; flex-shrink: 0;
-}
-.testi-name { font-size: .875rem; font-weight: 700; color: #0B2D4E; }
-.testi-role { font-size: .75rem; color: #94a3b8; }
-
-/* ─── Pricing ─────────────────────────────────────────────── */
-.od-pricing-bg { background: white; }
-.billing-toggle-wrap {
-  display: inline-flex; align-items: center; gap: .75rem;
-  background: #f8fafc; border: 1px solid #e2e8f0;
-  border-radius: 12px; padding: .5rem 1.25rem; margin-bottom: 3rem;
-}
-.billing-toggle-wrap span { font-size: .875rem; font-weight: 600; color: #64748b; }
-.billing-toggle-wrap span.active { color: #0B2D4E; }
-.currency-pill {
-  display: inline-flex; align-items: center; gap: 0;
-  background: #f1f5f9; border: 1.5px solid #e2e8f0;
-  border-radius: 999px; overflow: hidden; margin-left: .5rem;
-}
-.currency-pill button {
-  border: none; background: transparent; padding: .32rem .9rem;
-  font-size: .8rem; font-weight: 700; color: #64748b;
-  cursor: pointer; transition: background .18s, color .18s; line-height: 1;
-}
-.currency-pill button.active {
-  background: var(--od-green, #00d084); color: #fff; border-radius: 999px;
-}
-
-.od-plan-card {
-  background: white; border-radius: 20px; padding: 2.25rem 2rem;
-  border: 2px solid #f0f4f8; position: relative;
-  transition: all .3s; height: 100%;
-}
-.od-plan-card:hover { transform: translateY(-6px); box-shadow: 0 24px 60px rgba(11,45,78,.12); }
-.od-plan-card.popular {
-  border-color: var(--od-green);
-  box-shadow: 0 12px 40px rgba(26,138,78,.15);
-  background: linear-gradient(180deg, #e6f5ee 0%, #ffffff 25%);
-}
-.od-plan-card .pop-label {
-  position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
-  background: var(--od-green); color: white; font-size: .72rem; font-weight: 800;
-  padding: .3rem 1rem; border-radius: 50px; white-space: nowrap;
-  text-transform: uppercase; letter-spacing: .5px;
-}
-.od-plan-card .plan-name { font-size: .85rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: .5rem; }
-.od-plan-card .plan-price { font-size: 3rem; font-weight: 900; color: #0B2D4E; line-height: 1; letter-spacing: -2px; }
-.od-plan-card .plan-price sup { font-size: 1rem; font-weight: 600; color: #94a3b8; vertical-align: top; margin-top: .6rem; letter-spacing: 0; }
-.od-plan-card .plan-price .per { font-size: .9rem; font-weight: 500; color: #94a3b8; letter-spacing: 0; }
-.plan-features { list-style: none; padding: 0; margin: 1.75rem 0; }
-.plan-features li { display: flex; align-items: flex-start; gap: .65rem; padding: .45rem 0; font-size: .875rem; color: #475569; border-bottom: 1px solid #f8fafc; }
-.plan-features li:last-child { border-bottom: none; }
-.plan-features li i { color: var(--od-green); font-size: .75rem; margin-top: .2rem; flex-shrink: 0; }
-.btn-plan-primary { display: block; width: 100%; padding: .85rem; border-radius: 10px; font-weight: 700; font-size: .9rem; text-align: center; background: var(--od-green); color: white; text-decoration: none; transition: all .2s; border: none; }
-.btn-plan-primary:hover { background: #157a42; color: white; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(26,138,78,.35); }
-.btn-plan-outline { display: block; width: 100%; padding: .85rem; border-radius: 10px; font-weight: 700; font-size: .9rem; text-align: center; background: transparent; color: #0B2D4E; border: 2px solid #e2e8f0; text-decoration: none; transition: all .2s; }
-.btn-plan-outline:hover { border-color: var(--od-green); color: var(--od-green); }
-
-/* ─── FAQ ─────────────────────────────────────────────────── */
-.od-faq-bg { background: #f8fafc; }
-.od-accordion .accordion-item { background: white; border: 1px solid #f0f4f8; border-radius: 12px !important; margin-bottom: .6rem; overflow: hidden; }
-.od-accordion .accordion-button {
-  background: white; color: #0B2D4E; font-weight: 700; font-size: .9rem;
-  border-radius: 12px !important; padding: 1.1rem 1.5rem;
-  box-shadow: none !important;
-}
-.od-accordion .accordion-button:not(.collapsed) { color: var(--od-green); background: #e6f5ee; }
-.od-accordion .accordion-button::after { filter: none; }
-.od-accordion .accordion-button:not(.collapsed)::after { filter: hue-rotate(120deg) saturate(2); }
-.od-accordion .accordion-body { color: #64748b; font-size: .875rem; line-height: 1.75; padding: .5rem 1.5rem 1.25rem; }
-
-/* ─── CTA Section ─────────────────────────────────────────── */
-.od-cta-section {
-  background: linear-gradient(135deg, #050f1f 0%, #0B2D4E 50%, #0d3b1e 100%);
-  padding: 6rem 0; position: relative; overflow: hidden;
-}
-.od-cta-section::before {
-  content: ''; position: absolute; inset: 0;
-  background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
-  background-size: 40px 40px;
-}
-.od-cta-section .cta-glow {
-  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-  width: 600px; height: 300px;
-  background: radial-gradient(ellipse, rgba(26,138,78,.2) 0%, transparent 70%);
-}
-.od-cta-section h2 { font-size: clamp(2rem, 4vw, 3rem); font-weight: 900; color: white; letter-spacing: -1px; }
-.od-cta-section p  { color: rgba(255,255,255,.6); font-size: 1.05rem; max-width: 520px; margin: 0 auto 2.5rem; }
-.cta-trust-row { display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; margin-top: 2.5rem; }
-.cta-trust-item { display: flex; align-items: center; gap: .4rem; color: rgba(255,255,255,.45); font-size: .8rem; }
-.cta-trust-item i { color: #4ade93; }
-
-/* ─── Contact ─────────────────────────────────────────────── */
-.od-contact-bg { background: white; }
-.contact-info-card {
-  display: flex; align-items: flex-start; gap: 1rem;
-  background: #f8fafc; border: 1px solid #f0f4f8;
-  border-radius: 14px; padding: 1.25rem 1.5rem;
-  margin-bottom: 1rem; transition: all .2s;
-}
-.contact-info-card:hover { border-color: #c7e8d8; background: #e6f5ee; }
-.contact-info-card .ci-icon {
-  width: 44px; height: 44px; border-radius: 12px; background: #e6f5ee;
-  color: var(--od-green); display: flex; align-items: center; justify-content: center;
-  font-size: 1rem; flex-shrink: 0;
-}
-.contact-info-card .ci-label { font-size: .72rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .5px; margin-bottom: .2rem; }
-.contact-info-card .ci-value { font-size: .9rem; font-weight: 600; color: #0B2D4E; }
-
-.od-contact-form { background: #f8fafc; border-radius: 20px; padding: 2.5rem; border: 1px solid #f0f4f8; }
-.od-contact-form .form-control, .od-contact-form .form-select {
-  background: white; border-color: #e2e8f0; border-radius: 10px;
-  padding: .7rem 1rem; font-size: .875rem;
-}
-.od-contact-form .form-control:focus, .od-contact-form .form-select:focus {
-  border-color: var(--od-green); box-shadow: 0 0 0 3px rgba(26,138,78,.1);
-}
-.od-contact-form .form-label { font-size: .82rem; font-weight: 700; color: #475569; margin-bottom: .4rem; }
-
-/* ─── Footer ──────────────────────────────────────────────── */
-.od-footer { background: #050f1f; color: rgba(255,255,255,.55); }
-.od-footer .foot-logo-name { font-size: 1.15rem; font-weight: 900; color: white; }
-.od-footer .foot-logo-name span { color: #4ade93; }
-.od-footer .foot-desc { font-size: .85rem; line-height: 1.7; color: rgba(255,255,255,.45); max-width: 280px; }
-.od-footer h6 { font-size: .78rem; font-weight: 800; color: rgba(255,255,255,.9); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 1.1rem; }
-.od-footer .foot-link { display: block; color: rgba(255,255,255,.45); font-size: .85rem; margin-bottom: .5rem; text-decoration: none; transition: color .2s; }
-.od-footer .foot-link:hover { color: #4ade93; }
-.od-footer .social-links { display: flex; gap: .5rem; margin-top: 1.25rem; }
-.od-footer .soc-btn {
-  width: 36px; height: 36px; border-radius: 9px;
-  background: rgba(255,255,255,.07); color: rgba(255,255,255,.6);
-  display: flex; align-items: center; justify-content: center;
-  font-size: .8rem; transition: all .2s; text-decoration: none;
-}
-.od-footer .soc-btn:hover { background: var(--od-green); color: white; }
-.od-footer .foot-bottom { border-top: 1px solid rgba(255,255,255,.07); padding: 1.5rem 0; }
-.od-footer .foot-bottom p { font-size: .8rem; color: rgba(255,255,255,.35); margin: 0; }
-.od-footer .foot-badges { display: flex; gap: .75rem; align-items: center; }
-.od-footer .foot-badge {
-  display: inline-flex; align-items: center; gap: .35rem;
-  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
-  border-radius: 6px; padding: .25rem .65rem; font-size: .7rem; color: rgba(255,255,255,.45);
-}
-.od-footer .foot-badge i { color: #4ade93; font-size: .65rem; }
-
-/* ─── Scroll-reveal ───────────────────────────────────────── */
-.reveal { opacity: 0; transform: translateY(28px); transition: opacity .6s ease, transform .6s ease; }
-.reveal.visible { opacity: 1; transform: translateY(0); }
-.reveal.delay-1 { transition-delay: .1s; }
-.reveal.delay-2 { transition-delay: .2s; }
-.reveal.delay-3 { transition-delay: .3s; }
-.reveal.delay-4 { transition-delay: .4s; }
-
-/* ─── Mobile Nav ──────────────────────────────────────────── */
-.od-mobile-menu {
-  background: rgba(5,15,31,.98); border-top: 1px solid rgba(255,255,255,.08);
-  padding: 1rem; margin-top: .5rem;
-}
-.od-mobile-menu a { display: block; color: rgba(255,255,255,.75); padding: .65rem .75rem; border-radius: 8px; font-weight: 500; font-size: .9rem; text-decoration: none; margin-bottom: .2rem; }
-.od-mobile-menu a:hover { background: rgba(255,255,255,.08); color: white; }
-.od-mobile-menu .mob-divider { border-color: rgba(255,255,255,.1); margin: .5rem 0; }
-
-</style>
+<link href="<?= APP_URL ?>/assets/css/landing.css?v=<?= @filemtime(__DIR__ . '/assets/css/landing.css') ?: time() ?>" rel="stylesheet">
 <?php
 $extraHeadHtml = ob_get_clean();
 require_once __DIR__ . '/includes/header-public.php';
@@ -855,38 +318,114 @@ require_once __DIR__ . '/includes/header-public.php';
 <!-- ══════════════════════════════════════════════════════════
      HERO
 ══════════════════════════════════════════════════════════ -->
-<section class="od-hero" id="hero">
+<section class="od-hero<?= $heroCarouselOn ? ' has-carousel' : '' ?>" id="hero"
+         data-hero-interval="<?= (int)$heroInterval ?>"
+         data-hero-effect="<?= e($heroEffect) ?>"
+         style="--hero-overlay:<?= number_format($heroOverlay, 2, '.', '') ?>">
+
+  <!-- ── Background carousel (slides managed in /admin/landing.php) ── -->
+  <div class="hero-carousel hero-fx-<?= e($heroEffect) ?>" aria-hidden="true">
+    <?php foreach ($heroSlides as $hi => $hs): ?>
+    <div class="hero-slide<?= $hi === 0 ? ' is-active' : '' ?>"
+         data-index="<?= $hi ?>"
+         data-caption="<?= e($hs['caption'] ?? '') ?>"
+         style="background-image:url('<?= e(APP_URL . '/' . ltrim($hs['image_path'], '/')) ?>')"
+         role="img"
+         aria-label="<?= e($hs['alt_text'] ?? '') ?>"></div>
+    <?php endforeach; ?>
+  </div>
+
+  <!-- Flat navy wash — opacity is admin-controlled via --hero-overlay -->
+  <div class="hero-wash"></div>
+
   <!-- Overlay layers -->
   <div class="hero-mesh"></div>
   <div class="hero-bottom-shimmer"></div>
-  <!-- Glow orbs -->
-  <div class="orb-1"></div>
-  <div class="orb-2"></div>
-  <div class="orb-3"></div>
+
+  <?php if ($heroCarouselOn): ?>
+  <!-- Carousel controls -->
+  <div class="hero-dots" role="tablist" aria-label="Background slides">
+    <?php foreach ($heroSlides as $hi => $hs): ?>
+    <button class="hero-dot<?= $hi === 0 ? ' is-active' : '' ?>" role="tab"
+            data-go="<?= $hi ?>"
+            aria-selected="<?= $hi === 0 ? 'true' : 'false' ?>"
+            aria-label="Show background <?= $hi + 1 ?><?= !empty($hs['alt_text']) ? ': ' . e($hs['alt_text']) : '' ?>"></button>
+    <?php endforeach; ?>
+    <button class="hero-dot-pause" id="heroPause" aria-label="Pause background slideshow" aria-pressed="false">
+      <i class="fas fa-pause"></i>
+    </button>
+  </div>
+  <?php endif; ?>
+
+  <?php
+  // Render the caption slot if ANY slide carries one, so later slides can fill it
+  $heroHasCaption = false;
+  foreach ($heroSlides as $hs) { if (!empty($hs['caption'])) { $heroHasCaption = true; break; } }
+  ?>
+  <?php if ($heroHasCaption): ?>
+  <div class="hero-caption" id="heroCaption"><?= e($heroSlides[0]['caption'] ?? '') ?></div>
+  <?php endif; ?>
+
+  <!-- Flat outlined shapes (replaces the old glow orbs — no gradients) -->
+  <div class="shape shape-ring" aria-hidden="true"></div>
+  <div class="shape shape-ring-2" aria-hidden="true"></div>
+  <div class="shape shape-square" aria-hidden="true"></div>
   <div class="container position-relative" style="z-index:4">
     <div class="row align-items-center g-5">
-      <!-- Left: Copy -->
+      <!-- Left: Copy — slide 1 is server-rendered; JS swaps it per slide -->
       <div class="col-lg-6">
-        <div class="hero-eyebrow">
-          <span class="dot"></span>
-          Kenya's #1 Business Management Suite
+        <div class="hero-copy" id="heroCopy">
+          <?php $hs0 = $heroSlides[0]; ?>
+          <div class="hero-eyebrow" id="heroEyebrow">
+            <span class="dot"></span>
+            <span id="heroEyebrowText"><?= e($hs0['eyebrow']) ?></span>
+          </div>
+
+          <h1 class="hero-headline" id="heroHeadline">
+            <?php
+            // Split into words so each can animate in; the last two words get the accent.
+            $hWords = preg_split('/\s+/', trim($hs0['headline']));
+            $hTotal = count($hWords);
+            foreach ($hWords as $wi => $word):
+                $accent = $wi >= $hTotal - 2 ? ' grad-text' : '';
+            ?>
+            <span class="hero-word<?= $accent ?>" style="--w:<?= $wi ?>"><?= e($word) ?></span>
+            <?php endforeach; ?>
+          </h1>
+
+          <p class="hero-sub" id="heroSub"><?= e($hs0['subheadline']) ?></p>
+
+          <?php
+          // Both anchors are always emitted (hidden when unused) so a later
+          // slide's button always has an element to populate.
+          $hCta1On = !empty($hs0['cta1_label']) && !empty($hs0['cta1_url']);
+          $hCta2On = !empty($hs0['cta2_label']) && !empty($hs0['cta2_url']);
+          ?>
+          <div class="hero-actions" id="heroActions">
+            <a href="<?= e($hCta1On ? $hs0['cta1_url'] : '#') ?>" class="btn-od-primary" id="heroCta1"
+               <?= $hCta1On ? '' : 'style="display:none"' ?>>
+              <span id="heroCta1Text"><?= e($hs0['cta1_label'] ?? '') ?></span> <i class="fas fa-arrow-right"></i>
+            </a>
+            <a href="<?= e($hCta2On ? $hs0['cta2_url'] : '#') ?>" class="btn-od-ghost" id="heroCta2"
+               <?= $hCta2On ? '' : 'style="display:none"' ?>>
+              <i class="fas fa-th-large"></i> <span id="heroCta2Text"><?= e($hs0['cta2_label'] ?? '') ?></span>
+            </a>
+          </div>
         </div>
-        <h1>
-          One Platform.<br>
-          <span class="grad-text">20+ Business</span><br>
-          Solutions.
-        </h1>
-        <p class="hero-sub">
-          OrbitDesk Workspace centralises every aspect of your business — accounting, HR, POS, hotel, school, SACCO, and more — in a single, powerful, cloud-based platform.
-        </p>
-        <div class="hero-actions">
-          <a href="<?= APP_URL ?>/auth/register.php" class="btn-od-primary">
-            Start Free Trial <i class="fas fa-arrow-right"></i>
-          </a>
-          <a href="#modules" class="btn-od-ghost">
-            <i class="fas fa-th-large"></i> Browse Modules
-          </a>
-        </div>
+
+        <?php
+        // Copy for every slide, for the JS swap. Escaped as JSON, not HTML.
+        $heroCopyJson = array_map(static fn($s) => [
+            'eyebrow'     => (string)($s['eyebrow']     ?? ''),
+            'headline'    => (string)($s['headline']    ?? ''),
+            'subheadline' => (string)($s['subheadline'] ?? ''),
+            'cta1_label'  => (string)($s['cta1_label']  ?? ''),
+            'cta1_url'    => (string)($s['cta1_url']    ?? ''),
+            'cta2_label'  => (string)($s['cta2_label']  ?? ''),
+            'cta2_url'    => (string)($s['cta2_url']    ?? ''),
+        ], $heroSlides);
+        ?>
+        <script type="application/json" id="heroCopyData"><?= json_encode($heroCopyJson, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?></script>
         <div class="hero-trust">
           <div class="trust-item"><i class="fas fa-check-circle"></i> No credit card</div>
           <div class="trust-item"><i class="fas fa-check-circle"></i> 14-day free trial</div>
@@ -924,10 +463,20 @@ require_once __DIR__ . '/includes/header-public.php';
             </div>
             <div class="dash-body">
               <div class="dash-header-row">
-                <div class="dash-title">Business Overview</div>
+                <div class="dash-title" id="dashTitle">Business Overview</div>
                 <div class="dash-period">This Month</div>
               </div>
-              <div class="dash-kpis">
+
+              <!-- Interactive: switches the KPI set + chart below -->
+              <div class="dash-tabs" role="tablist" aria-label="Dashboard preview">
+                <button class="dash-tab active" role="tab" aria-selected="true"  data-dash="overview">Overview</button>
+                <button class="dash-tab"        role="tab" aria-selected="false" data-dash="sales">Sales</button>
+                <button class="dash-tab"        role="tab" aria-selected="false" data-dash="hr">HR</button>
+                <button class="dash-tab"        role="tab" aria-selected="false" data-dash="pos">POS</button>
+              </div>
+
+              <!-- Server-rendered default ("overview"); JS swaps it per tab -->
+              <div class="dash-kpis" id="dashKpis">
                 <div class="dash-kpi">
                   <div class="kv green">KES 2.4M</div>
                   <div class="kl">Revenue</div>
@@ -951,10 +500,10 @@ require_once __DIR__ . '/includes/header-public.php';
               </div>
 
               <div class="dash-chart-section">
-                <div class="dash-chart-label">Monthly Revenue Trend</div>
-                <div class="dash-bars">
+                <div class="dash-chart-label" id="dashChartLabel">Monthly Revenue Trend</div>
+                <div class="dash-bars" id="dashBars">
                   <?php $heights=[30,45,28,58,40,52,65,72,50,68,80,100]; foreach($heights as $i=>$h): ?>
-                  <div class="dash-bar <?= $i>=9?'hi':'' ?>" style="height:<?=$h?>%"></div>
+                  <div class="dash-bar<?= $i>=9?' hi':'' ?>" data-h="<?=$h?>" style="height:<?=$h?>%"></div>
                   <?php endforeach; ?>
                 </div>
               </div>
@@ -984,26 +533,32 @@ require_once __DIR__ . '/includes/header-public.php';
   <div class="container">
     <div class="d-flex flex-column flex-sm-row align-items-center gap-3">
       <span class="trusted-label text-nowrap">Trusted by</span>
-      <div class="d-flex gap-2 flex-wrap">
-        <?php
-        $industries = [
-          ['Schools',       'fas fa-school'],
-          ['Hotels',        'fas fa-hotel'],
-          ['SACCOs',        'fas fa-piggy-bank'],
-          ['Hospitals',     'fas fa-hospital'],
-          ['Salons',        'fas fa-cut'],
-          ['Retail Shops',  'fas fa-store'],
-          ['Churches',      'fas fa-church'],
-          ['NGOs',          'fas fa-hands-helping'],
-          ['Car Yards',       'fas fa-car'],
-          ['Driving Schools', 'fas fa-steering-wheel'],
-          ['Manufacturing',   'fas fa-industry'],
-        ];
-        foreach($industries as $ind): ?>
-        <span class="industry-pill">
-          <i class="<?=$ind[1]?>" style="color:#1A8A4E"></i> <?=$ind[0]?>
-        </span>
-        <?php endforeach; ?>
+      <?php
+      $industries = [
+        ['Schools',       'fas fa-school'],
+        ['Hotels',        'fas fa-hotel'],
+        ['SACCOs',        'fas fa-piggy-bank'],
+        ['Hospitals',     'fas fa-hospital'],
+        ['Salons',        'fas fa-cut'],
+        ['Retail Shops',  'fas fa-store'],
+        ['Churches',      'fas fa-church'],
+        ['NGOs',          'fas fa-hands-helping'],
+        ['Car Yards',       'fas fa-car'],
+        ['Driving Schools', 'fas fa-steering-wheel'],
+        ['Manufacturing',   'fas fa-industry'],
+      ];
+      ?>
+      <!-- Marquee: the list is duplicated so the loop is seamless at -50% -->
+      <div class="marquee flex-grow-1 w-100">
+        <div class="marquee-track">
+          <?php for ($pass = 0; $pass < 2; $pass++): ?>
+            <?php foreach($industries as $ind): ?>
+            <span class="industry-pill" <?= $pass ? 'aria-hidden="true"' : '' ?>>
+              <i class="<?=$ind[1]?>" style="color:#1A8A4E"></i> <?=$ind[0]?>
+            </span>
+            <?php endforeach; ?>
+          <?php endfor; ?>
+        </div>
       </div>
     </div>
   </div>
@@ -1096,15 +651,50 @@ require_once __DIR__ . '/includes/header-public.php';
       </div>
     </div>
 
-    <div class="row g-3">
-      <?php foreach($modules as $m):
+    <?php
+    // Distinct categories for the filter tabs
+    $modCats = [];
+    foreach ($modules as $m) {
+        $c = trim((string)($m['category'] ?? ''));
+        if ($c !== '') $modCats[$c] = ($modCats[$c] ?? 0) + 1;
+    }
+    ksort($modCats);
+    ?>
+    <!-- Interactive filter + live search -->
+    <div class="mod-toolbar reveal">
+      <div class="mod-search-wrap">
+        <i class="fas fa-search"></i>
+        <label class="visually-hidden" for="modSearch">Search modules</label>
+        <input type="search" id="modSearch" class="mod-search" autocomplete="off"
+               placeholder="Search modules — e.g. payroll, hotel, POS…">
+        <button type="button" class="mod-search-clear" id="modSearchClear" aria-label="Clear search">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="mod-filter-tabs" role="group" aria-label="Filter modules by category">
+        <button class="mod-filter-tab active" data-cat="all" aria-pressed="true">
+          All <span class="cnt"><?= count($modules) ?></span>
+        </button>
+        <?php foreach ($modCats as $cat => $cnt): ?>
+        <button class="mod-filter-tab" data-cat="<?= e(strtolower($cat)) ?>" aria-pressed="false">
+          <?= e($cat) ?> <span class="cnt"><?= (int)$cnt ?></span>
+        </button>
+        <?php endforeach; ?>
+      </div>
+    </div>
+
+    <div class="row g-3" id="modGrid">
+      <?php foreach($modules as $i => $m):
         $kesMo = (float)$m['monthly_price'];
         $usdMo = $kesMo > 0 ? round($kesMo / $usdRate, 2) : 0;
       ?>
-      <div class="col-6 col-md-4 col-lg-3 reveal">
+      <div class="col-6 col-md-4 col-lg-3 mod-col reveal-scale"
+           style="--i:<?= $i % 8 ?>"
+           data-cat="<?= e(strtolower(trim((string)($m['category'] ?? '')))) ?>"
+           data-name="<?= e(strtolower($m['name'] . ' ' . $m['slug'] . ' ' . ($m['description'] ?? ''))) ?>">
         <div class="mod-tile" role="button" tabindex="0"
              onclick="openModuleModal('<?=e($m['slug'])?>')"
-             onkeydown="if(event.key==='Enter')openModuleModal('<?=e($m['slug'])?>') "
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openModuleModal('<?=e($m['slug'])?>')}"
              style="cursor:pointer">
           <div class="mod-tile-icon" style="background:<?=e($m['color'])?>1a;color:<?=e($m['color'])?>">
             <i class="<?=e($m['icon'])?>"></i>
@@ -1119,6 +709,11 @@ require_once __DIR__ . '/includes/header-public.php';
         </div>
       </div>
       <?php endforeach; ?>
+    </div>
+
+    <div class="mod-empty" id="modEmpty">
+      <i class="fas fa-search fa-2x mb-3 d-block" style="opacity:.35"></i>
+      <p class="mb-0">No modules match <strong id="modEmptyTerm"></strong>. Try a different search.</p>
     </div>
 
     <div class="text-center mt-5 reveal">
@@ -1553,130 +1148,565 @@ require_once __DIR__ . '/includes/header-public.php';
 </div>
 <!-- ══ /Module Detail Modal ══════════════════════════════════════ -->
 
+<button type="button" class="back-to-top" id="backToTop" aria-label="Back to top">
+  <i class="fas fa-arrow-up"></i>
+</button>
+
 <?php
 ob_start();
 ?>
 <script src="<?= APP_URL ?>/assets/js/app.js"></script>
 <script>
-// ── Scroll-reveal ─────────────────────────────────────────────
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
-}, { threshold: .12, rootMargin: '0px 0px -40px 0px' });
-document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+(function () {
+  'use strict';
 
-// ── Animated counters ─────────────────────────────────────────
-function animateCounter(el) {
-  const target = +el.dataset.target;
-  const suffix = el.querySelector('span')?.textContent || '';
-  let start = 0;
-  const duration = 1600;
-  const step = timestamp => {
-    if (!start) start = timestamp;
-    const progress = Math.min((timestamp - start) / duration, 1);
-    const ease = 1 - Math.pow(1 - progress, 3);
-    const val = Math.round(ease * target);
-    const span = el.querySelector('span');
-    el.textContent = val.toLocaleString();
-    if (span) el.appendChild(span);
-    if (progress < 1) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
-}
-const counterObserver = new IntersectionObserver((entries) => {
-  entries.forEach(e => {
-    if (e.isIntersecting) { animateCounter(e.target); counterObserver.unobserve(e.target); }
-  });
-}, { threshold: .5 });
-document.querySelectorAll('[data-counter]').forEach(el => counterObserver.observe(el));
+  var REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-// ── Pricing toggle ─────────────────────────────────────────────
-const USD_RATE = <?= (float)$usdRate ?>;
-let activeCur  = localStorage.getItem('landingCurrency') || 'USD';
+  /* ── Scroll reveal (all variants, with stagger) ───────────── */
+  var revealSel = '.reveal, .reveal-left, .reveal-right, .reveal-scale';
+  var revealEls = document.querySelectorAll(revealSel);
 
-function updatePricing() {
-  const annual   = document.getElementById('billingToggle').checked;
-  const isUSD    = (activeCur === 'USD');
-  const curSym   = isUSD ? '$' : 'KES ';
-  document.getElementById('pricingSubtitle').textContent = isUSD
-    ? 'All prices in USD. Start free, scale as you grow. No hidden fees.'
-    : 'All prices in KES. Start free, scale as you grow. No hidden fees.';
-  document.getElementById('lblMonthly').className = annual ? '' : 'active';
-  document.getElementById('lblAnnual').className  = annual ? 'active' : '';
-  document.getElementById('btnUSD').classList.toggle('active', isUSD);
-  document.getElementById('btnKES').classList.toggle('active', !isUSD);
-  document.getElementById('btnUSD').setAttribute('aria-pressed', isUSD);
-  document.getElementById('btnKES').setAttribute('aria-pressed', !isUSD);
-  document.querySelectorAll('.plan-cur').forEach(function(el) { el.textContent = curSym; });
-  document.querySelectorAll('.plan-price-val').forEach(function(el) {
-    var val = annual ? (isUSD ? el.dataset.usdAnnMo : el.dataset.kesAnnMo)
-                     : (isUSD ? el.dataset.usdMo    : el.dataset.kesMo);
-    el.textContent = val || '0';
-  });
-  document.querySelectorAll('.plan-note').forEach(function(el) {
-    var annTot = isUSD ? el.dataset.usdAnnTotal : el.dataset.kesAnnTotal;
-    var save   = el.dataset.savePct;
-    var cur    = isUSD ? 'USD' : 'KES';
-    el.textContent = annual
-      ? 'Billed annually — ' + cur + ' ' + annTot + '/yr' + (save > 0 ? ' · Save ' + save + '%' : '')
-      : 'No long-term commitment';
-  });
-  document.querySelectorAll('.mod-price-pill').forEach(function(el) {
-    el.textContent = isUSD ? 'From $ ' + el.dataset.usd + '/mo' : 'From KES ' + el.dataset.kes + '/mo';
-  });
-  var modUSD = document.getElementById('modBtnUSD');
-  var modKES = document.getElementById('modBtnKES');
-  if (modUSD && modKES) {
-    var activeStyle   = 'background:#0B2D4E;color:#fff;border-radius:999px';
-    var inactiveStyle = 'background:transparent;color:#64748b;border-radius:999px';
-    modUSD.style.cssText = (isUSD  ? activeStyle : inactiveStyle) + ';border:none;padding:.28rem .9rem;font-size:.78rem;font-weight:700;cursor:pointer;transition:all .18s';
-    modKES.style.cssText = (!isUSD ? activeStyle : inactiveStyle) + ';border:none;padding:.28rem .9rem;font-size:.78rem;font-weight:700;cursor:pointer;transition:all .18s';
+  if (REDUCED) {
+    revealEls.forEach(function (el) { el.classList.add('visible'); });
+  } else {
+    var revealObs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        e.target.classList.add('visible');
+        revealObs.unobserve(e.target);
+      });
+    }, { threshold: .12, rootMargin: '0px 0px -40px 0px' });
+    revealEls.forEach(function (el) { revealObs.observe(el); });
   }
-}
-function setCurrency(cur) { activeCur = cur; localStorage.setItem('landingCurrency', cur); updatePricing(); }
-document.getElementById('billingToggle').addEventListener('change', updatePricing);
-updatePricing();
 
-// ── Module detail modal ────────────────────────────────────────
-const MOD_INFO = <?= json_encode($moduleMap, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
-function openModuleModal(slug) {
-  const m = MOD_INFO[slug];
-  if (!m) return;
-  document.getElementById('mmHeader').style.background = `linear-gradient(135deg, ${m.color}f0 0%, ${m.color}b0 100%)`;
-  document.getElementById('mmIcon').className = m.icon;
-  document.getElementById('mmCat').textContent  = m.category;
-  document.getElementById('mmName').textContent = m.name;
-  document.getElementById('mmDesc').textContent = m.desc;
-  var isUSD = (activeCur === 'USD');
-  var primary   = isUSD ? '$ ' + Number(m.price_usd).toFixed(2) + '/mo' : 'KES ' + Number(m.price).toLocaleString('en-KE') + '/mo';
-  var secondary = isUSD ? '≈ KES ' + Number(m.price).toLocaleString('en-KE') + '/mo' : '≈ $ ' + Number(m.price_usd).toFixed(2) + '/mo';
-  var annLine   = (m.price_ann > 0) ? (isUSD
-    ? ' · $ ' + Number(m.price_ann_usd).toFixed(2) + '/yr (≈ KES ' + Number(m.price_ann).toLocaleString('en-KE') + ')'
-    : ' · KES ' + Number(m.price_ann).toLocaleString('en-KE') + '/yr (≈ $ ' + Number(m.price_ann_usd).toFixed(2) + ')') : '';
-  document.getElementById('mmPrice').innerHTML =
-    '<span class="fw-bold">' + primary + '</span>' +
-    '<span class="text-muted small ms-2">' + secondary + '</span>' +
-    (annLine ? '<div class="text-muted small mt-1" style="font-size:.75rem">' + annLine + '</div>' : '');
-  document.getElementById('mmFeatures').innerHTML = (m.features || []).map(f => `
-    <div class="col-sm-6">
-      <div class="d-flex align-items-start gap-2 px-2 py-2 rounded-2" style="background:#f0fdf4">
-        <i class="fas fa-check-circle flex-shrink-0 mt-1" style="color:#1A8A4E;font-size:.72rem"></i>
-        <span style="font-size:.8rem;color:#1e293b;line-height:1.45">${f}</span>
-      </div>
-    </div>`).join('');
-  bootstrap.Modal.getOrCreateInstance(document.getElementById('modDetailModal')).show();
-}
+  /* ── Hero background carousel ─────────────────────────────────
+     Slides/interval/effect all come from /admin/landing.php.
+     Pauses when the tab is hidden or the hero is scrolled out of view,
+     and honours prefers-reduced-motion by holding on slide 1. */
+  (function heroCarousel() {
+    var hero = document.getElementById('hero');
+    if (!hero || !hero.classList.contains('has-carousel')) return;
 
-// ── Active nav section highlight ───────────────────────────────
-const sections = document.querySelectorAll('section[id]');
-const navLinks = document.querySelectorAll('.od-nav-links a');
-window.addEventListener('scroll', () => {
-  let current = '';
-  sections.forEach(s => { if (window.scrollY >= s.offsetTop - 100) current = s.id; });
-  navLinks.forEach(a => {
-    a.style.color      = a.getAttribute('href') === '#' + current ? 'white' : '';
-    a.style.background = a.getAttribute('href') === '#' + current ? 'rgba(255,255,255,.1)' : '';
+    var slides = hero.querySelectorAll('.hero-slide');
+    var dots   = hero.querySelectorAll('.hero-dot');
+    var pause  = document.getElementById('heroPause');
+    var cap    = document.getElementById('heroCaption');
+    if (slides.length < 2 || REDUCED) return;
+
+    var interval = parseInt(hero.dataset.heroInterval, 10) || 6000;
+    var isSlide  = hero.dataset.heroEffect === 'slide';
+    var current  = 0;
+    var timer    = null;
+    var paused   = false;
+    var visible  = true;
+    var hovered  = false;
+
+    /* Per-slide marketing copy, emitted as JSON by PHP */
+    var COPY = [];
+    try {
+      var raw = document.getElementById('heroCopyData');
+      if (raw) COPY = JSON.parse(raw.textContent) || [];
+    } catch (e) { COPY = []; }
+
+    var copyBox = document.getElementById('heroCopy');
+    var elHead  = document.getElementById('heroHeadline');
+    var elSub   = document.getElementById('heroSub');
+    var elEyeTx = document.getElementById('heroEyebrowText');
+    var elCta1  = document.getElementById('heroCta1');
+    var elCta2  = document.getElementById('heroCta2');
+
+    /* Rebuild the headline as animated word spans.
+       textContent everywhere — admin copy is never injected as HTML. */
+    function paintHeadline(text) {
+      if (!elHead) return;
+      elHead.innerHTML = '';
+      var words = String(text || '').trim().split(/\s+/);
+      words.forEach(function (w, i) {
+        var span = document.createElement('span');
+        span.className = 'hero-word' + (i >= words.length - 2 ? ' grad-text' : '');
+        span.style.setProperty('--w', i);
+        span.textContent = w;
+        elHead.appendChild(span);
+      });
+    }
+
+    function paintCta(el, label, url) {
+      if (!el) return;
+      if (!label || !url) { el.style.display = 'none'; return; }
+      el.style.display = '';
+      el.setAttribute('href', url);
+      var txt = el.querySelector('span');
+      if (txt) txt.textContent = label;
+    }
+
+    function paintCopy(i) {
+      var c = COPY[i];
+      if (!c) return;
+      if (elEyeTx) elEyeTx.textContent = c.eyebrow || '';
+      if (elSub)   elSub.textContent   = c.subheadline || '';
+      paintHeadline(c.headline);
+      paintCta(elCta1, c.cta1_label, c.cta1_url);
+      paintCta(elCta2, c.cta2_label, c.cta2_url);
+    }
+
+    function go(next) {
+      if (next === current) return;
+      var from = slides[current];
+      var to   = slides[next];
+
+      if (isSlide) {
+        from.classList.add('is-leaving');
+        setTimeout(function () { from.classList.remove('is-leaving'); }, 1100);
+      }
+      from.classList.remove('is-active');
+      to.classList.add('is-active');
+
+      // Restart the Ken Burns zoom on the incoming slide
+      if (!isSlide) {
+        to.style.animation = 'none';
+        void to.offsetWidth;               // force reflow so the anim replays
+        to.style.animation = '';
+      }
+
+      dots.forEach(function (d, i) {
+        d.classList.toggle('is-active', i === next);
+        d.setAttribute('aria-selected', i === next ? 'true' : 'false');
+      });
+
+      // Fade the copy out, swap it, fade back in
+      if (copyBox && COPY.length) {
+        copyBox.classList.add('is-swapping');
+        setTimeout(function () {
+          paintCopy(next);
+          copyBox.classList.remove('is-swapping');
+        }, 350);
+      }
+
+      if (cap) cap.textContent = to.dataset.caption || '';
+      current = next;
+    }
+
+    function start() {
+      stop();
+      if (paused || !visible || hovered) return;
+      timer = setInterval(function () { go((current + 1) % slides.length); }, interval);
+    }
+    function stop() { if (timer) { clearInterval(timer); timer = null; } }
+
+    /* Hold still while the user is reading or reaching for a CTA — the
+       buttons change per slide, so moving them mid-click is hostile. */
+    ['mouseenter', 'focusin'].forEach(function (ev) {
+      hero.addEventListener(ev, function () { hovered = true;  stop();  });
+    });
+    ['mouseleave', 'focusout'].forEach(function (ev) {
+      hero.addEventListener(ev, function () {
+        // Ignore focusout that just moves between elements inside the hero
+        if (ev === 'focusout' && hero.contains(document.activeElement)) return;
+        hovered = false; start();
+      });
+    });
+
+    dots.forEach(function (dot) {
+      dot.addEventListener('click', function () {
+        go(parseInt(dot.dataset.go, 10) || 0);
+        start();                            // reset the clock after manual nav
+      });
+    });
+
+    if (pause) {
+      pause.addEventListener('click', function () {
+        paused = !paused;
+        pause.setAttribute('aria-pressed', String(paused));
+        pause.setAttribute('aria-label', paused ? 'Resume background slideshow' : 'Pause background slideshow');
+        pause.innerHTML = paused ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>';
+        paused ? stop() : start();
+      });
+    }
+
+    // Don't burn cycles animating a hidden tab or an off-screen hero
+    document.addEventListener('visibilitychange', function () {
+      visible = !document.hidden;
+      visible ? start() : stop();
+    });
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(function (entries) {
+        visible = entries[0].isIntersecting && !document.hidden;
+        visible ? start() : stop();
+      }, { threshold: .05 }).observe(hero);
+    }
+
+    start();
+  })();
+
+  /* ── Animated counters ────────────────────────────────────── */
+  function animateCounter(el) {
+    var target = +el.dataset.target || 0;
+    var span   = el.querySelector('span');
+    var suffix = span ? span.textContent : '';
+    if (REDUCED) {
+      el.textContent = target.toLocaleString();
+      if (span) el.appendChild(span);
+      return;
+    }
+    var start = 0, duration = 1600;
+    function step(ts) {
+      if (!start) start = ts;
+      var p    = Math.min((ts - start) / duration, 1);
+      var ease = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(ease * target).toLocaleString();
+      if (span) el.appendChild(span);
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  var counterObs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      animateCounter(e.target);
+      counterObs.unobserve(e.target);
+    });
+  }, { threshold: .5 });
+  document.querySelectorAll('[data-counter]').forEach(function (el) { counterObs.observe(el); });
+
+  /* ── Interactive dashboard mockup ─────────────────────────── */
+  var DASH = {
+    overview: {
+      title: 'Business Overview',
+      label: 'Monthly Revenue Trend',
+      bars:  [30,45,28,58,40,52,65,72,50,68,80,100],
+      kpis:  [
+        { v: 'KES 2.4M', c: 'green',            l: 'Revenue',   t: '24%', d: 'up'   },
+        { v: '1,284',    c: '', s: '#38bdf8',   l: 'Customers', t: '12%', d: 'up'   },
+        { v: '48',       c: 'amber',            l: 'Pending',   t: '3%',  d: 'down' },
+        { v: '99.9%',    c: '', s: '#a78bfa',   l: 'Uptime',    t: 'Stable', d: 'up' }
+      ]
+    },
+    sales: {
+      title: 'Sales Performance',
+      label: 'Orders Closed Per Month',
+      bars:  [22,38,55,41,62,48,70,85,66,78,92,100],
+      kpis:  [
+        { v: 'KES 940K', c: 'green',          l: 'Pipeline', t: '18%', d: 'up'   },
+        { v: '312',      c: '', s: '#38bdf8', l: 'Orders',   t: '9%',  d: 'up'   },
+        { v: '27',       c: 'amber',          l: 'Quotes',   t: '5%',  d: 'down' },
+        { v: '68%',      c: '', s: '#a78bfa', l: 'Win Rate', t: '4%',  d: 'up'   }
+      ]
+    },
+    hr: {
+      title: 'HR & Payroll',
+      label: 'Headcount Growth',
+      bars:  [40,42,45,44,50,55,58,60,64,70,74,80],
+      kpis:  [
+        { v: '184',      c: '', s: '#38bdf8', l: 'Employees', t: '6%',  d: 'up'   },
+        { v: 'KES 3.1M', c: 'green',          l: 'Payroll',   t: '2%',  d: 'up'   },
+        { v: '12',       c: 'amber',          l: 'On Leave',  t: '1%',  d: 'down' },
+        { v: '96%',      c: '', s: '#a78bfa', l: 'Attendance', t: 'Stable', d: 'up' }
+      ]
+    },
+    pos: {
+      title: 'Point of Sale',
+      label: 'Daily Transactions',
+      bars:  [55,62,48,70,66,80,74,88,92,84,96,100],
+      kpis:  [
+        { v: 'KES 412K', c: 'green',          l: 'Today',     t: '31%', d: 'up'   },
+        { v: '1,047',    c: '', s: '#38bdf8', l: 'Receipts',  t: '14%', d: 'up'   },
+        { v: '6',        c: 'amber',          l: 'Low Stock', t: '2%',  d: 'down' },
+        { v: '3',        c: '', s: '#a78bfa', l: 'Shifts',    t: 'Open', d: 'up'  }
+      ]
+    }
+  };
+
+  var dashKpis  = document.getElementById('dashKpis');
+  var dashBars  = document.getElementById('dashBars');
+  var dashTitle = document.getElementById('dashTitle');
+  var dashLabel = document.getElementById('dashChartLabel');
+
+  function renderDash(key, animate) {
+    var d = DASH[key];
+    if (!d || !dashKpis || !dashBars) return;
+
+    if (dashTitle) dashTitle.textContent = d.title;
+    if (dashLabel) dashLabel.textContent = d.label;
+
+    dashKpis.innerHTML = d.kpis.map(function (k) {
+      var style = k.s ? ' style="color:' + k.s + '"' : '';
+      var arrow = k.d === 'up'
+        ? '<i class="fas fa-arrow-up" style="font-size:.55rem"></i> '
+        : '<i class="fas fa-arrow-down" style="font-size:.55rem"></i> ';
+      var showArrow = /%$/.test(k.t) ? arrow : '';
+      return '<div class="dash-kpi">' +
+               '<div class="kv ' + (k.c || '') + '"' + style + '>' + k.v + '</div>' +
+               '<div class="kl">' + k.l + '</div>' +
+               '<div class="kt ' + k.d + '">' + showArrow + k.t + '</div>' +
+             '</div>';
+    }).join('');
+
+    dashBars.innerHTML = d.bars.map(function (h, i) {
+      return '<div class="dash-bar' + (i >= 9 ? ' hi' : '') + '" data-h="' + h + '"></div>';
+    }).join('');
+
+    var bars = dashBars.querySelectorAll('.dash-bar');
+    if (REDUCED || !animate) {
+      bars.forEach(function (b) { b.style.height = b.dataset.h + '%'; });
+    } else {
+      requestAnimationFrame(function () {
+        bars.forEach(function (b, i) {
+          setTimeout(function () { b.style.height = b.dataset.h + '%'; }, i * 45);
+        });
+      });
+    }
+  }
+
+  if (dashKpis) {
+    // The "overview" state is already server-rendered, so we don't paint it
+    // again on load — we only re-render (with animation) on scroll-in / tab click.
+    var dashObs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        renderDash(document.querySelector('.dash-tab.active').dataset.dash, true);
+        dashObs.disconnect();
+      });
+    }, { threshold: .3 });
+    dashObs.observe(dashKpis);
+
+    document.querySelectorAll('.dash-tab').forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        document.querySelectorAll('.dash-tab').forEach(function (t) {
+          t.classList.remove('active');
+          t.setAttribute('aria-selected', 'false');
+        });
+        tab.classList.add('active');
+        tab.setAttribute('aria-selected', 'true');
+        renderDash(tab.dataset.dash, true);
+      });
+    });
+  }
+
+  /* ── Module filter + live search ──────────────────────────── */
+  var modCols   = Array.prototype.slice.call(document.querySelectorAll('.mod-col'));
+  var modSearch = document.getElementById('modSearch');
+  var modClear  = document.getElementById('modSearchClear');
+  var modEmpty  = document.getElementById('modEmpty');
+  var modTerm   = document.getElementById('modEmptyTerm');
+  var activeCat = 'all';
+
+  function applyModFilter() {
+    var q = (modSearch && modSearch.value || '').trim().toLowerCase();
+    var shown = 0;
+
+    modCols.forEach(function (col) {
+      var okCat  = (activeCat === 'all') || (col.dataset.cat === activeCat);
+      var okText = !q || (col.dataset.name || '').indexOf(q) !== -1;
+      var show   = okCat && okText;
+      col.classList.toggle('filtered-out', !show);
+      if (show) shown++;
+    });
+
+    if (modClear) modClear.classList.toggle('show', q.length > 0);
+    if (modEmpty) {
+      modEmpty.classList.toggle('show', shown === 0);
+      if (shown === 0 && modTerm) modTerm.textContent = q ? '"' + q + '"' : 'that filter';
+    }
+  }
+
+  document.querySelectorAll('.mod-filter-tab').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.mod-filter-tab').forEach(function (b) {
+        b.classList.remove('active');
+        b.setAttribute('aria-pressed', 'false');
+      });
+      btn.classList.add('active');
+      btn.setAttribute('aria-pressed', 'true');
+      activeCat = btn.dataset.cat;
+      applyModFilter();
+    });
   });
-}, { passive: true });
+
+  if (modSearch) {
+    var t;
+    modSearch.addEventListener('input', function () {
+      clearTimeout(t);
+      t = setTimeout(applyModFilter, 120);
+    });
+    // Let Esc clear the field
+    modSearch.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { modSearch.value = ''; applyModFilter(); }
+    });
+  }
+  if (modClear) {
+    modClear.addEventListener('click', function () {
+      modSearch.value = '';
+      modSearch.focus();
+      applyModFilter();
+    });
+  }
+
+  /* ── Pricing toggle ───────────────────────────────────────── */
+  var USD_RATE  = <?= (float)$usdRate ?>;
+  var activeCur = localStorage.getItem('landingCurrency') || 'USD';
+
+  function updatePricing() {
+    var toggle = document.getElementById('billingToggle');
+    if (!toggle) return;
+    var annual = toggle.checked;
+    var isUSD  = (activeCur === 'USD');
+    var curSym = isUSD ? '$' : 'KES ';
+
+    var sub = document.getElementById('pricingSubtitle');
+    if (sub) {
+      sub.textContent = isUSD
+        ? 'All prices in USD. Start free, scale as you grow. No hidden fees.'
+        : 'All prices in KES. Start free, scale as you grow. No hidden fees.';
+    }
+
+    var lblM = document.getElementById('lblMonthly');
+    var lblA = document.getElementById('lblAnnual');
+    if (lblM) lblM.className = annual ? '' : 'active';
+    if (lblA) lblA.className = annual ? 'active' : '';
+
+    ['btnUSD', 'btnKES'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      var on = (id === 'btnUSD') === isUSD;
+      el.classList.toggle('active', on);
+      el.setAttribute('aria-pressed', String(on));
+    });
+
+    document.querySelectorAll('.plan-cur').forEach(function (el) { el.textContent = curSym; });
+
+    document.querySelectorAll('.plan-price-val').forEach(function (el) {
+      var val = annual ? (isUSD ? el.dataset.usdAnnMo : el.dataset.kesAnnMo)
+                       : (isUSD ? el.dataset.usdMo    : el.dataset.kesMo);
+      if (REDUCED) { el.textContent = val || '0'; return; }
+      el.classList.add('flip');
+      setTimeout(function () {
+        el.textContent = val || '0';
+        el.classList.remove('flip');
+      }, 160);
+    });
+
+    document.querySelectorAll('.plan-note').forEach(function (el) {
+      var annTot = isUSD ? el.dataset.usdAnnTotal : el.dataset.kesAnnTotal;
+      var save   = el.dataset.savePct;
+      var cur    = isUSD ? 'USD' : 'KES';
+      el.textContent = annual
+        ? 'Billed annually — ' + cur + ' ' + annTot + '/yr' + (save > 0 ? ' · Save ' + save + '%' : '')
+        : 'No long-term commitment';
+    });
+
+    document.querySelectorAll('.mod-price-pill').forEach(function (el) {
+      el.textContent = isUSD ? 'From $ ' + el.dataset.usd + '/mo'
+                             : 'From KES ' + el.dataset.kes + '/mo';
+    });
+
+    var modUSD = document.getElementById('modBtnUSD');
+    var modKES = document.getElementById('modBtnKES');
+    if (modUSD && modKES) {
+      var base = ';border:none;padding:.28rem .9rem;font-size:.78rem;font-weight:700;cursor:pointer;transition:all .18s';
+      var on   = 'background:#0B2D4E;color:#fff;border-radius:999px';
+      var off  = 'background:transparent;color:#64748b;border-radius:999px';
+      modUSD.style.cssText = (isUSD  ? on : off) + base;
+      modKES.style.cssText = (!isUSD ? on : off) + base;
+    }
+  }
+
+  window.setCurrency = function (cur) {
+    activeCur = cur;
+    localStorage.setItem('landingCurrency', cur);
+    updatePricing();
+  };
+
+  var billingToggle = document.getElementById('billingToggle');
+  if (billingToggle) billingToggle.addEventListener('change', updatePricing);
+  updatePricing();
+
+  /* ── Module detail modal ──────────────────────────────────── */
+  var MOD_INFO = <?= json_encode($moduleMap, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
+
+  window.openModuleModal = function (slug) {
+    var m = MOD_INFO[slug];
+    if (!m) return;
+
+    // Flat solid header — no gradient
+    var header = document.getElementById('mmHeader');
+    if (header) header.style.background = m.color;
+
+    var set = function (id, prop, val) {
+      var el = document.getElementById(id);
+      if (el) el[prop] = val;
+    };
+    set('mmIcon', 'className', m.icon);
+    set('mmCat',  'textContent', m.category);
+    set('mmName', 'textContent', m.name);
+    set('mmDesc', 'textContent', m.desc);
+
+    var isUSD     = (activeCur === 'USD');
+    var primary   = isUSD ? '$ ' + Number(m.price_usd).toFixed(2) + '/mo'
+                          : 'KES ' + Number(m.price).toLocaleString('en-KE') + '/mo';
+    var secondary = isUSD ? '≈ KES ' + Number(m.price).toLocaleString('en-KE') + '/mo'
+                          : '≈ $ ' + Number(m.price_usd).toFixed(2) + '/mo';
+    var annLine = (m.price_ann > 0)
+      ? (isUSD ? ' · $ ' + Number(m.price_ann_usd).toFixed(2) + '/yr (≈ KES ' + Number(m.price_ann).toLocaleString('en-KE') + ')'
+               : ' · KES ' + Number(m.price_ann).toLocaleString('en-KE') + '/yr (≈ $ ' + Number(m.price_ann_usd).toFixed(2) + ')')
+      : '';
+
+    set('mmPrice', 'innerHTML',
+      '<span class="fw-bold">' + primary + '</span>' +
+      '<span class="text-muted small ms-2">' + secondary + '</span>' +
+      (annLine ? '<div class="text-muted small mt-1" style="font-size:.75rem">' + annLine + '</div>' : ''));
+
+    set('mmFeatures', 'innerHTML', (m.features || []).map(function (f) {
+      return '<div class="col-sm-6">' +
+               '<div class="d-flex align-items-start gap-2 px-2 py-2 rounded-2" style="background:#f0fdf4">' +
+                 '<i class="fas fa-check-circle flex-shrink-0 mt-1" style="color:#1A8A4E;font-size:.72rem"></i>' +
+                 '<span style="font-size:.8rem;color:#1e293b;line-height:1.45">' + f + '</span>' +
+               '</div>' +
+             '</div>';
+    }).join(''));
+
+    var modalEl = document.getElementById('modDetailModal');
+    if (modalEl && window.bootstrap) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  };
+
+  /* ── Active nav highlight (observer, not scroll handler) ──── */
+  var navLinks = document.querySelectorAll('.od-nav-links a');
+  var sections = document.querySelectorAll('section[id]');
+  if (sections.length && navLinks.length) {
+    var navObs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        navLinks.forEach(function (a) {
+          a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px' });
+    sections.forEach(function (s) { navObs.observe(s); });
+  }
+
+  /* ── Back to top ──────────────────────────────────────────────
+     The scroll-progress bar and navbar .scrolled state are owned by
+     includes/footer-public.php — deliberately not duplicated here. */
+  var toTop   = document.getElementById('backToTop');
+  var ticking = false;
+
+  function onScroll() {
+    var st = window.pageYOffset || document.documentElement.scrollTop;
+    if (toTop) toTop.classList.toggle('show', st > 600);
+    ticking = false;
+  }
+  window.addEventListener('scroll', function () {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(onScroll);
+  }, { passive: true });
+  onScroll();
+
+  if (toTop) {
+    toTop.addEventListener('click', function () {
+      window.scrollTo({ top: 0, behavior: REDUCED ? 'auto' : 'smooth' });
+    });
+  }
+})();
 </script>
 <?php
 $extraBodyJs = ob_get_clean();

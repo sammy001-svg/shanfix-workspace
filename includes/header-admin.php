@@ -114,6 +114,8 @@ function markNotifsRead() {
       <i class="fas fa-history"></i><span>Activity Log</span></a>
     <a href="<?= APP_URL ?>/admin/custom-domains.php" class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'custom-domains.php' ? 'active' : '' ?>">
       <i class="fas fa-globe"></i><span>Custom Domains</span></a>
+    <a href="<?= APP_URL ?>/admin/landing.php"       class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'landing.php'       ? 'active' : '' ?>">
+      <i class="fas fa-images"></i><span>Landing Page</span></a>
     <a href="<?= APP_URL ?>/admin/settings.php"      class="nav-item <?= basename($_SERVER['PHP_SELF']) === 'settings.php'      ? 'active' : '' ?>">
       <i class="fas fa-cog"></i><span>Settings</span></a>
 

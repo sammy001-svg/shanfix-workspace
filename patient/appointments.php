@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $pageTitle = 'My Appointments';
 require_once __DIR__ . '/../includes/header-patient.php';
 

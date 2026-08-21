@@ -26,7 +26,7 @@ $_extraJs = isset($extraBodyJs) ? $extraBodyJs : '';
       <!-- Brand -->
       <div class="col-lg-4">
         <div class="d-flex align-items-center gap-2 mb-3">
-          <div style="width:36px;height:36px;background:linear-gradient(135deg,#1A8A4E,#22c27a);border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:900;color:white;font-size:.8rem">OD</div>
+          <div style="width:36px;height:36px;background:#1A8A4E;border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:900;color:white;font-size:.8rem">OD</div>
           <div class="foot-logo-name">Orbit<span>Desk</span></div>
         </div>
         <p class="foot-desc"><?= htmlspecialchars($_ftag, ENT_QUOTES) ?>. Built for African businesses, trusted across Kenya and East Africa.</p>

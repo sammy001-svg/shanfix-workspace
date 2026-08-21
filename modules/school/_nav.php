@@ -13,6 +13,10 @@ $moduleNav = [
     // ── Overview ─────────────────────────────────────────────────
     ['url' => 'index.php', 'icon' => 'fas fa-tachometer-alt', 'label' => 'Dashboard'],
 
+    // ── Admissions ───────────────────────────────────────────────
+    ['divider' => true, 'label' => 'Admissions'],
+    ['url' => 'admissions.php', 'icon' => 'fas fa-clipboard-list', 'label' => 'Admissions Pipeline'],
+
     // ── People ───────────────────────────────────────────────────
     ['divider' => true, 'label' => 'People'],
     ['url' => 'students.php',    'icon' => 'fas fa-user-graduate',      'label' => 'Students'],
@@ -42,6 +46,7 @@ $moduleNav = [
     ['url' => 'finance.php',       'icon' => 'fas fa-chart-pie',       'label' => 'Finance Dashboard'],
     ['url' => 'fees.php',          'icon' => 'fas fa-money-bill-wave', 'label' => 'Fees'],
     ['url' => 'fee-statement.php', 'icon' => 'fas fa-file-invoice',    'label' => 'Fee Statements'],
+    ['url' => 'scholarships.php',  'icon' => 'fas fa-award',           'label' => 'Scholarships'],
     ['url' => 'budget.php',        'icon' => 'fas fa-chart-bar',       'label' => 'Budget'],
     ['url' => 'expenses.php',      'icon' => 'fas fa-receipt',         'label' => 'Expenses'],
 
@@ -53,9 +58,11 @@ $moduleNav = [
     // ── Facilities & Welfare ──────────────────────────────────────
     ['divider' => true, 'label' => 'Facilities'],
     ['url' => 'library.php',    'icon' => 'fas fa-book-reader', 'label' => 'Library'],
+    ['url' => 'store.php',      'icon' => 'fas fa-store',       'label' => 'School Store'],
     ['url' => 'transport.php',  'icon' => 'fas fa-bus',         'label' => 'Transport'],
     ['url' => 'hostel.php',     'icon' => 'fas fa-bed',         'label' => 'Hostel'],
     ['url' => 'discipline.php', 'icon' => 'fas fa-gavel',       'label' => 'Discipline'],
+    ['url' => 'medical.php',    'icon' => 'fas fa-notes-medical','label' => 'Medical Records'],
 
     // ── Online Learning ──────────────────────────────────────────
     ['divider' => true, 'label' => 'Online Learning'],
@@ -67,10 +74,12 @@ $moduleNav = [
     ['url' => 'events.php',        'icon' => 'fas fa-calendar-day',    'label' => 'Events'],
     ['url' => 'notices.php',       'icon' => 'fas fa-bullhorn',        'label' => 'Notices'],
     ['url' => 'communication.php', 'icon' => 'fas fa-broadcast-tower', 'label' => 'Communicate'],
+    ['url' => 'automation.php',    'icon' => 'fas fa-robot',           'label' => 'Automation'],
 
     // ── Administration ───────────────────────────────────────────
     ['divider' => true, 'label' => 'Administration'],
     ['url' => 'id-cards.php',      'icon' => 'fas fa-id-card',       'label' => 'ID Cards'],
+    ['url' => 'analytics.php',     'icon' => 'fas fa-chart-line',    'label' => 'Analytics'],
     ['url' => 'reports.php',       'icon' => 'fas fa-chart-bar',     'label' => 'Reports'],
     ['url' => 'portals.php',       'icon' => 'fas fa-key',            'label' => 'Portal Access'],
     ['url' => 'import-export.php', 'icon' => 'fas fa-file-import',   'label' => 'Import / Export'],

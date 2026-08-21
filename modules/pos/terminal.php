@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * POS Live Terminal — full-screen, no sidebar layout
  */

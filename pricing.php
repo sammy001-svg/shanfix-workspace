@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * OrbitDesk — Standalone Pricing Page
  * Pulls live plans and modules from the database.
@@ -118,6 +118,7 @@ ob_start();
     .site-nav {
       position: sticky; top: 0; z-index: 1000;
       background: rgba(255,255,255,.96);
+      -webkit-backdrop-filter: blur(14px);
       backdrop-filter: blur(14px);
       border-bottom: 1px solid rgba(0,0,0,.07);
       padding: .75rem 0;
@@ -142,7 +143,7 @@ ob_start();
 
     /* ── Hero ─────────────────────────────────────────────── */
     .pricing-hero {
-      background: linear-gradient(135deg, var(--navy-dk) 0%, var(--navy) 55%, #0d3d1e 100%);
+      background: var(--navy-dk);
       padding: 5.5rem 0 4.5rem;
       position: relative;
       overflow: hidden;
@@ -152,7 +153,7 @@ ob_start();
     .pricing-hero::before {
       content: '';
       position: absolute; inset: 0;
-      background-image: radial-gradient(rgba(26,138,78,.12) 1px, transparent 1px);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36'%3E%3Ccircle cx='1' cy='1' r='1' fill='%231A8A4E' fill-opacity='.12'/%3E%3C/svg%3E");
       background-size: 36px 36px;
     }
     .pricing-hero .hero-glow {
@@ -324,7 +325,7 @@ ob_start();
 
     /* ── Enterprise CTA ───────────────────────────────────── */
     .enterprise-cta {
-      background: linear-gradient(135deg, var(--navy-dk), var(--navy), #0d3d1e);
+      background: var(--navy-dk);
       padding: 5rem 0;
       color: #fff;
       text-align: center;
@@ -333,7 +334,7 @@ ob_start();
     .enterprise-cta::before {
       content: '';
       position: absolute; inset: 0;
-      background-image: radial-gradient(rgba(255,255,255,.04) 1px, transparent 1px);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='1' cy='1' r='1' fill='%23ffffff' fill-opacity='.04'/%3E%3C/svg%3E");
       background-size: 32px 32px;
     }
     .enterprise-cta h2 { font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 900; letter-spacing: -.4px; margin-bottom: .7rem; }

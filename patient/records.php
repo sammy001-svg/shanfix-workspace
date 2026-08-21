@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $pageTitle = 'Medical Records';
 require_once __DIR__ . '/../includes/header-patient.php';
 

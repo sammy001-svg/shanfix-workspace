@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once __DIR__ . '/_nav.php';
 
 // ── CSV Export (must run before header-module outputs HTML) ───
